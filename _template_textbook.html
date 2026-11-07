@@ -309,14 +309,15 @@ window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],tags
     _iv=setInterval(function(){
       var top=el.getBoundingClientRect().top;
       if(Math.abs(top-goal)>150){ el.scrollIntoView({behavior:'instant',block:'start'}); }
-      if(++tries>=80){clearInterval(_iv);_iv=null;}
+      if(++tries>=120){clearInterval(_iv);_iv=null;}
     },450);
   }
   ['wheel','touchmove','keydown'].forEach(function(ev){
     window.addEventListener(ev,function(){ if(_iv){clearInterval(_iv);_iv=null;} if(_ro){_ro.disconnect();_ro=null;} },{passive:true});
   });
-  /* 直因修正：版面尺寸每次变化（MathJax 占位文本→SVG 的巨幅涨缩）后立即按当前 hash 重校，
-     30 秒后自动断开；与上面的定时值守互为冗余。 */
+  /* 直因修正：版面尺寸每次变化（MathJax 占位文本→SVG 的巨幅涨缩）后立即按当前 hash 重校。
+     不设时限断开——慢设备上排版可能耗时一分钟以上，30 秒断开会把读者留在漂移位置；
+     ResizeObserver 只在版面变动时触发，稳定期零成本。用户滚动即永久让位。 */
   var _ro=null;
   if('ResizeObserver' in window){
     _ro=new ResizeObserver(function(){
@@ -328,7 +329,6 @@ window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],tags
       if(Math.abs(top-goal)>150) el.scrollIntoView({behavior:'instant',block:'start'});
     });
     _ro.observe(document.body);
-    setTimeout(function(){ if(_ro){_ro.disconnect();_ro=null;} },30000);
   }
   if(window.MathJax && MathJax.startup && MathJax.startup.promise){
     MathJax.startup.promise.then(function(){ setTimeout(jump,30); setTimeout(stabilize,80); });
