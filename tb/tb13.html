@@ -6,6 +6,14 @@
     <p class="ch-lede">训练完只是开始，钱花在推理上——每回答一个用户，都在烧显存、带宽和电。本章把部署的账算成四笔：自回归解码为什么卡在「搬数据」而不是「算数据」；KV Cache 用多少显存换多少时间；INT8/INT4 量化省多少显存、丢多少精度；张量并行的 All-Reduce 通信量有多大、为什么必须关在单机里。每笔账都配完整数字例题，全部可以拿 python3 复算。学完这一章，给你一张显卡和一份业务需求，你能算出能开多少并发、每百万 token 多少钱。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>decode 瓶颈 → KV cache → 量化 → 并行通信 → 吞吐与延迟 → 自测</div>
   </header>
+  <div class="checkpoint"><span class="box-tag">进入本章</span>
+    <ul>
+      <li><strong>前置</strong>：第六章的注意力机制（K、V 与多头，式 (6.7)），第一章的矩阵乘与分块乘法；这两处不熟时先回第六章、第一章补好再回来。</li>
+      <li><strong>一句话直觉</strong>：开餐馆算账——带宽是传菜口、显存是台面、NVLink 是喊话距离，部署的全部招式都是在这三样资源之间挪预算。</li>
+      <li><strong>最常见误解</strong>：以为 decode 慢是算力不够、该换算力更强的卡——其实它卡在搬权重的带宽上，算力根本没用满。</li>
+      <li><strong>读不懂回哪</strong>：13.1 节的「翻参考书」类比与例 13.1 的时延账。先把算术强度这一个数看懂，后面全是它的应用。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb13-s1">13.1 自回归解码：prefill 与 decode</a>
     <a href="#tb13-s2">13.2 KV Cache：拿显存换时间</a>
@@ -17,6 +25,7 @@
 
   <h3 id="tb13-s1"><span class="h3-num">13.1</span> 自回归解码：prefill 与 decode</h3>
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>decode 就是「一个字一个字往外蹦，每蹦一个都要翻一遍全部记忆」。</strong>想象你写小说，规矩很奇怪：每写下一个字之前，必须把整本参考书（模型全部权重）从头到尾翻一遍。写一百个字，就得翻一百遍——写多快不取决于你翻书之后写字的手速（算力），而取决于翻书本身的速度（带宽）。这就是大模型 decode 阶段的处境，也是它慢的根子。</p></div>
+  <p>先看一句能算的话。设模型要估计「今天天晴」这句话的概率，逐个 token 算：「今」出现的概率 \(0.9\)；给定「今」，「天」跟上的概率 \(0.8\)；给定「今天」，下一个「天」再接的概率 \(0.7\)。三个条件概率一乘，\(0.9\times0.8\times0.7=0.504\) 就是前缀「今天天」的概率。生成就是把这条链倒过来走：每一步从分布里挑一个 token，接龙到下一步。把这条链写成正式记号，就是下面的定义。</p>
   <div class="def"><span class="box-tag">定义 13.1 · 自回归生成</span><p><span class="kt">自回归</span>（autoregressive）分解：模型逐 token 生成，每一步都以已有序列为条件（第三章式 (3.2) 已见过）：</p></div>
   \[ p(\mathbf{x})=\prod_{t=1}^{n} p\big(x_t\mid x_1,\dots,x_{t-1}\big) \tag{13.1} \]
   <p>这条链式分解把推理劈成两个阶段，两者的脾气完全相反。<strong>prefill（预填充）</strong>：prompt 的 \(n\) 个 token 一次并行过模型——矩阵乘里裹着 \(n\) 个位置，是大矩阵乘，GPU 喂得饱。<strong>decode（解码）</strong>：之后每步只算 1 个新 token，却要把全部权重从显存读一遍——矩阵乘退化成矩阵乘向量。</p>
@@ -32,6 +41,7 @@
   </div>
 
   <h3 id="tb13-s2"><span class="h3-num">13.2</span> KV Cache：拿显存换时间</h3>
+  <aside class="mn">背景｜KV Cache 从哪来：它来自「用空间换时间」这个最古老的工程权衡——注意力里每个历史 token 的 K、V 一旦算过，后面每步都要原样再用，重算一遍是纯粹的浪费。长上下文模型普及之后，这套缓存从省算力的技巧变成了显存规划的主角：它决定一张卡能同时伺候多少条会话。</aside>
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>别每写一个字就把前面的重新读一遍——把读过的记下来。</strong>写小说时你绝不会每写一个新字就把前一千字重读一遍，你会做读书笔记：每读一段，把要点抄在卡片上，写新字时只翻卡片。KV cache 就是这套卡片：每个历史 token 的 K、V 向量在第一次算过之后留在显存里，后面每步直接取用。卡片要占桌面（显存），但省下了无穷的重读（重算）。本节就算：卡片占多大桌面，省下多少时间。</p></div>
   <p>为什么需要这套卡片？回到第六章的注意力：decode 第 \(t\) 步，新 token 的 query 要跟<strong>全部 \(t\) 个历史位置</strong>的 K 算打分、对全部 V 加权求和。不缓存的话，每一步都得把前 \(t\) 个 token 的 K、V 投影（一次矩阵乘）全部重算。设头维合并后宽度为 \(d_{\text{model}}\)，单层单步的对比为</p>
   \[ \operatorname{FLOPs}_{\text{no-cache}}(t)=O\!\big(t\,d_{\text{model}}^{2}\big),\qquad \operatorname{FLOPs}_{\text{cache}}(t)=\underbrace{O\!\big(d_{\text{model}}^{2}\big)}_{\text{只算新 token 的投影}}+\underbrace{O\!\big(t\,d_{\text{model}}\big)}_{\text{与缓存打分}} \tag{13.3} \]
@@ -45,6 +55,7 @@
     \[ M_{\text{KV}}=2\cdot L\cdot d_{\text{model}}\cdot n_{\text{ctx}}\cdot B\cdot b \tag{13.4} \]
     <p>四个乘数各管一件事：2 是「K 和 V 两份」，\(L\) 是「每层一份」，\(d_{\text{model}}\) 是「每份多宽」，\(n_{\text{ctx}}\cdot B\) 是「业务规模」。</p>
   </div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这段推导</span><p>刚才四步干了什么：单 token 单层存 K、V 两份（\(2d_{\text{model}}\) 个元素）→ 乘上层数 \(L\) → 乘上 token 数与 batch → 乘上每元素字节数 \(b\)，拼出式 (13.4)。结论意味着：KV cache 显存对上下文和并发都是线性的——并发每加一条就扣一份，这是 13.6 节例 13.6 算「一张卡能开多少并发」的直接依据。</p></div>
   <div class="example"><span class="box-tag">例 13.2 · 动手算</span>
     <p><strong>题目</strong>　7B 模型：\(L=32\)、\(d_{\text{model}}=4096\)，BF16。求 batch \(=1\)、上下文 2048 时的 KV cache 显存；再算 batch \(=8\)，以及 batch \(=64\)、上下文 8192 的压力情形。</p>
     <p><strong>解</strong>　套式 (13.4)，一项项代入：\(2\)（K、V 两份）\(\times32\)（层）\(\times4096\)（宽）\(\times2048\)（token）\(\times1\)（batch）\(\times2\)（字节）：</p>
@@ -64,7 +75,9 @@
   </div>
 
   <h3 id="tb13-s3"><span class="h3-num">13.3</span> 量化：拿比特换显存</h3>
+  <aside class="mn">背景｜量化从哪来：它出身数字信号处理——上世纪把连续声音压进有限比特的电话与 CD，核心难题就是「格子画多宽、误差藏在哪」。神经网络量化继承了同一套算术：权重从 FP16 压到 INT8/INT4，替代的是「全精度才保险」的默认做法，换来显存与带宽的成倍节省。</aside>
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>量化 = 把高保真照片存成低分辨率，省空间但损失细节。</strong>一张 RAW 照片 50 MB，压成 JPG 只剩 5 MB——远看没区别，放大看细节糊了。权重也一样：FP16 每参数 2 字节是「高保真」，INT4 每参数 0.5 字节是「低分辨率」。省 4 倍显存是确定的，损失多少「细节」（精度）取决于压多狠、以及有没有聪明地把模糊藏到人眼（模型输出）不敏感的地方。</p></div>
+  <p>先拿一个数试手感。权重 \(x=1.6\)，尺度取 \(s=0.5\)：\(x/s=3.2\)，四舍五入到整数 \(q=3\)；用的时候乘回来，\(\hat{x}=0.5\times3=1.5\)。存 \(3\) 这个整数只花几比特，比存 \(1.6\) 的浮点省得多，代价是误差 \(1.6-1.5=0.1\)。把「除尺度、取整、乘回来」这三步写成公式，就是下面的定义。</p>
   <div class="def"><span class="box-tag">定义 13.2 · 对称量化</span><p><span class="kt">对称量化</span>（symmetric quantization）把浮点数 \(x\) 按尺度 \(s\) 映射到 \(b\) 比特整数，还原时乘回尺度：</p></div>
   \[ q=\operatorname{round}\!\left(\frac{x}{s}\right)\in\big[-2^{\,b-1},\,2^{\,b-1}-1\big],\qquad \hat{x}=s\cdot q,\qquad s=\frac{\max_i|x_i|}{2^{\,b-1}-1} \tag{13.6} \]
   <p>三个符号逐个拆。尺度 \(s\)：「一格代表多大的浮点区间」——拿整组权重里绝对值最大的那个，除以整数能表示的最大正值（INT4 是 \(2^{4-1}-1=7\)，INT8 是 127），保证最大那个数恰好顶到格子上。整数 \(q\)：\(x/s\) 四舍五入，落在 \([-8,7]\)（INT4）或 \([-128,127]\)（INT8）里。还原值 \(\hat{x}=s\cdot q\)：用的时候乘回来。值域明显不对称时改用<span class="kt">非对称量化</span>：引入<span class="kt">零点</span>（zero-point）\(z\) 把整数区间平移到数据的实际范围，</p>
@@ -76,6 +89,7 @@
     \[ |x-\hat{x}|\le \frac{s}{2} \tag{13.8} \]
     <p>第四步，读含义：误差上界跟 \(s\) 成正比；而由式 (13.6)，\(s\) 由值域撑开、被比特数除细——<strong>比特越少，格子越宽，误差上界越松</strong>。INT8 与 INT4 的精度差距，算术本质就是这一条。</p>
   </div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这段推导</span><p>刚才四步干了什么：四舍五入离最近的整数最多差半格（定义）→ 写成 \(|x/s-q|\le1/2\) → 两边乘 \(s\) 得 \(|x-\hat{x}|\le s/2\)（式 (13.8)）→ 读出误差随尺度线性涨。结论意味着：比特越少格子越宽、误差上界越松，INT4 比 INT8 糙是算术而不是实现 bug——例 13.3 马上拿真数验证这一条。</p></div>
   <div class="example"><span class="box-tag">例 13.3 · 动手算</span>
     <p><strong>题目</strong>　4 个 FP16 权重 \(\mathbf{w}=(0.45,\,-1.20,\,3.75,\,0.05)\)。做 INT4 对称量化（值域 \([-8,7]\)，\(s=\max|\mathbf{w}|/7\)），写出整数、反量化值与逐元素误差；对比同组 INT8。</p>
     <p><strong>解</strong>　第一步算尺度：\(s=3.75/7\approx0.5357\)。第二步逐个量化：\(0.45/0.5357\approx0.84\to\operatorname{round}=1\)；\(-1.20/0.5357\approx-2.24\to-2\)；\(3.75/0.5357=7\to7\)（正好顶格）；\(0.05/0.5357\approx0.09\to0\)。第三步反量化 \(\hat{x}=s\,q\)：</p>
@@ -97,6 +111,7 @@
   </div>
 
   <h3 id="tb13-s4"><span class="h3-num">13.4</span> 张量并行的通信点</h3>
+  <aside class="mn">背景｜All-Reduce 从哪来：它是高性能计算里几十年的老通信原语（MPI 的标准集合操作），为「每台机器各算出一份局部结果、要合成全局结果且人人拿到」而生，替代了「全发给一台主节点再发回」的瓶颈模式。深度学习多卡训练把它用熟，推理的张量并行又把它提到了每层两次的频次。</aside>
   <p>模型大到单卡装不下，就把每个大矩阵切开摊到多卡——这就是<span class="kt">张量并行</span>（tensor parallelism，TP）。对线性层 \(\mathbf{Y}=\mathbf{X}\mathbf{W}\)，\(\mathbf{X}\in\mathbb{R}^{M\times d}\)、\(\mathbf{W}\in\mathbb{R}^{d\times d'}\)，有两种切法，通信性质截然不同：</p>
   \[ \text{列切：}\ \mathbf{W}=[\mathbf{W}_1\mid\mathbf{W}_2],\ \mathbf{Y}=[\mathbf{X}\mathbf{W}_1\mid\mathbf{X}\mathbf{W}_2];\qquad \text{行切：}\ \mathbf{W}=\begin{pmatrix}\mathbf{W}_1\\ \mathbf{W}_2\end{pmatrix},\ \mathbf{Y}=\mathbf{X}_1\mathbf{W}_1+\mathbf{X}_2\mathbf{W}_2 \tag{13.9} \]
   <p>慢慢读这两种切法。<strong>列切</strong>按输出维 \(d'\) 把 \(\mathbf{W}\) 劈成左右两块（每块 \(\mathbf{W}_i\in\mathbb{R}^{d\times d'/2}\)）：卡 1 算 \(\mathbf{X}\mathbf{W}_1\) 得到输出的左半，卡 2 算右半，最后拼接——各卡从头到尾不交换数据，<strong>零通信</strong>。<strong>行切</strong>按输入维 \(d\) 劈（\(\mathbf{W}_i\in\mathbb{R}^{d/2\times d'}\)，相应地把 \(\mathbf{X}\) 按列劈成 \(\mathbf{X}_1,\mathbf{X}_2\)）：由第一章的分块矩阵乘法，\(\mathbf{Y}=\mathbf{X}_1\mathbf{W}_1+\mathbf{X}_2\mathbf{W}_2\)——每卡只算出<em>部分和</em>，必须有人把它们加起来，这个「加起来并人人有份」的操作叫 <span class="kt">All-Reduce</span>（全归约）。通信点就在这里。</p>
@@ -143,6 +158,7 @@
     \[ C_{\text{AR}}=\frac{2(N-1)}{N}\cdot K\cdot b\ \xrightarrow{\ N\ \text{大}\ }\ 2Kb \tag{13.10} \]
     <p>第四步，读含义：\(\frac{N-1}{N}\) 随卡数趋于 1，总量趋于常数 \(2K\)，<strong>与卡数几乎无关</strong>——增加卡数摊薄的只是计算，通信量省不掉。</p>
   </div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这段推导</span><p>刚才四步干了什么：把 All-Reduce 拆成 reduce-scatter 加 all-gather（标准分解）→ 各算出每卡 \((N-1)K/N\) 个元素 → 两步相加乘字节数得式 (13.10) → 发现总量趋于 \(2K\)、与卡数几乎无关。结论意味着：加卡摊得薄计算、摊不薄通信——这就是张量并行必须关在单机 NVLink 里的定量理由，例 13.4 把它换算成秒。</p></div>
   <div class="example"><span class="box-tag">例 13.4 · 动手算</span>
     <p><strong>题目</strong>　一层 \(4096\times4096\) 的行切矩阵乘，\(M=4096\) 个 token（batch × seq），输出 \(\mathbf{Y}\in\mathbb{R}^{4096\times4096}\)，BF16，4 卡。估算每层这次 All-Reduce 的每卡通信字节数，并对比 NVLink 与以太网的耗时。</p>
     <p><strong>解</strong>　归约对象是输出矩阵：\(K=4096\times4096=16{,}777{,}216\) 个元素，BF16 下 \(K\times2=32\) MiB。套式 (13.10)，\(N=4\)：</p>
@@ -161,6 +177,7 @@
     <p>第四步，算通信量。归约对象是输出 \(\mathbf{Y}\)：\(K=M\cdot d'=1\times2=2\) 个元素，BF16 每元素 2 字节，\(N=2\) 套式 (13.10)：\(C_{\text{AR}}=\frac{2\times1}{2}\times2\times2=4\) 字节/卡。和例 13.4 对照看：行切的通信量只跟输出大小 \(K\) 有关，跟矩阵怎么切、切几份几乎无关。</p>
     <p><strong>反例</strong>　若省掉 All-Reduce、把两块部分和直接拼接当输出，得到 \((1,4,11,4)\)——维数不对，数值更不是 \((12,8)\)。行切之后每卡手里只是「半个答案」，求和不是优化项，是正确性本身。（python3 验算：\(1\cdot1+2\cdot0=1\)，\(3\cdot1+4\cdot2=11\)，\((1,4)+(11,4)=(12,8)\)；\(2\cdot(1/2)\cdot2\cdot2=4\)。）</p>
   </div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这道例题</span><p>刚才四步干了什么：直接相乘得标准答案 \((12,8)\) → 两卡各算部分和 \((1,4)\)、\((11,4)\) → All-Reduce 相加还原出答案 → 按式 (13.10) 算出这次通信仅 4 字节/卡。结论意味着：行切的求和不是可省的开销而是正确性本身——少了它输出连维数都不对；通信量只看输出大小 \(K\)，跟矩阵切几份几乎无关。</p></div>
 
   <h3 id="tb13-s5"><span class="h3-num">13.5</span> 吞吐与延迟：batch 的双面效应</h3>
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>一辆公交车的油耗，拉 1 个人和拉 40 个人几乎一样。</strong>decode 一步要搬一次权重（约 \(2P\) 字节），这是「油耗」；batch 里的 \(B\) 个请求是「乘客」——搬一次权重可以同时服务 \(B\) 个请求。乘客不满员，就是在浪费这趟车。但车有座位上限（算力平衡点），塞满之后再加人，就得开第二趟车——延迟开始涨了。</p></div>
@@ -201,5 +218,15 @@
     <details><summary>看答案</summary><p>尺度：\(s=\max|\mathbf{w}|/7=3.0/7\approx0.4286\)。量化：\(2.0/0.4286\approx4.67\to5\)；\(-0.5/0.4286\approx-1.17\to-1\)；\(0.9/0.4286\approx2.10\to2\)；\(-3.0/0.4286=-7\to-7\)（顶格）。所以 \(q=(5,-1,2,-7)\)。反量化 \(\hat{\mathbf{w}}=s\,q=(2.143,\,-0.429,\,0.857,\,-3.000)\)。逐元素误差 \((0.143,\ 0.071,\ 0.043,\ 0)\)，最大 \(0.143\)。验证上界：\(s/2\approx0.214\)，\(0.143\le0.214\)，成立。\(-3.0\) 是尺度锚点所以误差为零——和例 13.3 里 \(3.75\) 的角色一样。（python3 验算：<code>round(2.0/0.428571)=5</code>，\(5\times0.4286=2.143\)，全部吻合。）</p></details>
     <p><strong>第 3 题（概念）</strong>　(a) decode 阶段为什么是访存瓶颈而不是计算瓶颈？(b) 为什么张量并行必须放单机 NVLink、流水线并行才能跨机？</p>
     <details><summary>看答案</summary><p>(a) decode 每步只算 1 个新 token，却要把全部权重从显存读一遍：计算量约 \(2P\) FLOPs、搬运量约 \(2P\) 字节，算术强度 \(\approx1\) FLOP/byte（式 (13.2)）；而 A100 的机器平衡点约 156 FLOP/byte。\(1\ll156\)，算力大部分时间在等数据——瓶颈在带宽，所以单 token 时延 ≈ 权重字节数 ÷ 带宽，加算力卡没用。(b) 张量并行的行切层每层要两次 All-Reduce，每卡通信量约 \(2K b\)（式 (13.10)）。以例 13.4 的数字：NVLink 下约 56 μs，以太网约 4 ms、慢 72 倍，70 层模型每个 decode 步多花约 0.56 s——通信频繁到必须关在近 1 TB/s 的单机 NVLink 域内。流水线并行只在层边界传一次激活，通信次数少、量级小，以太网才扛得住，所以跨机用 PP。</p></details>
+  </div>
+
+  <div class="checkpoint"><span class="box-tag">本章节奏自测（试点章）</span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：670 字（阈值 ≤1,200，位于 13.3 节量化；次长 648 字，位于 13.1 节）；</li>
+      <li><strong>每节例子数</strong>：动手算共 6 例（13.1、13.2、13.3、13.6 节各 1 例，13.4 节 2 例），检查点 3 处；</li>
+      <li><strong>单步推导最大跨度</strong>：≤2 个等号（抽检：式 (13.4) 的逐项拼乘、式 (13.8) 的两边乘 \(s\)、式 (13.10) 的两步相加）；</li>
+      <li><strong>长推导回头看</strong>：4 处（13.2 节 KV cache 显存推导后、13.3 节量化误差上界推导后、13.4 节 All-Reduce 通信量推导后、例 13.5 后），每个 ≥3 步推导后均有；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（KV Cache / 量化 / All-Reduce）、回头看 4 处、数字预热 2 段（13.1、13.3 节），原文未删改一字。</li>
+    </ul>
   </div>
 </section>

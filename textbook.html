@@ -3355,6 +3355,14 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p class="ch-lede">本章按目录章名展开，目录原图未给副标题。要解决的问题很实际：模型训练完就「定格」了，你公司的退货政策、上周的新文档，它一概不知。RAG（检索增强生成）的补救办法是——答问之前先去资料库里查。本章回答三件事：文字怎么变成可检索的向量；三种相似度度量什么时候等价、什么时候打架；语料大到百万级时怎么用近似最近邻拿一点召回率换数量级的速度。最后把检索分数解释成概率，带你看清为什么「检索质量就是答案质量的上限」。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>地图直觉 → 三种度量 → 近似最近邻 → 分数变后验 → 完整例题 → 自测</div>
   </header>
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">进入本章</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>前置</strong>：<a class="xref" href="#tb01">第一章</a>的向量、点积与模长（式 (<a class="xref" href="#eq-1-2">1.2</a>)–(1.4)），<a class="xref" href="#tb03">第三章</a>的 softmax 与全概率公式；这两处不熟时先回<a class="xref" href="#tb01">第一章</a>、<a class="xref" href="#tb03">第三章</a>补好再回来。</li>
+      <li><strong>一句话直觉</strong>：查地图——每篇文档按内容钉成一个点，你的问题也钉成一个点，离得最近的几个点捞出来交给模型参考。</li>
+      <li><strong>最常见误解</strong>：以为「相似度分数高 = 这篇文档真含答案」——分数只是代理，含不含答案是另一回事，12.4 节专门拆这层关系。</li>
+      <li><strong>读不懂回哪</strong>：12.1 节的「地图」类比与例 <a class="xref" href="#ex-12-1">12.1</a> 的三种度量对照表。卡住多半是符号问题，不是数学问题。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb12-s1">12.1 嵌入检索：把文字变成地图上的点</a>
     <a href="#tb12-s2">12.2 三种度量：余弦、点积、欧氏</a>
@@ -3367,9 +3375,11 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <h3 id="tb12-s1"><span class="h3-num">12.1</span> 嵌入检索：把文字变成地图上的点</h3>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>嵌入检索 = 把每段文字变成地图上的一个点，找离你最近的点。</strong>想象一张巨大的城市地图：每篇文档按「内容」被钉在某个位置——讲退货的钉在东边，讲店铺历史的钉在西边。你的问题也被钉成一个点。检索就是拿尺子量：哪个文档点离你的问题点最近，就把它捞出来交给模型参考。地图画得好（语义相近的点真的挨在一起），检索就准；地图画歪了，后面全盘皆输。这张「地图」就是<a class="xref" href="#tb01">第一章</a>学的向量空间，「钉子」就是嵌入向量。</p></div>
   <p>把直觉落成定义。<a class="xref" href="#tb01">第一章</a>说过，嵌入是把 token 变成向量；这里要的是把<strong>一整段文字</strong>变成一个向量。</p>
+  <p>先看两个能算的小向量。假设嵌入模型只有 2 维：「退货政策」嵌成 \(\mathbf{a}=(0.9,0.1)\)，「店铺历史」嵌成 \(\mathbf{b}=(0.1,0.9)\)；用户问「怎么退款」，嵌成 \(\mathbf{q}=(0.85,0.15)\)。拿尺子一比：\(\mathbf{q}\) 离 \(\mathbf{a}\) 的距离是 \(\sqrt{0.005}\approx0.07\)，离 \(\mathbf{b}\) 是 \(\sqrt{1.125}\approx1.06\)——问题明显靠向退货那篇。把「嵌成向量、再比远近」这套动作写成正式定义，就是下面两条。</p>
   <div class="def"><span class="box-tag"><span class="ctab">12.1</span><span class="clabel">定义· 嵌入模型</span></span><p><span class="kt">嵌入模型</span>（embedding model）是一个映射 \(f:\text{文本}\to\mathbb{R}^{d}\)，训练目标只有一句话：<strong>语义相近的文本，向量相近</strong>。把语料库全部 \(N\) 篇文档预先嵌好，按行存成矩阵；查询来了，现算一个查询向量：</p></div>
   <span id="eq-12-1" class="anchor"></span>\[ \mathbf{D}=\begin{pmatrix}\mathbf{d}_1^{\top}\\ \vdots\\ \mathbf{d}_N^{\top}\end{pmatrix}\in\mathbb{R}^{N\times d},\qquad \mathbf{q}=f(\text{query})\in\mathbb{R}^{d} \tag{12.1} \]
   <p>维度标清楚：\(\mathbf{D}\) 是 \(N\) 行 \(d\) 列，每行一篇文档的向量；\(\mathbf{q}\) 是 \(d\) 维。注意一个关键纪律：<strong>查询和文档必须过同一个嵌入模型</strong>——同一张地图上的点才能比距离，各画各的地图，距离毫无意义。</p>
+  <aside class="mn">背景｜最近邻检索从哪来：它出身上世纪的模式识别与信息检索——给新样本找「最像的老样本」，替代的是人工编目的分类卡片；后来向量数据库把它做成了毫秒级的在线服务。这里需要它，因为 RAG 的第一步正是「从语料里找出跟问题最像的几篇」。</aside>
   <div class="def"><span class="box-tag"><span class="ctab">12.2</span><span class="clabel">定义· 最近邻检索</span></span><p>给定相似度函数 \(\operatorname{sim}(\cdot,\cdot)\)，<span class="kt">最近邻检索</span>（nearest neighbor search）返回得分最高的 \(k\) 篇文档：\(\operatorname{top}\text{-}k=\arg\max\nolimits_{i}^{(k)}\ \operatorname{sim}(\mathbf{q},\mathbf{d}_i)\)。</p></div>
   <p>全流程因此只有两步。<strong>离线建索引</strong>：语料切块、逐块过嵌入模型、把向量存进向量库——这一步做慢点没关系，只做一次。<strong>在线查询</strong>：问题过同一个嵌入模型得到 \(\mathbf{q}\)，检索出 top-\(k\)，把原文拼进 prompt 交给生成模型——这一步要快，用户在等。还有一个隐患先记下：分数高只说明「在嵌入模型的语义空间里离得近」，它是「真的包含答案」的<em>代理</em>，不是答案本身。12.4 节会把这层代理关系写成概率。</p>
   <aside class="mn">嵌入模型是「翻译官」：把「退货」和「退款」这两个字面不同的词，翻成地图上挨着的两个点。翻译翻歪了，后面全盘皆输。</aside>
@@ -3397,6 +3407,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p>第三步，代入归一化条件 \(\|\mathbf{q}\|_2^2=\|\mathbf{d}\|_2^2=1\)：\(\|\mathbf{q}-\mathbf{d}\|_2^{2}=1-2\,\mathbf{q}\cdot\mathbf{d}+1=2-2\operatorname{cos\_sim}(\mathbf{q},\mathbf{d})\)。</p>
     <p>第四步，看结论的形状：欧氏距离的平方 \(=2-2\times\) 余弦。余弦越大，右边越小——欧氏距离是余弦的严格单调减函数，<strong>排序完全一致</strong>。证毕。</p>
   </div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才四步干了什么：先把余弦的分母算成 1（归一化后点积即余弦）→ 把欧氏距离的平方展开（去掉根号）→ 代入模长为 1（得 \(2-2\times\)余弦）→ 看单调性（排序一致）。结论意味着：归一化之后三种尺子其实是同一把，工程上直接用最快的点积就行——式 (<a class="xref" href="#eq-12-5">12.5</a>) 往后就是向量库选度量的依据。</p></div>
   <p>所以：<strong>归一化之后，三种度量给出完全相同的排序</strong>；不归一化时它们各管各的——余弦只看方向，点积额外奖励「模长更长的文档」，欧氏额外惩罚「绝对位置上离得远」。式 (<a class="xref" href="#eq-12-5">12.5</a>) 也是一条工程结论的依据：嵌入模型把输出归一化后，用最便宜的点积就等价于用余弦。</p>
   <aside class="mn">一句话记忆：先把所有向量压到单位球面上，三种度量就分不清谁是谁了；不压，点积就会被「长向量」收买。</aside>
   <div class="example" id="ex-12-1"><span class="box-tag"><span class="ctab">12.1</span><span class="clabel">例· 动手算</span></span>
@@ -3420,8 +3431,10 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <span id="eq-12-6" class="anchor"></span>\[ \operatorname{cost}_{\text{brute}}=O(Nd) \tag{12.6} \]
   <p>代入 \(N=10^{6}\)、\(d=1024\)：每个查询约 \(1.02\times10^{9}\) 次乘加，还要扫过 \(10^6\times1024\times4\) B \(\approx4.1\) GB 的数据——单查询就吃不消，更别说并发。<span class="kt">近似最近邻</span>（approximate nearest neighbor，ANN）的思路是：<strong>接受偶尔漏掉真正的最近邻，换数量级的加速</strong>。两套主流机制，各砍一刀。</p>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>IVF 像查图书馆的索书号。</strong>找一本书不必逐架扫荡：先查目录确定它在「文学区三楼」，再只扫荡那一个书架。k-means 聚类就是给向量库分「区」，每个区一个质心当索书号；查询时先跟所有索书号比一遍，只进最近的几个区细看。漏检的风险一目了然：书真被分错区，你就永远找不到它。<strong>HNSW 像问路。</strong>去一个陌生地址，先上高速跳到大致城区（顶层稀疏长边），再下干道进街区（中层），最后钻小巷精修门牌（底层稠密短边）。每一步都只跟「邻居」比远近，对数级步数就能走到目标附近。</p></div>
+  <aside class="mn">背景｜倒排索引从哪来：IVF 借的是搜索引擎的老名字——传统倒排索引为每个词建一张「含该词的文档清单」，替代逐篇扫描全文；这里词换成了聚类桶，清单换成了桶内向量，查询时只翻少数几张清单。它要解决的是暴力检索 \(O(Nd)\) 在百万级语料上算不动的问题。</aside>
   <p><strong>IVF（倒排文件索引，inverted file）</strong>：离线时用 k-means 把 \(N\) 个向量聚成 \(C\) 个桶，每桶记一个质心 \(\mathbf{c}_r\)；查询时先跟 \(C\) 个质心比一遍，只扫描最近的 \(\operatorname{nprobe}\) 个桶：</p>
   <span id="eq-12-7" class="anchor"></span>\[ r^{*}=\arg\max_{r}\ \operatorname{cos\_sim}(\mathbf{q},\mathbf{c}_r),\qquad \operatorname{cost}_{\text{IVF}}\approx Cd+\frac{\operatorname{nprobe}}{C}Nd \tag{12.7} \]
+  <aside class="mn">背景｜召回率从哪来：它来自信息检索的评测传统——漏掉相关文档往往比多捞几篇更致命（想想法律检索漏掉一条判例），于是专门设一个指标量「该捞的捞回了多少」。ANN 拿精确换速度，漏检成了常态，召回率就成了验收时的那把尺。</aside>
   <p>式 (<a class="xref" href="#eq-12-7">12.7</a>) 两项各是什么？第一项 \(Cd\) 是「跟所有索书号比一遍」；第二项 \(\frac{\operatorname{nprobe}}{C}Nd\) 是「进桶细查」——每桶平均 \(N/C\) 个向量，查 \(\operatorname{nprobe}\) 桶。代入 \(C=4096\)、\(\operatorname{nprobe}=8\)：质心比对约 \(4.2\times10^{6}\) 次运算，桶内扫描约 \(2.0\times10^{6}\)，合计 \(6.2\times10^{6}\)，比暴力的 \(1.02\times10^{9}\) 快约 <strong>165 倍</strong>。代价写在分数里：只看了全库的 \(8/4096\approx0.2\%\)——真正的最近邻若落在没探的桶里，就永久丢失。这就是<span class="kt">召回率</span>（recall，ANN 命中的 top-\(k\) 占暴力 top-\(k\) 的比例）的来源：\(\operatorname{nprobe}\) 调大，召回升、延迟升；调小，两头降。<strong>召回率与延迟，是同一根旋钮的两端。</strong></p>
   <p><strong>HNSW（分层可导航小世界图，hierarchical navigable small world）</strong>：把向量组织成多层图——顶层是稀疏长边，负责「跳大区」；底层是稠密短边，负责「精修」。查询从顶层贪心走向离 \(\mathbf{q}\) 更近的邻居，走不动就下降一层，直到底层。本书不证它的正确性，只记机制：对数级的跳数换来高召回；调参 <code>ef</code>（搜索时保留的候选池大小）控制召回率与延迟的交换比——<code>ef</code> 越大，候选池越深，越准也越慢，和 \(\operatorname{nprobe}\) 是同一类旋钮。</p>
   <p>还有第三刀，砍的方向不同。<strong>PQ（乘积量化，product quantization）</strong>：不砍「看多少向量」，砍「每个向量占多少字节」。把 \(d\) 维向量切成 \(M\) 段：</p>
@@ -3436,6 +3449,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p><strong>对照暴力。</strong>把跳过的桶 2 补算出来对答案：\(\operatorname{cos\_sim}(\mathbf{q},\mathbf{d}_4)=\frac{2+3}{\sqrt{5}\sqrt{10}}=\frac{5}{\sqrt{50}}\approx0.707\)，\(\operatorname{cos\_sim}(\mathbf{q},\mathbf{d}_5)=\frac{2+2}{\sqrt{5}\sqrt{5}}=0.800\)，\(\operatorname{cos\_sim}(\mathbf{q},\mathbf{d}_6)=\frac{0+3}{\sqrt{5}\times3}=\frac{1}{\sqrt{5}}\approx0.447\)——全部低于桶 1 的垫底成绩 \(0.976\)，暴力 top-1 同样是 \(\mathbf{d}_2\)，这次没漏。代价账：IVF 算了 \(2+3=5\) 次余弦，暴力要 \(6\) 次——库小只省一点；同一招放大到 \(N=10^{6}\)，就是上文按式 (<a class="xref" href="#eq-12-7">12.7</a>) 算出的约 165 倍加速。</p>
     <p><strong>反例：漏检长什么样。</strong>把查询换成 \(\mathbf{q}'=(1,1)^{\top}\)。它对两个质心打平：\(\operatorname{cos\_sim}(\mathbf{q}',\mathbf{c}_1)=\operatorname{cos\_sim}(\mathbf{q}',\mathbf{c}_2)=1/\sqrt{2}\approx0.707\)，进哪桶都说得过去。但暴力的前两名是 \(\mathbf{d}_2\) 与 \(\mathbf{d}_5\)——各得 \(3/\sqrt{10}\approx0.949\)，其余四篇最高只有 \(4/\sqrt{20}\approx0.894\)——而 \(\mathbf{d}_2\) 在桶 1、\(\mathbf{d}_5\) 在桶 2。\(\operatorname{nprobe}=1\) 注定丢掉其中一个：recall@2 封顶 \(1/2\)。真近邻落在没探的桶里就永久丢失，这就是召回率代价的具体形状。（python3 验算：\(2/\sqrt{5}=0.8944\)，\(7/\sqrt{50}=0.9899\)，\(9/\sqrt{85}=0.9762\)，\(3/\sqrt{10}=0.9487\)，\(4/\sqrt{17}=0.9701\)，全部吻合。）</p>
   </div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这道例题</span></span><p>刚才干了什么：先跟 2 个质心比余弦、选中桶 1（第一步），再在桶内 3 个向量里细查出 \(\mathbf{d}_2\)（第二步），然后补算被跳过的桶 2 验证这次没漏（对照暴力），最后换查询 \(\mathbf{q}'\) 演示了一次真漏检（recall@2 封顶一半）。结论意味着：IVF 的两步正好对应式 (<a class="xref" href="#eq-12-7">12.7</a>) 的两项成本，漏检不是事故而是设计——\(\operatorname{nprobe}\) 拧的就是召回率与延迟的交换。</p></div>
   <div class="warn"><span class="box-tag bare"><span class="ctab">常见坑</span><span class="clabel"></span></span><p><strong>以为 ANN 是无损的。</strong>IVF 只扫了 \(0.2\%\) 的库、HNSW 贪心跳会错过角落、PQ 连距离都是近似——三者都用召回率换速度。线上典型症状是「偶发检索不到明明存在的文档」，且随 nprobe、ef 调小而恶化。改法：上线前用一批真实查询跑暴力检索当基准，测出召回率，把 nprobe、ef 调到召回达标（比如 recall@10 ≥ 0.95）再谈延迟优化。</p></div>
   <div class="checkpoint"><span class="box-tag bare"><span class="ctab">检查点 ✓</span><span class="clabel"></span></span><p>你现在应该能：</p>
     <ul>
@@ -3480,6 +3494,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p><strong>第四步，拼 prompt。</strong>「已知资料：①退货政策：签收后 7 天内可无理由退货；②换货流程：联系客服登记，3 个工作日内发出新件……问题：买了之后不想要了怎么办？请根据资料回答。」模型按式 (<a class="xref" href="#eq-12-10">12.10</a>) 的条件化在上下文中完成：以约 \(0.53:0.47\) 的「注意力预算」依据 \(\mathbf{d}_1\)、\(\mathbf{d}_3\) 作答，给出「7 天内可无理由退货，联系客服登记」。</p>
     <p><strong>反事实看上限。</strong>若嵌入模型没训练好，把「不想要了」嵌得离 \(\mathbf{d}_2\)（店铺历史）、\(\mathbf{d}_4\)（积分）更近，top-2 就不含退货政策——式 (<a class="xref" href="#eq-12-10">12.10</a>) 里 \(p(\mathbf{y}\mid\mathbf{x},\mathbf{d}_1)\) 的权重为零，prompt 里没有答案材料，模型只能硬编。这就是 garbage in garbage out：<strong>检索质量是答案质量的上限</strong>。（python3 验算：\(\mathbf{q}\cdot\mathbf{d}_1=12\)，\(\cos=12/\sqrt{144}=1\)；\(Z=2.718+1.441+2.377+1.335=7.871\)；\(2.718/5.096=0.533\)，全部吻合。）</p>
   </div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这道例题</span></span><p>刚才四步干了什么：打分（余弦，\(\mathbf{d}_1\) 满分 1.000）→ 取 top-2（\(\mathbf{d}_1,\mathbf{d}_3\) 入选）→ 算后验（全量里占 0.345，截断重归一化后升到 0.533）→ 拼 prompt（按约 0.53:0.47 的条件化作答）。结论意味着：流水线每个零件都是前几节造好的；嵌入一旦把问题钉错位置，答案上限当场锁死——「检索质量是答案质量的上限」至此走完了全过程。</p></div>
 
   <h3 id="tb12-ai"><span class="h3-num">12.6</span> 在 AI 中的位置</h3>
   <p>RAG 是企业落地的默认方案——私有数据进不了训练集，就进检索库。本章每条结论对应的组件与故障：</p>
@@ -3505,6 +3520,16 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p><strong>第 3 题（概念 + 计算）</strong>　某向量库 \(N=10^{6}\)、\(d=1024\)、\(C=4096\) 个 IVF 桶。(a) \(\operatorname{nprobe}=8\) 与 \(\operatorname{nprobe}=64\) 各扫全库的百分之几？(b) 用式 (<a class="xref" href="#eq-12-7">12.7</a>) 分别估算两种设置的运算量，以及相对暴力检索的加速比。(c) 把 \(\operatorname{nprobe}\) 从 8 调到 64，召回率和延迟各怎么变？</p>
     <details><summary>看答案</summary><p>(a) 扫描比例 \(=\operatorname{nprobe}/C\)：\(8/4096\approx0.2\%\)；\(64/4096\approx1.56\%\)。(b) 暴力 \(=Nd=1.02\times10^{9}\)。\(\operatorname{nprobe}=8\)：\(Cd+\frac{8}{4096}Nd=4.19\times10^{6}+2.0\times10^{6}\approx6.2\times10^{6}\)，加速约 \(1.02\times10^{9}/6.2\times10^{6}\approx165\) 倍。\(\operatorname{nprobe}=64\)：\(4.19\times10^{6}+1.6\times10^{7}\approx2.02\times10^{7}\)，加速约 \(51\) 倍。(c) \(\operatorname{nprobe}\) 升 8 倍：扫描面大 8 倍，落在被探桶里的真近邻更多——召回率升；运算量从 \(6.2\times10^{6}\) 涨到 \(2.02\times10^{7}\)——延迟升。同一根旋钮的两端：召回率与延迟一起涨，工程上要做的是找到「召回达标的最小 nprobe」，而不是越大越好。（python3 验算：\(4096\times1024=4194304\)；\(64/4096\times10^{6}\times1024=1.6\times10^{7}\)；\(1024000000/20194304\approx50.7\)。）</p></details>
   </div>
+
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">本章节奏自测（试点章）</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：884 字（阈值 ≤1,200，位于 12.3 节近似最近邻；次长 748 字，位于 12.1 节）；</li>
+      <li><strong>每节例子数</strong>：动手算共 4 例（12.2、12.3、12.4、12.5 节各 1 例），检查点 4 处；</li>
+      <li><strong>单步推导最大跨度</strong>：≤2 个等号为主，唯一例外是式 (<a class="xref" href="#eq-12-5">12.5</a>) 的平方差连等展开（一行 3 个等号，同一恒等式的连写）（抽检：式 (<a class="xref" href="#eq-12-5">12.5</a>) 展开、例 <a class="xref" href="#ex-12-3">12.3</a> 的 \(\tau=0.5\) 一支、例 <a class="xref" href="#ex-12-4">12.4</a> 第一步打分）；</li>
+      <li><strong>长推导回头看</strong>：3 处（12.2 节归一化等价推导后、例 <a class="xref" href="#ex-12-2">12.2</a> 后、例 <a class="xref" href="#ex-12-4">12.4</a> 后），每个 ≥3 步推导后均有；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（最近邻检索 / 倒排索引 / 召回率）、回头看 3 处、12.1 节数字预热 1 段，原文未删改一字。</li>
+    </ul>
+  </div>
 </section>
 
 </div>
@@ -3518,6 +3543,14 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p class="ch-lede">训练完只是开始，钱花在推理上——每回答一个用户，都在烧显存、带宽和电。本章把部署的账算成四笔：自回归解码为什么卡在「搬数据」而不是「算数据」；KV Cache 用多少显存换多少时间；INT8/INT4 量化省多少显存、丢多少精度；张量并行的 All-Reduce 通信量有多大、为什么必须关在单机里。每笔账都配完整数字例题，全部可以拿 python3 复算。学完这一章，给你一张显卡和一份业务需求，你能算出能开多少并发、每百万 token 多少钱。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>decode 瓶颈 → KV cache → 量化 → 并行通信 → 吞吐与延迟 → 自测</div>
   </header>
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">进入本章</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>前置</strong>：<a class="xref" href="#tb06">第六章</a>的注意力机制（K、V 与多头，式 (<a class="xref" href="#eq-6-7">6.7</a>)），<a class="xref" href="#tb01">第一章</a>的矩阵乘与分块乘法；这两处不熟时先回<a class="xref" href="#tb06">第六章</a>、<a class="xref" href="#tb01">第一章</a>补好再回来。</li>
+      <li><strong>一句话直觉</strong>：开餐馆算账——带宽是传菜口、显存是台面、NVLink 是喊话距离，部署的全部招式都是在这三样资源之间挪预算。</li>
+      <li><strong>最常见误解</strong>：以为 decode 慢是算力不够、该换算力更强的卡——其实它卡在搬权重的带宽上，算力根本没用满。</li>
+      <li><strong>读不懂回哪</strong>：13.1 节的「翻参考书」类比与例 <a class="xref" href="#ex-13-1">13.1</a> 的时延账。先把算术强度这一个数看懂，后面全是它的应用。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb13-s1">13.1 自回归解码：prefill 与 decode</a>
     <a href="#tb13-s2">13.2 KV Cache：拿显存换时间</a>
@@ -3529,6 +3562,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
 
   <h3 id="tb13-s1"><span class="h3-num">13.1</span> 自回归解码：prefill 与 decode</h3>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>decode 就是「一个字一个字往外蹦，每蹦一个都要翻一遍全部记忆」。</strong>想象你写小说，规矩很奇怪：每写下一个字之前，必须把整本参考书（模型全部权重）从头到尾翻一遍。写一百个字，就得翻一百遍——写多快不取决于你翻书之后写字的手速（算力），而取决于翻书本身的速度（带宽）。这就是大模型 decode 阶段的处境，也是它慢的根子。</p></div>
+  <p>先看一句能算的话。设模型要估计「今天天晴」这句话的概率，逐个 token 算：「今」出现的概率 \(0.9\)；给定「今」，「天」跟上的概率 \(0.8\)；给定「今天」，下一个「天」再接的概率 \(0.7\)。三个条件概率一乘，\(0.9\times0.8\times0.7=0.504\) 就是前缀「今天天」的概率。生成就是把这条链倒过来走：每一步从分布里挑一个 token，接龙到下一步。把这条链写成正式记号，就是下面的定义。</p>
   <div class="def"><span class="box-tag"><span class="ctab">13.1</span><span class="clabel">定义· 自回归生成</span></span><p><span class="kt">自回归</span>（autoregressive）分解：模型逐 token 生成，每一步都以已有序列为条件（<a class="xref" href="#tb03">第三章</a>式 (<a class="xref" href="#eq-3-2">3.2</a>) 已见过）：</p></div>
   <span id="eq-13-1" class="anchor"></span>\[ p(\mathbf{x})=\prod_{t=1}^{n} p\big(x_t\mid x_1,\dots,x_{t-1}\big) \tag{13.1} \]
   <p>这条链式分解把推理劈成两个阶段，两者的脾气完全相反。<strong>prefill（预填充）</strong>：prompt 的 \(n\) 个 token 一次并行过模型——矩阵乘里裹着 \(n\) 个位置，是大矩阵乘，GPU 喂得饱。<strong>decode（解码）</strong>：之后每步只算 1 个新 token，却要把全部权重从显存读一遍——矩阵乘退化成矩阵乘向量。</p>
@@ -3544,6 +3578,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   </div>
 
   <h3 id="tb13-s2"><span class="h3-num">13.2</span> KV Cache：拿显存换时间</h3>
+  <aside class="mn">背景｜KV Cache 从哪来：它来自「用空间换时间」这个最古老的工程权衡——注意力里每个历史 token 的 K、V 一旦算过，后面每步都要原样再用，重算一遍是纯粹的浪费。长上下文模型普及之后，这套缓存从省算力的技巧变成了显存规划的主角：它决定一张卡能同时伺候多少条会话。</aside>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>别每写一个字就把前面的重新读一遍——把读过的记下来。</strong>写小说时你绝不会每写一个新字就把前一千字重读一遍，你会做读书笔记：每读一段，把要点抄在卡片上，写新字时只翻卡片。KV cache 就是这套卡片：每个历史 token 的 K、V 向量在第一次算过之后留在显存里，后面每步直接取用。卡片要占桌面（显存），但省下了无穷的重读（重算）。本节就算：卡片占多大桌面，省下多少时间。</p></div>
   <p>为什么需要这套卡片？回到<a class="xref" href="#tb06">第六章</a>的注意力：decode 第 \(t\) 步，新 token 的 query 要跟<strong>全部 \(t\) 个历史位置</strong>的 K 算打分、对全部 V 加权求和。不缓存的话，每一步都得把前 \(t\) 个 token 的 K、V 投影（一次矩阵乘）全部重算。设头维合并后宽度为 \(d_{\text{model}}\)，单层单步的对比为</p>
   <span id="eq-13-3" class="anchor"></span>\[ \operatorname{FLOPs}_{\text{no-cache}}(t)=O\!\big(t\,d_{\text{model}}^{2}\big),\qquad \operatorname{FLOPs}_{\text{cache}}(t)=\underbrace{O\!\big(d_{\text{model}}^{2}\big)}_{\text{只算新 token 的投影}}+\underbrace{O\!\big(t\,d_{\text{model}}\big)}_{\text{与缓存打分}} \tag{13.3} \]
@@ -3557,6 +3592,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <span id="eq-13-4" class="anchor"></span>\[ M_{\text{KV}}=2\cdot L\cdot d_{\text{model}}\cdot n_{\text{ctx}}\cdot B\cdot b \tag{13.4} \]
     <p>四个乘数各管一件事：2 是「K 和 V 两份」，\(L\) 是「每层一份」，\(d_{\text{model}}\) 是「每份多宽」，\(n_{\text{ctx}}\cdot B\) 是「业务规模」。</p>
   </div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才四步干了什么：单 token 单层存 K、V 两份（\(2d_{\text{model}}\) 个元素）→ 乘上层数 \(L\) → 乘上 token 数与 batch → 乘上每元素字节数 \(b\)，拼出式 (<a class="xref" href="#eq-13-4">13.4</a>)。结论意味着：KV cache 显存对上下文和并发都是线性的——并发每加一条就扣一份，这是 13.6 节例 <a class="xref" href="#ex-13-6">13.6</a> 算「一张卡能开多少并发」的直接依据。</p></div>
   <div class="example" id="ex-13-2"><span class="box-tag"><span class="ctab">13.2</span><span class="clabel">例· 动手算</span></span>
     <p><strong>题目</strong>　7B 模型：\(L=32\)、\(d_{\text{model}}=4096\)，BF16。求 batch \(=1\)、上下文 2048 时的 KV cache 显存；再算 batch \(=8\)，以及 batch \(=64\)、上下文 8192 的压力情形。</p>
     <p><strong>解</strong>　套式 (<a class="xref" href="#eq-13-4">13.4</a>)，一项项代入：\(2\)（K、V 两份）\(\times32\)（层）\(\times4096\)（宽）\(\times2048\)（token）\(\times1\)（batch）\(\times2\)（字节）：</p>
@@ -3576,7 +3612,9 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   </div>
 
   <h3 id="tb13-s3"><span class="h3-num">13.3</span> 量化：拿比特换显存</h3>
+  <aside class="mn">背景｜量化从哪来：它出身数字信号处理——上世纪把连续声音压进有限比特的电话与 CD，核心难题就是「格子画多宽、误差藏在哪」。神经网络量化继承了同一套算术：权重从 FP16 压到 INT8/INT4，替代的是「全精度才保险」的默认做法，换来显存与带宽的成倍节省。</aside>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>量化 = 把高保真照片存成低分辨率，省空间但损失细节。</strong>一张 RAW 照片 50 MB，压成 JPG 只剩 5 MB——远看没区别，放大看细节糊了。权重也一样：FP16 每参数 2 字节是「高保真」，INT4 每参数 0.5 字节是「低分辨率」。省 4 倍显存是确定的，损失多少「细节」（精度）取决于压多狠、以及有没有聪明地把模糊藏到人眼（模型输出）不敏感的地方。</p></div>
+  <p>先拿一个数试手感。权重 \(x=1.6\)，尺度取 \(s=0.5\)：\(x/s=3.2\)，四舍五入到整数 \(q=3\)；用的时候乘回来，\(\hat{x}=0.5\times3=1.5\)。存 \(3\) 这个整数只花几比特，比存 \(1.6\) 的浮点省得多，代价是误差 \(1.6-1.5=0.1\)。把「除尺度、取整、乘回来」这三步写成公式，就是下面的定义。</p>
   <div class="def"><span class="box-tag"><span class="ctab">13.2</span><span class="clabel">定义· 对称量化</span></span><p><span class="kt">对称量化</span>（symmetric quantization）把浮点数 \(x\) 按尺度 \(s\) 映射到 \(b\) 比特整数，还原时乘回尺度：</p></div>
   <span id="eq-13-6" class="anchor"></span>\[ q=\operatorname{round}\!\left(\frac{x}{s}\right)\in\big[-2^{\,b-1},\,2^{\,b-1}-1\big],\qquad \hat{x}=s\cdot q,\qquad s=\frac{\max_i|x_i|}{2^{\,b-1}-1} \tag{13.6} \]
   <p>三个符号逐个拆。尺度 \(s\)：「一格代表多大的浮点区间」——拿整组权重里绝对值最大的那个，除以整数能表示的最大正值（INT4 是 \(2^{4-1}-1=7\)，INT8 是 127），保证最大那个数恰好顶到格子上。整数 \(q\)：\(x/s\) 四舍五入，落在 \([-8,7]\)（INT4）或 \([-128,127]\)（INT8）里。还原值 \(\hat{x}=s\cdot q\)：用的时候乘回来。值域明显不对称时改用<span class="kt">非对称量化</span>：引入<span class="kt">零点</span>（zero-point）\(z\) 把整数区间平移到数据的实际范围，</p>
@@ -3588,6 +3626,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <span id="eq-13-8" class="anchor"></span>\[ |x-\hat{x}|\le \frac{s}{2} \tag{13.8} \]
     <p>第四步，读含义：误差上界跟 \(s\) 成正比；而由式 (<a class="xref" href="#eq-13-6">13.6</a>)，\(s\) 由值域撑开、被比特数除细——<strong>比特越少，格子越宽，误差上界越松</strong>。INT8 与 INT4 的精度差距，算术本质就是这一条。</p>
   </div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才四步干了什么：四舍五入离最近的整数最多差半格（定义）→ 写成 \(|x/s-q|\le1/2\) → 两边乘 \(s\) 得 \(|x-\hat{x}|\le s/2\)（式 (<a class="xref" href="#eq-13-8">13.8</a>)）→ 读出误差随尺度线性涨。结论意味着：比特越少格子越宽、误差上界越松，INT4 比 INT8 糙是算术而不是实现 bug——例 <a class="xref" href="#ex-13-3">13.3</a> 马上拿真数验证这一条。</p></div>
   <div class="example" id="ex-13-3"><span class="box-tag"><span class="ctab">13.3</span><span class="clabel">例· 动手算</span></span>
     <p><strong>题目</strong>　4 个 FP16 权重 \(\mathbf{w}=(0.45,\,-1.20,\,3.75,\,0.05)\)。做 INT4 对称量化（值域 \([-8,7]\)，\(s=\max|\mathbf{w}|/7\)），写出整数、反量化值与逐元素误差；对比同组 INT8。</p>
     <p><strong>解</strong>　第一步算尺度：\(s=3.75/7\approx0.5357\)。第二步逐个量化：\(0.45/0.5357\approx0.84\to\operatorname{round}=1\)；\(-1.20/0.5357\approx-2.24\to-2\)；\(3.75/0.5357=7\to7\)（正好顶格）；\(0.05/0.5357\approx0.09\to0\)。第三步反量化 \(\hat{x}=s\,q\)：</p>
@@ -3609,6 +3648,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   </div>
 
   <h3 id="tb13-s4"><span class="h3-num">13.4</span> 张量并行的通信点</h3>
+  <aside class="mn">背景｜All-Reduce 从哪来：它是高性能计算里几十年的老通信原语（MPI 的标准集合操作），为「每台机器各算出一份局部结果、要合成全局结果且人人拿到」而生，替代了「全发给一台主节点再发回」的瓶颈模式。深度学习多卡训练把它用熟，推理的张量并行又把它提到了每层两次的频次。</aside>
   <p>模型大到单卡装不下，就把每个大矩阵切开摊到多卡——这就是<span class="kt">张量并行</span>（tensor parallelism，TP）。对线性层 \(\mathbf{Y}=\mathbf{X}\mathbf{W}\)，\(\mathbf{X}\in\mathbb{R}^{M\times d}\)、\(\mathbf{W}\in\mathbb{R}^{d\times d'}\)，有两种切法，通信性质截然不同：</p>
   <span id="eq-13-9" class="anchor"></span>\[ \text{列切：}\ \mathbf{W}=[\mathbf{W}_1\mid\mathbf{W}_2],\ \mathbf{Y}=[\mathbf{X}\mathbf{W}_1\mid\mathbf{X}\mathbf{W}_2];\qquad \text{行切：}\ \mathbf{W}=\begin{pmatrix}\mathbf{W}_1\\ \mathbf{W}_2\end{pmatrix},\ \mathbf{Y}=\mathbf{X}_1\mathbf{W}_1+\mathbf{X}_2\mathbf{W}_2 \tag{13.9} \]
   <p>慢慢读这两种切法。<strong>列切</strong>按输出维 \(d'\) 把 \(\mathbf{W}\) 劈成左右两块（每块 \(\mathbf{W}_i\in\mathbb{R}^{d\times d'/2}\)）：卡 1 算 \(\mathbf{X}\mathbf{W}_1\) 得到输出的左半，卡 2 算右半，最后拼接——各卡从头到尾不交换数据，<strong>零通信</strong>。<strong>行切</strong>按输入维 \(d\) 劈（\(\mathbf{W}_i\in\mathbb{R}^{d/2\times d'}\)，相应地把 \(\mathbf{X}\) 按列劈成 \(\mathbf{X}_1,\mathbf{X}_2\)）：由<a class="xref" href="#tb01">第一章</a>的分块矩阵乘法，\(\mathbf{Y}=\mathbf{X}_1\mathbf{W}_1+\mathbf{X}_2\mathbf{W}_2\)——每卡只算出<em>部分和</em>，必须有人把它们加起来，这个「加起来并人人有份」的操作叫 <span class="kt">All-Reduce</span>（全归约）。通信点就在这里。</p>
@@ -3655,6 +3695,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <span id="eq-13-10" class="anchor"></span>\[ C_{\text{AR}}=\frac{2(N-1)}{N}\cdot K\cdot b\ \xrightarrow{\ N\ \text{大}\ }\ 2Kb \tag{13.10} \]
     <p>第四步，读含义：\(\frac{N-1}{N}\) 随卡数趋于 1，总量趋于常数 \(2K\)，<strong>与卡数几乎无关</strong>——增加卡数摊薄的只是计算，通信量省不掉。</p>
   </div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才四步干了什么：把 All-Reduce 拆成 reduce-scatter 加 all-gather（标准分解）→ 各算出每卡 \((N-1)K/N\) 个元素 → 两步相加乘字节数得式 (<a class="xref" href="#eq-13-10">13.10</a>) → 发现总量趋于 \(2K\)、与卡数几乎无关。结论意味着：加卡摊得薄计算、摊不薄通信——这就是张量并行必须关在单机 NVLink 里的定量理由，例 <a class="xref" href="#ex-13-4">13.4</a> 把它换算成秒。</p></div>
   <div class="example" id="ex-13-4"><span class="box-tag"><span class="ctab">13.4</span><span class="clabel">例· 动手算</span></span>
     <p><strong>题目</strong>　一层 \(4096\times4096\) 的行切矩阵乘，\(M=4096\) 个 token（batch × seq），输出 \(\mathbf{Y}\in\mathbb{R}^{4096\times4096}\)，BF16，4 卡。估算每层这次 All-Reduce 的每卡通信字节数，并对比 NVLink 与以太网的耗时。</p>
     <p><strong>解</strong>　归约对象是输出矩阵：\(K=4096\times4096=16{,}777{,}216\) 个元素，BF16 下 \(K\times2=32\) MiB。套式 (<a class="xref" href="#eq-13-10">13.10</a>)，\(N=4\)：</p>
@@ -3673,6 +3714,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p>第四步，算通信量。归约对象是输出 \(\mathbf{Y}\)：\(K=M\cdot d'=1\times2=2\) 个元素，BF16 每元素 2 字节，\(N=2\) 套式 (<a class="xref" href="#eq-13-10">13.10</a>)：\(C_{\text{AR}}=\frac{2\times1}{2}\times2\times2=4\) 字节/卡。和例 <a class="xref" href="#ex-13-4">13.4</a> 对照看：行切的通信量只跟输出大小 \(K\) 有关，跟矩阵怎么切、切几份几乎无关。</p>
     <p><strong>反例</strong>　若省掉 All-Reduce、把两块部分和直接拼接当输出，得到 \((1,4,11,4)\)——维数不对，数值更不是 \((12,8)\)。行切之后每卡手里只是「半个答案」，求和不是优化项，是正确性本身。（python3 验算：\(1\cdot1+2\cdot0=1\)，\(3\cdot1+4\cdot2=11\)，\((1,4)+(11,4)=(12,8)\)；\(2\cdot(1/2)\cdot2\cdot2=4\)。）</p>
   </div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这道例题</span></span><p>刚才四步干了什么：直接相乘得标准答案 \((12,8)\) → 两卡各算部分和 \((1,4)\)、\((11,4)\) → All-Reduce 相加还原出答案 → 按式 (<a class="xref" href="#eq-13-10">13.10</a>) 算出这次通信仅 4 字节/卡。结论意味着：行切的求和不是可省的开销而是正确性本身——少了它输出连维数都不对；通信量只看输出大小 \(K\)，跟矩阵切几份几乎无关。</p></div>
 
   <h3 id="tb13-s5"><span class="h3-num">13.5</span> 吞吐与延迟：batch 的双面效应</h3>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>一辆公交车的油耗，拉 1 个人和拉 40 个人几乎一样。</strong>decode 一步要搬一次权重（约 \(2P\) 字节），这是「油耗」；batch 里的 \(B\) 个请求是「乘客」——搬一次权重可以同时服务 \(B\) 个请求。乘客不满员，就是在浪费这趟车。但车有座位上限（算力平衡点），塞满之后再加人，就得开第二趟车——延迟开始涨了。</p></div>
@@ -3714,6 +3756,16 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p><strong>第 3 题（概念）</strong>　(a) decode 阶段为什么是访存瓶颈而不是计算瓶颈？(b) 为什么张量并行必须放单机 NVLink、流水线并行才能跨机？</p>
     <details><summary>看答案</summary><p>(a) decode 每步只算 1 个新 token，却要把全部权重从显存读一遍：计算量约 \(2P\) FLOPs、搬运量约 \(2P\) 字节，算术强度 \(\approx1\) FLOP/byte（式 (<a class="xref" href="#eq-13-2">13.2</a>)）；而 A100 的机器平衡点约 156 FLOP/byte。\(1\ll156\)，算力大部分时间在等数据——瓶颈在带宽，所以单 token 时延 ≈ 权重字节数 ÷ 带宽，加算力卡没用。(b) 张量并行的行切层每层要两次 All-Reduce，每卡通信量约 \(2K b\)（式 (<a class="xref" href="#eq-13-10">13.10</a>)）。以例 <a class="xref" href="#ex-13-4">13.4</a> 的数字：NVLink 下约 56 μs，以太网约 4 ms、慢 72 倍，70 层模型每个 decode 步多花约 0.56 s——通信频繁到必须关在近 1 TB/s 的单机 NVLink 域内。流水线并行只在层边界传一次激活，通信次数少、量级小，以太网才扛得住，所以跨机用 PP。</p></details>
   </div>
+
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">本章节奏自测（试点章）</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：670 字（阈值 ≤1,200，位于 13.3 节量化；次长 648 字，位于 13.1 节）；</li>
+      <li><strong>每节例子数</strong>：动手算共 6 例（13.1、13.2、13.3、13.6 节各 1 例，13.4 节 2 例），检查点 3 处；</li>
+      <li><strong>单步推导最大跨度</strong>：≤2 个等号（抽检：式 (<a class="xref" href="#eq-13-4">13.4</a>) 的逐项拼乘、式 (<a class="xref" href="#eq-13-8">13.8</a>) 的两边乘 \(s\)、式 (<a class="xref" href="#eq-13-10">13.10</a>) 的两步相加）；</li>
+      <li><strong>长推导回头看</strong>：4 处（13.2 节 KV cache 显存推导后、13.3 节量化误差上界推导后、13.4 节 All-Reduce 通信量推导后、例 <a class="xref" href="#ex-13-5">13.5</a> 后），每个 ≥3 步推导后均有；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（KV Cache / 量化 / All-Reduce）、回头看 4 处、数字预热 2 段（13.1、13.3 节），原文未删改一字。</li>
+    </ul>
+  </div>
 </section>
 
 </div>
@@ -3727,6 +3779,14 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p class="ch-lede">大模型从没为你的任务专门训练过，可你在输入里摆三四个例子，它就会了——参数一个没动，「学习」发生在哪？这不是玄学，是可以讲清楚的数学。本章给你三个互相补充的视角：贝叶斯推断（示例是证据，模型临时更新判断）、函数学习（前向传播里偷偷拟合了一条规律）、归纳头（复制行为的具体电路），最后讨论「能力随规模突然涌现」到底是真相变还是度量假象。全程有玩具数字演示，学完你能说清 few-shot 为什么有效、示例的顺序为什么重要、RAG 与上下文学习是什么关系。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>直觉（看例子照做） → 现象定义 → 贝叶斯视角 → 函数学习视角 → 归纳头 → 涌现之争 → 自测</div>
   </header>
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">进入本章</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>前置</strong>：<a class="xref" href="#tb03">第三章</a>的贝叶斯定理与条件概率（14.2 节全靠它）、<a class="xref" href="#tb06">第六章</a>的注意力打分与 softmax（14.4 节用）；<a class="xref" href="#tb05">第五章</a>的训练流程只作对照——本章讲的恰恰是「不训练」。</li>
+      <li><strong>一句话直觉</strong>：一位博览群书的助理——你摆几个例子，他当场看明白照做；对话一关他又忘了，因为他本人（参数）一个字没改。</li>
+      <li><strong>最常见误解</strong>：以为 few-shot 偷偷微调了模型。全程没有梯度、没有参数更新，「学」发生在这次前向计算的激活里。</li>
+      <li><strong>读不懂回哪</strong>：先回 14.1 节的助理类比；贝叶斯更新不熟回<a class="xref" href="#tb03">第三章</a> 3.4 节；注意力电路不熟回<a class="xref" href="#tb06">第六章</a> 6.3 节。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb14-s1">14.1 上下文学习：现象与定义</a>
     <a href="#tb14-s2">14.2 贝叶斯视角：示例是证据</a>
@@ -3740,11 +3800,13 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <h3 id="tb14-s1"><span class="h3-num">14.1</span> 上下文学习：现象与定义</h3>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p>想象你雇了一个博览群书的助理。你说：「帮我做情感分类。例：『这家火锅真绝』→ 好评；『等位两小时』→ 差评；『不会再来了』→ 差评。那『服务挺热情』呢？」他答：「好评。」注意他做了什么：<strong>他没有当场改自己任何习惯，而是『看明白了』你给的几个例子，直接照做</strong>。例子一撤，下次他又不记得这个任务了。这就是上下文学习（in-context learning，ICL）的日常画面：不给模型改参数，只在输入里摆几个示例，它的行为立刻「学会」新任务；对话一关，一切归零。「学」不在参数里，而在这次前向计算的激活里。</p></div>
   <p>这个现象值得一个严格定义，因为「没训练却学会了」听起来自相矛盾——矛盾感来自把「学习」等同于「改参数」，而 ICL 恰恰要把它俩分开。</p>
+  <p>先看一组能数出来的现象。同一个模型，问它「服务挺热情」是好评还是差评：一个示例都不给时，答好评的概率约 0.5，等于抛硬币；摆进 1 个示例后升到约 0.68；摆进 2 个后约 0.76（这组数例 <a class="xref" href="#ex-14-1">14.1</a> 会一步步算出来）。权重一个没动，输出却随示例个数有规律地移动——下面要定义的就是这个现象。</p>
   <div class="def"><span class="box-tag"><span class="ctab">14.1</span><span class="clabel">定义</span></span><p><span class="kt">上下文学习</span>（in-context learning，ICL）：把 \(k\) 个示例 \((x_1,y_1),\dots,(x_k,y_k)\) 与查询 \(x_q\) 拼接进输入，模型直接输出对 \(y_q\) 的预测。全过程<strong>没有梯度、没有参数更新</strong>，权重 \(\theta\) 固定，行为却随示例改变。\(k=0\) 叫 <span class="kt">zero-shot</span>（只靠指令），\(k\ge1\) 叫 <span class="kt">few-shot</span>。</p></div>
   <p>于是数学上要解释的对象很明确：条件分布 \(p_\theta(y\mid x_q,\,D_k)\)（\(D_k\) 是示例集合）为什么在 \(D_k\) 变化时表现出「学习」行为——同一份权重，换一组示例就像换了一个人。<a class="xref" href="#tb05">第五章</a>的一切（梯度下降、Adam、学习率）在这里都不发生。下面三节从三个层次回答：模型在算什么（贝叶斯、函数学习）、哪个零件在算（归纳头）。</p>
 
   <h3 id="tb14-s2"><span class="h3-num">14.2</span> 贝叶斯视角：示例是证据</h3>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p>第一个回答来自<a class="xref" href="#tb03">第三章</a>的贝叶斯定理。预训练让模型见过海量文本，等于在它脑子里存了一本「任务百科全书」：褒贬分类、英译法、表格补全、按格式改写……每样都见过无数遍，这叫<strong>任务上的先验</strong>。你给的几个示例，对它来说不是「教材」，而是<strong>新证据</strong>——「哦，原来这次要干的是百科里的这一页」。示例就是证据，模型把预训练的老经验当先验，看完证据临时更新判断（后验），然后按更新后的判断作答。参数一个字没动，动的是「当前是哪个任务」的概率分布。</p></div>
+  <aside class="mn">背景｜拿贝叶斯定理解 ICL 从哪来：贝叶斯定理本身是 18 世纪的老结果（<a class="xref" href="#tb03">第三章</a> 3.4 节）；用它解释上下文学习是 2021 年前后的新事——预训练语料混着海量任务，模型为预测下一个词不得不隐含推断「当前是哪个任务」，few-shot 示例正好充当证据。这里需要它，是因为它能回答「不改参数凭什么像在学」：动的是任务后验，不是权重。</aside>
   <p>形式化：设 \(c\) 为隐藏的任务或概念，预训练给出先验 \(p(c)\)；prompt 里的示例 \(D_k\) 是关于当前任务的证据。贝叶斯定理（<a class="xref" href="#tb03">第三章</a>式 (<a class="xref" href="#eq-3-12">3.12</a>)）给出后验：</p>
   <span id="eq-14-1" class="anchor"></span>\[ p(c\mid D_k)\propto p(D_k\mid c)\,p(c) \tag{14.1} \]
   <p>模型的预测则是对「任务后验」加权平均的<span class="kt">后验预测分布</span>：每个候选任务都说一句「要是我，我会这么答」，按各任务的后验概率投票：</p>
@@ -3779,11 +3841,13 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
 
   <h3 id="tb14-s3"><span class="h3-num">14.3</span> 函数学习视角：前向里的临时拟合</h3>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p>第二个回答换个角度：把示例看成某个未知函数的几个采样点。给你 \((1\to3)\)、\((2\to5)\)、\((3\to7)\)，问 \(4\to?\)——你大概率答 9，因为你脑子里「拟合」出了 \(y=2x+1\)。这个视角说：大模型在前向传播里也干了同样的事——<strong>它在前向里临时『拟合』一个规律，再对查询做外推</strong>。贝叶斯视角回答「选中哪个任务」，函数学习视角进一步回答「任务内部、没见过的新输入怎么处理」。</p></div>
+  <aside class="mn">背景｜最小二乘从哪来：19 世纪初高斯为预测谷神星轨道、勒让德为测量子午线各自独立发明——观测总有噪声，就挑让「误差平方和最小」的那条曲线，替代了凭眼力连线的老办法。这里需要它，是因为它是「从几个采样点拟合一条规律」能手算到底的最简模型：大模型在 prompt 里干的事，先在这个透明版本上看清。</aside>
   <div class="derive"><span class="box-tag bare"><span class="ctab">推导</span><span class="clabel">一步步来（最小二乘怎么解出 w 和 b）</span></span><p>例 <a class="xref" href="#ex-14-3">14.3</a> 要用到的「最小二乘解」这里先推一遍，全程不跳步。目标：最小化平方误差 \(S(w,b)=\sum_{i=1}^{3}(y_i-wx_i-b)^{2}\)。</p>
   <p><strong>第 1 步，对 b 求偏导并令其为 0</strong>。为什么对 b 下手最简单：b 在每一项里都以同样的方式出现。链式法则：外层平方求导得 \(2(y_i-wx_i-b)\)，内层 \((y_i-wx_i-b)\) 对 b 的导数是 \(-1\)，合起来 \(\partial S/\partial b=-2\sum_i(y_i-wx_i-b)\)。最小值处切线水平，令其等于 0，把求和拆开（\(\sum_i b=3b\)）得：\(\sum_i y_i=w\sum_i x_i+3b\)。</p>
   <p><strong>第 2 步，对 w 求偏导并令其为 0</strong>。同理，内层对 w 的导数是 \(-x_i\)：\(\partial S/\partial w=-2\sum_i x_i(y_i-wx_i-b)=0\)，拆开得 \(\sum_i x_iy_i=w\sum_i x_i^{2}+b\sum_i x_i\)。</p>
   <p><strong>第 3 步，代入数字</strong>。备料：\(\sum x_i=1+2+3=6\)，\(\sum y_i=3+5+7=15\)，\(\sum x_iy_i=1\times3+2\times5+3\times7=3+10+21=34\)，\(\sum x_i^{2}=1+4+9=14\)。两个方程：\(15=6w+3b\) 与 \(34=14w+6b\)（python3 验算备料数字）。</p>
   <p><strong>第 4 步，解二元一次方程组</strong>。由第一式得 \(b=5-2w\)（两边除以 3 再移项）；代入第二式：\(34=14w+6(5-2w)=14w+30-12w=2w+30\)，解得 \(w=2\)，回代得 \(b=1\)。两个方程、两个未知数，解唯一——这就是<a class="xref" href="#tb01">第一章</a>线性方程组的最小情形。下面例 <a class="xref" href="#ex-14-3">14.3</a> 直接用这个结果。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才四步干了什么：对 \(b\)、对 \(w\) 各求偏导并令其为 0（最小值处切线水平）→ 代入三个点的求和备料 → 解二元一次方程组 → 得 \(w=2,b=1\)。结论意味着：「从采样点拟合规律」有闭式解，两行方程就够——例 <a class="xref" href="#ex-14-3">14.3</a>、例 <a class="xref" href="#ex-14-4">14.4</a> 与<a class="xref" href="#tb15">第十五章</a>的回归题全是这套流程的复制。</p></div>
   <div class="example" id="ex-14-3"><span class="box-tag"><span class="ctab">14.3</span><span class="clabel">例· 动手算（线性规律外推）</span></span><p><strong>题目</strong>　prompt 里给三个数对 \((1\to3)\)、\((2\to5)\)、\((3\to7)\)，查询 \(x_q=4\)。若模型按最小二乘拟合线性函数 \(y=wx+b\)，预测是什么？</p>
   <p><strong>解</strong>　<strong>第 1 步，写最小二乘目标</strong>（<a class="xref" href="#tb01">第一章</a>）：</p>
   <span id="eq-14-5" class="anchor"></span>\[ \min_{w,b}\ \sum_{i=1}^{3}\bigl(y_i-wx_i-b\bigr)^{2} \tag{14.5} \]
@@ -3797,8 +3861,10 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p><strong>第 4 步，外推</strong>：\(\hat y_q=1.5\times4+2/3=6+0.667\approx6.67\)。</p>
   <p><strong>第 5 步，算残差</strong>（残差 = 真值 − 拟合值）：\(x=1\) 时拟合值 \(1.5+0.667\approx2.167\)，残差 \(\approx-0.167\)；\(x=2\) 时拟合值 \(3.667\)，残差 \(\approx+0.333\)；\(x=3\) 时拟合值 \(5.167\)，残差 \(\approx-0.167\)。三者之和为 0（含截距的最小二乘恒有此性质），误差平方和 \(S=(1/6)^{2}+(1/3)^{2}+(1/6)^{2}=1/6\approx0.167>0\)（python3 验算）。</p>
   <p><strong>读数</strong>：与例 <a class="xref" href="#ex-14-3">14.3</a> 的三点共线不同，这里直线一个点也穿不过，而是把误差分摊成「负、正、负」三份——这就是正文所说「回归式平均行为」的最小样本：面对带噪声的示例，拟合给出折中曲线，而不是死记某一行。也正因如此，把查询换成没见过的量级（如 \(x_q=100\)，外推 \(1.5\times100+2/3\approx150.67\)）仍由规律给出，而非背诵。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这道例题</span></span><p>刚才五步干了什么：备料求和 → 套本节推导框的正规方程 → 解出 \(w=1.5,b\approx0.67\) → 外推 \(x_q=4\) 得约 6.67 → 算残差核对（三者之和恰为 0）。结论意味着：示例带噪声时拟合给出折中曲线，而不是死记某一行——「拟合不是背诵」从此有了能复算的样板。</p></div>
 
   <h3 id="tb14-s4"><span class="h3-num">14.4</span> 归纳头：复制是怎么实现的</h3>
+  <aside class="mn">背景｜归纳头从哪来：2022 年 Anthropic 团队解剖小 transformer 的注意力头时发现，训练过程中会冒出一种专做「[A][B]…[A]→B」复制行为的电路，且它的出现与 ICL 能力陡增同步。它替代了「ICL 纯属黑箱」的说法——第一次给出能打开来看的具体零件。这里用它回答前两节没答的问题：模型里哪个零件在算。</aside>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p>前两个视角回答「模型在算什么」，没回答「哪个零件在算」。这里有一个在真实模型里被反复解剖观察到的电路：<span class="kt">归纳头</span>（induction head）。它完成的模式一句话说清：<strong>「[A][B] … [A] → 该接 B 了」</strong>——序列里 A 后面曾经跟过 B，那么 A 再次出现时，就预测 B。好比你在文档里见过「中华人民共和国成立于 1949 年」，后文再看到「中华人民共和国成立于」，你自然接「1949 年」。这不是推理，是<strong>带记忆的复制</strong>，而它需要两层注意力接力完成。</p></div>
   <p><strong>第一步，第一层的「前驱头」登记</strong>：每个位置把注意力投向前一个 token（<a class="xref" href="#tb06">第六章</a>的 \(QK^{\top}\) 匹配），把自己的表示改写成「我是 B，且我前面是 A」——等于在 B 的位置贴了一张标签：「谁的前面是 A？是我。」</p>
   <p><strong>第二步，第二层的「归纳头」查询</strong>：序列结尾再次出现 [A] 时，它以「谁的前面是 A？」为查询去匹配各位置的表示，恰好命中早先 [A][B] 里 B 所在的位置（第一步登记过），于是把注意力压在 B 上，把 B 复制到输出。</p>
@@ -3809,6 +3875,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p><strong>第 3 步，归一化得权重</strong>：位置 2：\(54.5982/61.035\approx0.8945\)；位置 1 与位置 3：\(2.7183/61.035\approx0.0445\)；位置 4：\(1/61.035\approx0.0164\)（python3 验算，四个权重之和为 1）。</p>
   <p><strong>第 4 步，读出复制结果</strong>：约 89% 的注意力压在位置 2，输出即复制位置 2 的字「山」——与上文「南 山 北 海 南 → 山」的人肉追踪一致，登记、查询两步电路闭合。</p>
   <p><strong>读数</strong>：得分只差 3（4 对 1），过了 softmax 权重差约 20 倍（\(0.8945/0.0445\approx20.1\)）——指数函数把「匹配上」与「没匹配上」的差距急剧放大，归纳头因此能实现接近硬复制的查表，而不是把四个字模糊地混在一起。<strong>反例对照</strong>：若映射模式没有重复出现（没有任何位置被登记为「前面是南」，四个得分全是 1），softmax 给出均匀权重各 0.25，复制无从谈起——这正是工程经验「few-shot 示例格式必须统一」在电路层面的解释：格式不统一，归纳头无表可查。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这道例题</span></span><p>刚才四步干了什么：对匹配得分取指数 → 求和 → 归一化成权重 → 读出约 89% 压在位置 2、复制出「山」。结论意味着：softmax 的指数把 3 分之差放大成约 20 倍权重差，「查表式硬复制」由此可能——示例格式统一，归纳头才有表可查，这正是 few-shot 格式纪律的电路级理由。</p></div>
   <p>诚实标注：<strong>这是有实验支持的机制解释，不是定理</strong>——真实模型里确实找得到这样的注意力头，且它们的出现与 ICL 能力的获得相关；但 ICL 不会全部归结于归纳头，贝叶斯与函数学习视角覆盖了它够不着的部分（比如对全新函数的外推，就不只是复制）。</p>
   <aside class="mn">记忆钩子：归纳头 = 「上次 A 后面跟的是谁？」的查表电路。前驱头负责登记，归纳头负责查询。</aside>
   <div class="checkpoint"><span class="box-tag bare"><span class="ctab">检查点 ✓</span><span class="clabel"></span></span><p>你现在应该能：
@@ -3858,6 +3925,16 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p><strong>题 3（概念 + 度量假象）</strong>（a）few-shot 学习过程中，模型的权重有没有被更新？「学到的能力」在对话结束后还在吗？（b）某模型每位数字答对率 \(p=0.8\)，升级到 \(p=0.9\)。按「4 位全对」的精确匹配指标，升级前后准确率各是多少？这能说明「能力突现」吗？</p>
     <details><summary>看答案</summary><p>（a）没有更新：ICL 全程无梯度、无参数变化（定义 14.1）；对话结束、示例离开上下文，「学到的」立即消失。（b）\(0.8^4=0.4096\)，\(0.9^4=0.6561\)（python3 验算）：硬指标上从 41% 跳到 66%，看似「突现」；但每位答对率只是从 0.8 平滑涨到 0.9——按度量假象论，这是 \(p^n\) 的乘法效应放大了连续进步，不构成能力相变的证据。</p></details>
   </div>
+
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">本章节奏自测（试点章）</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：809 字（阈值 ≤1,200，位于 14.6–14.7 节交界：例 <a class="xref" href="#ex-14-7">14.7</a> 加「在 AI 中的位置」表；次长 632 字，位于 14.5 节）；</li>
+      <li><strong>每节例子数</strong>：动手算共 7 例（14.2 两例、14.3 两例、14.4 一例、14.5 一例、14.6 一例），节内检查点 2 处（14.2 末、14.4 末）；</li>
+      <li><strong>单步推导最大跨度</strong>：≤2 个等号（抽检：式 (<a class="xref" href="#eq-14-3">14.3</a>)(14.4) 的后验更新一步一算、例 <a class="xref" href="#ex-14-4">14.4</a> 第 3 步解方程、例 <a class="xref" href="#ex-14-6">14.6</a> 第 2–3 步试算验证）；</li>
+      <li><strong>长推导回头看</strong>：3 处（14.3 最小二乘推导后、例 <a class="xref" href="#ex-14-4">14.4</a> 后、例 <a class="xref" href="#ex-14-5">14.5</a> 后），每个 ≥3 步推导与大例题后均有；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（贝叶斯视角 / 最小二乘 / 归纳头）、回头看 3 处、数字预热 1 段（14.1 节定义 14.1 前），原文未删改一字。</li>
+    </ul>
+  </div>
 </section>
 
 </div>
@@ -3871,6 +3948,14 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p class="ch-lede">大模型岗位的数学面试，翻来覆去就那十几道题。本章像学长带刷题一样，把最高频的十二道按固定节奏走一遍：题目 → 考点（对应哪章哪式）→ 完整解（不跳步）→ 面试官追问与应答 → 答不出说明第几章没过关。所有数字都用 python3 验算过，所有推导都能在本书前面章节找到出处。正确用法是先遮住解答自己推，再对照找差距——能独立复述这十二道题，数学这关基本就过了。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>用法说明 → 结构与数值四连推 → 参数显存优化器 → 评估与采样 → 自测</div>
   </header>
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">进入本章</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>前置</strong>：第二至<a class="xref" href="#tb07">第七章</a>的主干——链式法则（<a class="xref" href="#tb02">第二章</a>）、方差与期望（<a class="xref" href="#tb03">第三章</a>）、交叉熵与困惑度（<a class="xref" href="#tb04">第四章</a>）、Adam（<a class="xref" href="#tb05">第五章</a>）、注意力与 LayerNorm（<a class="xref" href="#tb06">第六章</a>）、浮点与 log-sum-exp（<a class="xref" href="#tb07">第七章</a>）。</li>
+      <li><strong>一句话直觉</strong>：学长带刷题——每题先遮住解答自己推，推完再对照；看懂和推出之间隔着一次面试。</li>
+      <li><strong>最常见误解</strong>：以为面试靠背结论。面试官两段式追问（为什么、不这样会怎样）专刷背题的人，能从头推的人才刷不掉。</li>
+      <li><strong>读不懂回哪</strong>：先读 15.1 节的三条使用纪律；哪题卡住就按题末标注回对应章重读，别背答案。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb15-s1">15.1 怎么用这一章</a>
     <a href="#tb15-s2">15.2 结构与数值稳定性四连推（例 15.1–15.4）</a>
@@ -3887,6 +3972,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
 
   <h3 id="tb15-s2"><span class="h3-num">15.2</span> 结构与数值稳定性四连推（例 <a class="xref" href="#ex-15-1">15.1</a>–15.4）</h3>
 
+  <aside class="mn">背景｜注意力缩放从哪来：2017 年 Transformer 原论文写下 scaled dot-product attention 里的 \(1/\sqrt{d_k}\)，针对的是点积随维度长大的老事实——维度越高，打分的散布越宽，softmax 越容易饱和；原论文的对照实验里，不缩放效果明显变差。它替代的就是不缩放的朴素点积。这里第一个考它，因为「除以 \(\sqrt{d_k}\)」是每个注意力实现都绕不开的第一行。</aside>
   <div class="example" id="ex-15-1"><span class="box-tag"><span class="ctab">15.1</span><span class="clabel">例· 动手算</span></span><p><strong>题目</strong>　注意力打分为什么要除以 \(\sqrt{d_k}\)？推导 \(\operatorname{Var}(\mathbf{q}\cdot\mathbf{k})\)。</p>
   <p><strong>考点</strong>　<a class="xref" href="#tb06">第六章</a>式 (<a class="xref" href="#eq-6-5">6.5</a>)；方差的性质（<a class="xref" href="#tb03">第三章</a>）。</p>
   <p><strong>解</strong>　一步步来。<strong>第 1 步，设假设。</strong>设 \(\mathbf{q},\mathbf{k}\in\mathbb{R}^{d_k}\)，各分量独立、均值 0、方差 1——初始化时近似成立（初始化方案就是按这个目标设计的）。<strong>第 2 步，把点积写成求和。</strong>由<a class="xref" href="#tb01">第一章</a>式 (<a class="xref" href="#eq-1-3">1.3</a>)：\(\mathbf{q}\cdot\mathbf{k}=\sum_{i=1}^{d_k}q_i k_i\)——打分的方差，就是 \(d_k\) 个「单分量乘积」之和的方差。<strong>第 3 步，算单分量乘积的方差。</strong>先算均值：\(\mathbb{E}[q_i k_i]=\mathbb{E}[q_i]\mathbb{E}[k_i]=0\times0=0\)（独立性让乘积的期望拆成期望的乘积）。于是</p>
@@ -3948,6 +4034,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p><strong>追问与应答</strong>　问：为什么主流 LLM 改用 RMSNorm？答：去掉均值项与 \(\boldsymbol{\beta}\)，只留均方根缩放加 \(\boldsymbol{\gamma}\)——参数减半、省一次归约，效果相当。问：为什么不用 BatchNorm？答：BN 依赖 batch 维统计，自回归推理 batch=1、序列变长、分布式切分下统计不稳；LN 在特征维统计，与 batch 无关。</p>
   <p><strong>这题答不出来说明<a class="xref" href="#tb06">第六章</a>没过关。</strong></p></div>
 
+  <aside class="mn">背景｜LoRA 从哪来：2021 年微软团队（Hu 等人）面对的现实是：大模型全量微调一次要动几十亿参数，显存与存储都吃不消。他们借<a class="xref" href="#tb01">第一章</a>的低秩分解老工具，押注「适配下游任务所需的权重增量本征秩很低」——冻结原权重，只学两个小矩阵的乘积，替代全量微调。这里考它，因为它是参数高效微调里部署最广的一个。</aside>
   <div class="example" id="ex-15-6"><span class="box-tag"><span class="ctab">15.6</span><span class="clabel">例· 动手算</span></span><p><strong>题目</strong>　LoRA 为什么省参数？为什么效果不明显下降？</p>
   <p><strong>考点</strong>　<a class="xref" href="#tb01">第一章</a>秩与低秩分解（式 (<a class="xref" href="#eq-1-10">1.10</a>)(1.11)）；参数量算术。</p>
   <p><strong>解</strong>　<strong>第 1 步，写结构。</strong>冻结预训练权重 \(\mathbf{W}_0\in\mathbb{R}^{d\times d}\)，把增量约束为低秩乘积（Hu et al., LoRA, 2021, arXiv:2106.09685）：</p>
@@ -3979,6 +4066,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p>中间那步是等比数列求和：\(\sum_{i=1}^{t}\beta_1^{t-i}=1+\beta_1+\cdots+\beta_1^{t-1}=\frac{1-\beta_1^{t}}{1-\beta_1}\)。<strong>第 3 步，读结论。</strong>估计系统性偏小一个因子 \(1-\beta_1^{t}\)——这是零初始化的「出生偏差」；除以它才无偏，这就是 \(\hat{\mathbf{m}}_t=\mathbf{m}_t/(1-\beta_1^{t})\)（式 (<a class="xref" href="#eq-5-10">5.10</a>)）的由来；二阶矩同理除以 \(1-\beta_2^{t}\)。<strong>第 4 步，量级感受。</strong>\(t=1,\ \beta_1=0.9\)：\(\mathbf{m}_1=0.1\,\mathbf{g}_1\)，不修正则第一步的有效步长被缩 10 倍；\(t=10\) 时 \(1-0.9^{10}\approx0.651\)，仍差三成（python3 验算：\(1-0.9^{10}=0.6513\)，吻合）。</p>
   <p><strong>追问与应答</strong>　问：为什么训久了修正就没影响？答：\(\beta_1^{t}\) 几何衰减，\(t\) 大时因子趋于 1，修正与不修正趋于一致。问：不修会怎样？答：前几十步有效学习率系统性偏小——warmup 会部分掩盖，但严格说早期更新幅度失真。</p>
   <p><strong>这题答不出来说明<a class="xref" href="#tb05">第五章</a>没过关。</strong></p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才四步干了什么：把 \(\mathbf{m}_t\) 的递推逐项展开成历史梯度的加权和 → 取期望并用等比数列求和 → 读出偏差因子 \(1-\beta_1^{t}\) → 用 \(t=1\) 与 \(t=10\) 感受量级。结论意味着：零初始化让一阶矩系统性偏小，除以 \(1-\beta_1^{t}\) 不是补丁而是推导的必然；训久后因子趋于 1，修正自动退场。</p></div>
 
   <div class="example" id="ex-15-9"><span class="box-tag"><span class="ctab">15.9</span><span class="clabel">例· 动手算</span></span><p><strong>题目</strong>　LoRA 微调时，优化器状态跟着省多少？给 LLaMA-7B（\(L=32\)、\(d_{\text{model}}=4096\)）每层注意力的四个投影矩阵（\(\mathbf{W}_q,\mathbf{W}_k,\mathbf{W}_v,\mathbf{W}_o\)，均为 \(4096\times4096\)）都挂上 \(r=8\) 的 LoRA，其余参数全部冻结，优化器用 Adam。(a) 可训练参数共多少？(b) 优化器状态占多少显存？和全量微调比一比。</p>
   <p><strong>考点</strong>　例 <a class="xref" href="#ex-15-6">15.6</a> 的低秩参数账；<a class="xref" href="#tb05">第五章</a>式 (<a class="xref" href="#eq-5-8">5.8</a>)(5.9)（Adam 的两份状态）；字节算术（同例 <a class="xref" href="#ex-15-7">15.7</a>）。</p>
@@ -3989,9 +4077,11 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p><strong>第 4 步，和全量比。</strong>全量微调要给全部 \(7\times10^{9}\) 个参数配状态：\(7\times10^{9}\times8\) B \(\approx52.2\) GiB。LoRA 把这笔账压到 64 MiB——约为全量的 \(1/834\)。这回答了「LoRA 为什么省显存」：省的大头不是权重（冻结的 BF16 权重约 13 GiB 照样驻留做前向），而是梯度与优化器状态这些「训练侧」开销（python3 验算：\(2\times4096\times8=65536\)，\(65536\times4\times32=8388608\)，\(8388608\times8=2^{26}\) B \(=64\) MiB，\(7\times10^{9}\times8/2^{30}=52.15\) GiB，\(52.15\times1024/64\approx834\)）。</p>
   <p><strong>追问与应答</strong>　问：\(r\) 翻倍，状态也翻倍吗？答：是——状态与可训练参数成正比，可训练参数与 \(r\) 成正比（\(2dr\)），链式传递。问：那 LoRA 是不是把显存问题解决了？答：只解决训练侧与可训练参数挂钩的项（梯度、状态、主权重）；权重本体 13 GiB、激活值照样占，超长序列时激活才是新大头。</p>
   <p><strong>这题答不出来说明<a class="xref" href="#tb01">第一章</a>、<a class="xref" href="#tb05">第五章</a>没过关。</strong></p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这道例题</span></span><p>刚才四步干了什么：单个矩阵的 LoRA 增量 \(2dr=65536\) → 乘 4 个投影、32 层得可训练参数约 840 万 → Adam 两份 FP32 状态共 64 MiB → 与全量微调的 52.2 GiB 比出约 1/834。结论意味着：LoRA 省显存的大头在训练侧（梯度与优化器状态），冻结权重本体照占——报方案时别把这两笔账混成一笔。</p></div>
 
   <h3 id="tb15-s4"><span class="h3-num">15.4</span> 评估与采样（例 <a class="xref" href="#ex-15-9">15.9</a>–15.11）</h3>
 
+  <aside class="mn">背景｜困惑度从哪来：信息论的老指标，源自香农 1948 年对信源不确定性的度量——给交叉熵取指数，把「平均每个词惊讶多少 nat」翻译成「平均像在几个等可能候选里挑一个」。它替代了直接拿损失小数点后几位比高低的读法，让不同规模的实验有个能口头交流的数。这里考它，是因为 PPL 与损失的换算是写评测报告天天要做的单位换算。</aside>
   <div class="example" id="ex-15-10"><span class="box-tag"><span class="ctab">15.10</span><span class="clabel">例· 动手算</span></span><p><strong>题目</strong>　困惑度和训练损失怎么换算？损失 2.3 对应多少 PPL？</p>
   <p><strong>考点</strong>　<a class="xref" href="#tb04">第四章</a>式 (<a class="xref" href="#eq-4-10">4.10</a>)。</p>
   <p><strong>解</strong>　<strong>第 1 步，摆定义。</strong>困惑度就是平均负对数似然（= 交叉熵损失 \(\mathcal{L}\)，单位 nat）的指数：</p>
@@ -4047,6 +4137,16 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <details><summary>看答案</summary><p>每 token \(2\times32\times4096\times2=524288\) B \(=0.5\) MiB；token 总数 \(=131072\times4=524288\) 个；合计 \(0.5\times524288=262144\) MiB \(=256\) GiB。比较：KV cache（256 GiB）约是权重（13 GiB）的 20 倍——长上下文 + 多并发下，显存大头是缓存而不是权重，这就是 GQA、KV cache 量化、滑窗注意力存在的理由。（python3 验算：<code>0.5*131072*4/1024 = 256.0</code> GiB。）答不出回<a class="xref" href="#tb06">第六章</a>、<a class="xref" href="#tb13">第十三章</a>。</p></details>
     <p><strong>第 3 题（变式：困惑度）</strong>　(a) 训练损失降到 1.6（nat），对应 PPL 是多少？(b) 竞品报告 PPL = 20，换回 nat 损失是多少？(c) 若有人把 1.6 当 bit 计的损失去算 PPL，会得出什么错数？</p>
     <details><summary>看答案</summary><p>(a) 由式 (<a class="xref" href="#eq-15-9">15.9</a>)，\(\mathrm{PPL}=e^{1.6}\approx4.95\)。(b) 反换算 \(\mathcal{L}=\ln\mathrm{PPL}=\ln20\approx3.00\) nat。(c) 错用 \(2^{\mathcal{L}}\)：\(2^{1.6}\approx3.03\)——比真值 4.95 低了近四成，报告里的「提升」可能全是单位错位。纪律：先确认损失单位是 nat 还是 bit，再选 \(e^{\mathcal{L}}\) 或 \(2^{\mathcal{L}}\)。（python3 验算：<code>math.exp(1.6)=4.953</code>，<code>math.log(20)=2.996</code>，<code>2**1.6=3.031</code>。）答不出回<a class="xref" href="#tb04">第四章</a>。</p></details>
+  </div>
+
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">本章节奏自测（试点章）</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：460 字（阈值 ≤1,200，位于 15.1 节；次长 411 字，位于 15.3 节）；</li>
+      <li><strong>每节例子数</strong>：动手算共 12 例（15.2 四例、15.3 五例、15.4 两例、15.5 一例），节内检查点 2 处（15.2 末、15.4 末）；</li>
+      <li><strong>单步推导最大跨度</strong>：≤2 个等号（抽检：例 <a class="xref" href="#ex-15-1">15.1</a> 第 3–4 步方差连等、例 <a class="xref" href="#ex-15-3">15.3</a> 第 2 步逐项求导、例 <a class="xref" href="#ex-15-8">15.8</a> 第 2 步等比求和）；</li>
+      <li><strong>长推导回头看</strong>：2 处（例 <a class="xref" href="#ex-15-8">15.8</a> 后、例 <a class="xref" href="#ex-15-9">15.9</a> 后）；例 <a class="xref" href="#ex-15-1">15.1</a>–15.4 与例 <a class="xref" href="#ex-15-10">15.10</a>–15.11 由相邻检查点逐题复述，例 <a class="xref" href="#ex-15-12">15.12</a> 第 4 步自带修复结论，不重复插；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（注意力缩放 / LoRA / 困惑度）、回头看 2 处，原文未删改一字。</li>
+    </ul>
   </div>
 </section>
 

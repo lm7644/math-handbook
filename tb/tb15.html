@@ -6,6 +6,14 @@
     <p class="ch-lede">大模型岗位的数学面试，翻来覆去就那十几道题。本章像学长带刷题一样，把最高频的十二道按固定节奏走一遍：题目 → 考点（对应哪章哪式）→ 完整解（不跳步）→ 面试官追问与应答 → 答不出说明第几章没过关。所有数字都用 python3 验算过，所有推导都能在本书前面章节找到出处。正确用法是先遮住解答自己推，再对照找差距——能独立复述这十二道题，数学这关基本就过了。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>用法说明 → 结构与数值四连推 → 参数显存优化器 → 评估与采样 → 自测</div>
   </header>
+  <div class="checkpoint"><span class="box-tag">进入本章</span>
+    <ul>
+      <li><strong>前置</strong>：第二至第七章的主干——链式法则（第二章）、方差与期望（第三章）、交叉熵与困惑度（第四章）、Adam（第五章）、注意力与 LayerNorm（第六章）、浮点与 log-sum-exp（第七章）。</li>
+      <li><strong>一句话直觉</strong>：学长带刷题——每题先遮住解答自己推，推完再对照；看懂和推出之间隔着一次面试。</li>
+      <li><strong>最常见误解</strong>：以为面试靠背结论。面试官两段式追问（为什么、不这样会怎样）专刷背题的人，能从头推的人才刷不掉。</li>
+      <li><strong>读不懂回哪</strong>：先读 15.1 节的三条使用纪律；哪题卡住就按题末标注回对应章重读，别背答案。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb15-s1">15.1 怎么用这一章</a>
     <a href="#tb15-s2">15.2 结构与数值稳定性四连推（例 15.1–15.4）</a>
@@ -22,6 +30,7 @@
 
   <h3 id="tb15-s2"><span class="h3-num">15.2</span> 结构与数值稳定性四连推（例 15.1–15.4）</h3>
 
+  <aside class="mn">背景｜注意力缩放从哪来：2017 年 Transformer 原论文写下 scaled dot-product attention 里的 \(1/\sqrt{d_k}\)，针对的是点积随维度长大的老事实——维度越高，打分的散布越宽，softmax 越容易饱和；原论文的对照实验里，不缩放效果明显变差。它替代的就是不缩放的朴素点积。这里第一个考它，因为「除以 \(\sqrt{d_k}\)」是每个注意力实现都绕不开的第一行。</aside>
   <div class="example"><span class="box-tag">例 15.1 · 动手算</span><p><strong>题目</strong>　注意力打分为什么要除以 \(\sqrt{d_k}\)？推导 \(\operatorname{Var}(\mathbf{q}\cdot\mathbf{k})\)。</p>
   <p><strong>考点</strong>　第六章式 (6.5)；方差的性质（第三章）。</p>
   <p><strong>解</strong>　一步步来。<strong>第 1 步，设假设。</strong>设 \(\mathbf{q},\mathbf{k}\in\mathbb{R}^{d_k}\)，各分量独立、均值 0、方差 1——初始化时近似成立（初始化方案就是按这个目标设计的）。<strong>第 2 步，把点积写成求和。</strong>由第一章式 (1.3)：\(\mathbf{q}\cdot\mathbf{k}=\sum_{i=1}^{d_k}q_i k_i\)——打分的方差，就是 \(d_k\) 个「单分量乘积」之和的方差。<strong>第 3 步，算单分量乘积的方差。</strong>先算均值：\(\mathbb{E}[q_i k_i]=\mathbb{E}[q_i]\mathbb{E}[k_i]=0\times0=0\)（独立性让乘积的期望拆成期望的乘积）。于是</p>
@@ -83,6 +92,7 @@
   <p><strong>追问与应答</strong>　问：为什么主流 LLM 改用 RMSNorm？答：去掉均值项与 \(\boldsymbol{\beta}\)，只留均方根缩放加 \(\boldsymbol{\gamma}\)——参数减半、省一次归约，效果相当。问：为什么不用 BatchNorm？答：BN 依赖 batch 维统计，自回归推理 batch=1、序列变长、分布式切分下统计不稳；LN 在特征维统计，与 batch 无关。</p>
   <p><strong>这题答不出来说明第六章没过关。</strong></p></div>
 
+  <aside class="mn">背景｜LoRA 从哪来：2021 年微软团队（Hu 等人）面对的现实是：大模型全量微调一次要动几十亿参数，显存与存储都吃不消。他们借第一章的低秩分解老工具，押注「适配下游任务所需的权重增量本征秩很低」——冻结原权重，只学两个小矩阵的乘积，替代全量微调。这里考它，因为它是参数高效微调里部署最广的一个。</aside>
   <div class="example"><span class="box-tag">例 15.6 · 动手算</span><p><strong>题目</strong>　LoRA 为什么省参数？为什么效果不明显下降？</p>
   <p><strong>考点</strong>　第一章秩与低秩分解（式 (1.10)(1.11)）；参数量算术。</p>
   <p><strong>解</strong>　<strong>第 1 步，写结构。</strong>冻结预训练权重 \(\mathbf{W}_0\in\mathbb{R}^{d\times d}\)，把增量约束为低秩乘积（Hu et al., LoRA, 2021, arXiv:2106.09685）：</p>
@@ -114,6 +124,7 @@
   <p>中间那步是等比数列求和：\(\sum_{i=1}^{t}\beta_1^{t-i}=1+\beta_1+\cdots+\beta_1^{t-1}=\frac{1-\beta_1^{t}}{1-\beta_1}\)。<strong>第 3 步，读结论。</strong>估计系统性偏小一个因子 \(1-\beta_1^{t}\)——这是零初始化的「出生偏差」；除以它才无偏，这就是 \(\hat{\mathbf{m}}_t=\mathbf{m}_t/(1-\beta_1^{t})\)（式 (5.10)）的由来；二阶矩同理除以 \(1-\beta_2^{t}\)。<strong>第 4 步，量级感受。</strong>\(t=1,\ \beta_1=0.9\)：\(\mathbf{m}_1=0.1\,\mathbf{g}_1\)，不修正则第一步的有效步长被缩 10 倍；\(t=10\) 时 \(1-0.9^{10}\approx0.651\)，仍差三成（python3 验算：\(1-0.9^{10}=0.6513\)，吻合）。</p>
   <p><strong>追问与应答</strong>　问：为什么训久了修正就没影响？答：\(\beta_1^{t}\) 几何衰减，\(t\) 大时因子趋于 1，修正与不修正趋于一致。问：不修会怎样？答：前几十步有效学习率系统性偏小——warmup 会部分掩盖，但严格说早期更新幅度失真。</p>
   <p><strong>这题答不出来说明第五章没过关。</strong></p></div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这段推导</span><p>刚才四步干了什么：把 \(\mathbf{m}_t\) 的递推逐项展开成历史梯度的加权和 → 取期望并用等比数列求和 → 读出偏差因子 \(1-\beta_1^{t}\) → 用 \(t=1\) 与 \(t=10\) 感受量级。结论意味着：零初始化让一阶矩系统性偏小，除以 \(1-\beta_1^{t}\) 不是补丁而是推导的必然；训久后因子趋于 1，修正自动退场。</p></div>
 
   <div class="example"><span class="box-tag">例 15.9 · 动手算</span><p><strong>题目</strong>　LoRA 微调时，优化器状态跟着省多少？给 LLaMA-7B（\(L=32\)、\(d_{\text{model}}=4096\)）每层注意力的四个投影矩阵（\(\mathbf{W}_q,\mathbf{W}_k,\mathbf{W}_v,\mathbf{W}_o\)，均为 \(4096\times4096\)）都挂上 \(r=8\) 的 LoRA，其余参数全部冻结，优化器用 Adam。(a) 可训练参数共多少？(b) 优化器状态占多少显存？和全量微调比一比。</p>
   <p><strong>考点</strong>　例 15.6 的低秩参数账；第五章式 (5.8)(5.9)（Adam 的两份状态）；字节算术（同例 15.7）。</p>
@@ -124,9 +135,11 @@
   <p><strong>第 4 步，和全量比。</strong>全量微调要给全部 \(7\times10^{9}\) 个参数配状态：\(7\times10^{9}\times8\) B \(\approx52.2\) GiB。LoRA 把这笔账压到 64 MiB——约为全量的 \(1/834\)。这回答了「LoRA 为什么省显存」：省的大头不是权重（冻结的 BF16 权重约 13 GiB 照样驻留做前向），而是梯度与优化器状态这些「训练侧」开销（python3 验算：\(2\times4096\times8=65536\)，\(65536\times4\times32=8388608\)，\(8388608\times8=2^{26}\) B \(=64\) MiB，\(7\times10^{9}\times8/2^{30}=52.15\) GiB，\(52.15\times1024/64\approx834\)）。</p>
   <p><strong>追问与应答</strong>　问：\(r\) 翻倍，状态也翻倍吗？答：是——状态与可训练参数成正比，可训练参数与 \(r\) 成正比（\(2dr\)），链式传递。问：那 LoRA 是不是把显存问题解决了？答：只解决训练侧与可训练参数挂钩的项（梯度、状态、主权重）；权重本体 13 GiB、激活值照样占，超长序列时激活才是新大头。</p>
   <p><strong>这题答不出来说明第一章、第五章没过关。</strong></p></div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这道例题</span><p>刚才四步干了什么：单个矩阵的 LoRA 增量 \(2dr=65536\) → 乘 4 个投影、32 层得可训练参数约 840 万 → Adam 两份 FP32 状态共 64 MiB → 与全量微调的 52.2 GiB 比出约 1/834。结论意味着：LoRA 省显存的大头在训练侧（梯度与优化器状态），冻结权重本体照占——报方案时别把这两笔账混成一笔。</p></div>
 
   <h3 id="tb15-s4"><span class="h3-num">15.4</span> 评估与采样（例 15.9–15.11）</h3>
 
+  <aside class="mn">背景｜困惑度从哪来：信息论的老指标，源自香农 1948 年对信源不确定性的度量——给交叉熵取指数，把「平均每个词惊讶多少 nat」翻译成「平均像在几个等可能候选里挑一个」。它替代了直接拿损失小数点后几位比高低的读法，让不同规模的实验有个能口头交流的数。这里考它，是因为 PPL 与损失的换算是写评测报告天天要做的单位换算。</aside>
   <div class="example"><span class="box-tag">例 15.10 · 动手算</span><p><strong>题目</strong>　困惑度和训练损失怎么换算？损失 2.3 对应多少 PPL？</p>
   <p><strong>考点</strong>　第四章式 (4.10)。</p>
   <p><strong>解</strong>　<strong>第 1 步，摆定义。</strong>困惑度就是平均负对数似然（= 交叉熵损失 \(\mathcal{L}\)，单位 nat）的指数：</p>
@@ -182,5 +195,15 @@
     <details><summary>看答案</summary><p>每 token \(2\times32\times4096\times2=524288\) B \(=0.5\) MiB；token 总数 \(=131072\times4=524288\) 个；合计 \(0.5\times524288=262144\) MiB \(=256\) GiB。比较：KV cache（256 GiB）约是权重（13 GiB）的 20 倍——长上下文 + 多并发下，显存大头是缓存而不是权重，这就是 GQA、KV cache 量化、滑窗注意力存在的理由。（python3 验算：<code>0.5*131072*4/1024 = 256.0</code> GiB。）答不出回第六章、第十三章。</p></details>
     <p><strong>第 3 题（变式：困惑度）</strong>　(a) 训练损失降到 1.6（nat），对应 PPL 是多少？(b) 竞品报告 PPL = 20，换回 nat 损失是多少？(c) 若有人把 1.6 当 bit 计的损失去算 PPL，会得出什么错数？</p>
     <details><summary>看答案</summary><p>(a) 由式 (15.9)，\(\mathrm{PPL}=e^{1.6}\approx4.95\)。(b) 反换算 \(\mathcal{L}=\ln\mathrm{PPL}=\ln20\approx3.00\) nat。(c) 错用 \(2^{\mathcal{L}}\)：\(2^{1.6}\approx3.03\)——比真值 4.95 低了近四成，报告里的「提升」可能全是单位错位。纪律：先确认损失单位是 nat 还是 bit，再选 \(e^{\mathcal{L}}\) 或 \(2^{\mathcal{L}}\)。（python3 验算：<code>math.exp(1.6)=4.953</code>，<code>math.log(20)=2.996</code>，<code>2**1.6=3.031</code>。）答不出回第四章。</p></details>
+  </div>
+
+  <div class="checkpoint"><span class="box-tag">本章节奏自测（试点章）</span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：460 字（阈值 ≤1,200，位于 15.1 节；次长 411 字，位于 15.3 节）；</li>
+      <li><strong>每节例子数</strong>：动手算共 12 例（15.2 四例、15.3 五例、15.4 两例、15.5 一例），节内检查点 2 处（15.2 末、15.4 末）；</li>
+      <li><strong>单步推导最大跨度</strong>：≤2 个等号（抽检：例 15.1 第 3–4 步方差连等、例 15.3 第 2 步逐项求导、例 15.8 第 2 步等比求和）；</li>
+      <li><strong>长推导回头看</strong>：2 处（例 15.8 后、例 15.9 后）；例 15.1–15.4 与例 15.10–15.11 由相邻检查点逐题复述，例 15.12 第 4 步自带修复结论，不重复插；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（注意力缩放 / LoRA / 困惑度）、回头看 2 处，原文未删改一字。</li>
+    </ul>
   </div>
 </section>
