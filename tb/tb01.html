@@ -6,6 +6,14 @@
     <p class="ch-lede">大模型做的每一次计算——查嵌入、过线性层、注意力打分、LoRA 微调——拆开看全是向量与矩阵运算。本章从零开始备齐八件工具：向量、点积、矩阵乘法、转置、秩、特征值、SVD、张量广播。每件都按同一个节奏来：先给生活类比，再给严格定义，然后一步步推导，最后用真实数字带你手算一遍。读完你会看得懂大模型里每一层到底在算什么。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>向量 → 矩阵乘法 → 转置规则 → 秩与 LoRA → 特征值 → 张量广播</div>
   </header>
+  <div class="checkpoint"><span class="box-tag">进入本章</span>
+    <ul>
+      <li><strong>前置</strong>：会四则运算与高中代数即可；符号（粗体、下标、∑）不熟时，先回第零章的记号约定再回来。</li>
+      <li><strong>一句话直觉</strong>：向量是词在城市里的住址，矩阵是搬运这些住址的机器——本章看懂这座城市和这台机器。</li>
+      <li><strong>最常见误解</strong>：把矩阵当「一表数据」死背乘法规则。其实矩阵是变换机器，矩阵乘法只是「拿每行和每列算一次相似度」。</li>
+      <li><strong>读不懂回哪</strong>：1.1 节的「城市住址」类比。卡住多半不是数学问题，是符号问题。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb01-s1">1.1 向量：嵌入就是向量</a><a href="#tb01-s2">1.2 矩阵：一台变换机器</a><a href="#tb01-s3">1.3 转置与乘法规则</a><a href="#tb01-s4">1.4 秩与低秩：LoRA 为什么省参数</a><a href="#tb01-s5">1.5 特征值与特征向量</a><a href="#tb01-s6">1.6 张量与广播：numpy 语义入门</a><a href="#tb01-ai">1.7 在 AI 中的位置</a>
   </nav>
@@ -25,12 +33,14 @@
   <div class="def"><span class="box-tag">定义 1.3</span><p>两个同维向量 \(\mathbf{x},\mathbf{y}\in\mathbb{R}^{n}\) 的<span class="kt">点积</span>（dot product），代数上是分量乘积之和，几何上是长度乘夹角余弦：</p></div>
   \[ \mathbf{x}\cdot\mathbf{y}=\sum_{i=1}^{n} x_i y_i=\|\mathbf{x}\|_2\,\|\mathbf{y}\|_2\cos\theta \tag{1.3} \]
   <p>其中 \(\theta\) 是两向量的夹角。为什么按位算出来的和，恰好等于带夹角的几何量？这不是巧合，值得推一遍——这也是本书第一条完整推导，我们慢慢走。</p>
+  <aside class="mn">背景｜余弦定理从哪来：它是勾股定理从直角三角形到任意三角形的推广——两边夹角不是直角时，对边的平方要多减一项「两边乘积 × 夹角余弦」。下面推导的第三步会用到它；公式记不住没关系，知道它是「勾股定理的通用版」就够。</aside>
   <div class="derive"><span class="box-tag">推导 · 一步步来</span><p>目标：证明式 (1.3) 的两种写法相等。我们在二维平面里推（高维时两向量也总落在某个平面里，结论不变）。</p>
     <p>第一步，构造一个三角形。把 \(\mathbf{x}\)、\(\mathbf{y}\) 画成从原点出发的两个箭头，连接两个箭头尖端，得到的第三条边正好是向量 \(\mathbf{x}-\mathbf{y}\)。为什么？因为向量减法 \(\mathbf{x}-\mathbf{y}\) 的几何意义就是「从 \(\mathbf{y}\) 的尖端指向 \(\mathbf{x}\) 的尖端」的那条边。</p>
     <p>第二步，用代数算这条边的长度平方。长度的平方等于自己和自己的点积（把式 (1.2) 两边平方即知），所以 \(\|\mathbf{x}-\mathbf{y}\|_2^2=(\mathbf{x}-\mathbf{y})\cdot(\mathbf{x}-\mathbf{y})\)。点积对加减法可以像乘法一样展开分配（这由点积的定义逐分量验证），展开得：\(\mathbf{x}\cdot\mathbf{x}-2\,\mathbf{x}\cdot\mathbf{y}+\mathbf{y}\cdot\mathbf{y}\)。再用一次「自己点自己等于长度平方」，得到 \(\|\mathbf{x}-\mathbf{y}\|_2^2=\|\mathbf{x}\|_2^2+\|\mathbf{y}\|_2^2-2\,\mathbf{x}\cdot\mathbf{y}\)。</p>
     <p>第三步，用几何算同一条边的长度平方。平面几何里的余弦定理说：三角形任一边的平方，等于另两边平方和减去两倍乘积乘夹角余弦。套到我们的三角形上：\(\|\mathbf{x}-\mathbf{y}\|_2^2=\|\mathbf{x}\|_2^2+\|\mathbf{y}\|_2^2-2\|\mathbf{x}\|_2\|\mathbf{y}\|_2\cos\theta\)。</p>
     <p>第四步，两式算的是同一条边，必然相等。两边同时消去 \(\|\mathbf{x}\|_2^2+\|\mathbf{y}\|_2^2\)，再同时除以 \(-2\)，剩下的就是 \(\mathbf{x}\cdot\mathbf{y}=\|\mathbf{x}\|_2\|\mathbf{y}\|_2\cos\theta\)。推导完成。这座桥意义重大：<strong>计算机只会按位乘加（代数面孔），而它能因此获得方向信息（几何面孔）</strong>——注意力机制拿点积当「相关度」用，靠的就是这座桥。</p>
   </div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这段推导</span><p>刚才四步干了什么：搭一个三角形（几何），用点积的代数定义算它的一条边（代数），再用余弦定理算同一条边（几何），两边一相等就得出「点积 = 长度乘积 × 夹角余弦」。结论意味着：计算机只会按位乘加，却能因此知道两个向量方向像不像——注意力机制拿点积当「相关度」，靠的就是这座代数与几何之间的桥。</p></div>
   <aside class="mn">点积 = 一个向量投到另一个方向上的长度，再乘上对方的长度。方向越一致，点积越大；垂直为零；反向为负。</aside>
   <p>点积有个小毛病：它同时被「方向像不像」和「向量长不长」两件事影响。一个向量光靠自己长得长，就能把点积拱大。做检索时我们只关心方向，于是把两个长度除掉：</p>
   <div class="thm"><span class="box-tag">结论 1.1</span><p><span class="kt">余弦相似度</span>（cosine similarity）等于点积除以两边长度，消掉「长短」的影响，只留下「方向」：</p></div>
@@ -55,6 +65,8 @@
 
   <h3 id="tb01-s2"><span class="h3-num">1.2</span> 矩阵：一台变换机器</h3>
   <p>向量是数据，矩阵是让数据动起来的东西。大模型里每一层「加工」，都是一次矩阵运算。</p>
+  <p>先看一台能算的小机器。把 3 个数排成一列：\(\mathbf{x}=(1,2,3)^{\top}\)。造一台机器：吃进这一列数，吐出两个数——第一个数是「三个数的总和」，第二个数是「前两个数之差」。对 \(\mathbf{x}\)，它吐出 \((6,-1)\)。这台机器可以写成一张数表：第一行是 \((1,1,1)\)（加起来），第二行是 \((1,-1,0)\)（做差）。把这张数表「逐行乘进」输入，就得到输出。这张数表就叫矩阵，「逐行乘进去」的动作就叫矩阵乘向量。</p>
+  <aside class="mn">背景｜矩阵从哪来：19 世纪人们解线性方程组时发现，真正干活的是「系数」，把系数单独抽出来排成表就是矩阵——它替代了把方程组整页抄写的老办法。这里需要它，是因为神经网络每一层恰好都是一个巨大的线性方程组。</aside>
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>把矩阵想成<strong>一台对向量做变换的机器</strong>：从进料口塞进一个向量，出料口掉出来一个新向量。这台机器能干的活儿概括起来就是「<strong>旋转 + 拉伸</strong>」——把平面上的每个向量转个角度、沿某些方向拉长或压短。也可以把它想成一台绞肉机：向量是肉，矩阵是机器内部那套刀片的结构，肉的形状（数值）进去什么样、出来什么样，完全由刀片（矩阵的元素）决定。学矩阵，就是学着看懂刀片的设计图。</p></div>
   <div class="def"><span class="box-tag">定义 1.4</span><p><span class="kt">矩阵</span>（matrix）\(\mathbf{A}\in\mathbb{R}^{m\times n}\) 是一个 \(m\) 行 \(n\) 列的数表，同时它是从 \(\mathbb{R}^{n}\) 到 \(\mathbb{R}^{m}\) 的线性映射：\(\mathbf{y}=\mathbf{A}\mathbf{x}\) 把 \(\mathbf{x}\in\mathbb{R}^{n}\) 变成 \(\mathbf{y}\in\mathbb{R}^{m}\)。「线性」的意思是它对加法和数乘都老实：\(\mathbf{A}(\mathbf{x}_1+\mathbf{x}_2)=\mathbf{A}\mathbf{x}_1+\mathbf{A}\mathbf{x}_2\)。还有一个看列的视角：\(\mathbf{A}\mathbf{x}\) 是用 \(\mathbf{x}\) 的各分量当系数，把 \(\mathbf{A}\) 的各列加权混合起来。</p></div>
   <p>矩阵乘矩阵怎么算？先别背规则，我们用两个最小的矩阵，手把手乘一遍。</p>
@@ -109,6 +121,7 @@
     \[ \big((\mathbf{A}\mathbf{B})^{\top}\big)_{ij}=(\mathbf{A}\mathbf{B})_{ji}=\sum_{l=1}^{k} A_{jl}B_{li}=\sum_{l=1}^{k}(\mathbf{B}^{\top})_{il}(\mathbf{A}^{\top})_{lj}=(\mathbf{B}^{\top}\mathbf{A}^{\top})_{ij} \tag{1.9} \]
     <p>四个等号，逐个交代。第一个等号：转置的定义（定义 1.6），把 \((j,i)\) 位置的元素搬到 \((i,j)\)。第二个等号：矩阵乘法的定义（式 (1.5)），\(\mathbf{A}\mathbf{B}\) 的 \((j,i)\) 元素是 \(\mathbf{A}\) 的第 \(j\) 行点 \(\mathbf{B}\) 的第 \(i\) 列。第三个等号：只是换写法——\(A_{jl}\) 按转置定义就是 \((\mathbf{A}^{\top})_{lj}\)，\(B_{li}\) 就是 \((\mathbf{B}^{\top})_{il}\)，数还是那些数，座位换了叫法。第四个等号：再认一次式 (1.5)——\(\sum_l(\mathbf{B}^{\top})_{il}(\mathbf{A}^{\top})_{lj}\) 正是 \(\mathbf{B}^{\top}\) 的第 \(i\) 行点 \(\mathbf{A}^{\top}\) 的第 \(j\) 列，即 \(\mathbf{B}^{\top}\mathbf{A}^{\top}\) 的 \((i,j)\) 元素。左右两边每个元素都相等，证毕。</p>
   </div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这段推导</span><p>刚才干了什么：先对形状（两边都是 \(n\times m\)），再逐元素追——转置定义、乘法定义、换个叫法、再认一次乘法，四个等号每一步都只是定义，没有技巧。结论意味着：乘积的转置必须反序，这不是谁定的规矩，是「形状必须合法、数值必须相等」逼出来的。下次在代码里写 <code>x @ W.T</code> 时，你知道那个 <code>.T</code> 为什么非在不可。</p></div>
   <p>用例 1.2 的数字验算一遍，心里更踏实。我们已经算过 \(\mathbf{A}\mathbf{B}=\begin{pmatrix}4 &amp; 6\\10 &amp; 12\end{pmatrix}\)，所以 \((\mathbf{A}\mathbf{B})^{\top}=\begin{pmatrix}4 &amp; 10\\6 &amp; 12\end{pmatrix}\)。再算右边：\(\mathbf{B}^{\top}=\begin{pmatrix}2 &amp; 1\\0 &amp; 3\end{pmatrix}\)、\(\mathbf{A}^{\top}=\begin{pmatrix}1 &amp; 3\\2 &amp; 4\end{pmatrix}\)，于是 \(\mathbf{B}^{\top}\mathbf{A}^{\top}\) 的四个元素为 \(2\times 1+1\times 2=4\)、\(2\times 3+1\times 4=10\)、\(0\times 1+3\times 2=6\)、\(0\times 3+3\times 4=12\)——一模一样。</p>
   <aside class="mn">反序记忆法：像脱鞋袜——早上先穿袜子再穿鞋，晚上脱的时候必须先鞋后袜。乘积的转置（还有逆）都要倒过来。</aside>
   <p>这条规则能解开工程代码里的一个常见困惑：PyTorch 的线性层把权重存成形状 \((d_{\text{out}},\,d_{\text{in}})\)，前向传播却写 <code>x @ W.T</code>。原因正是式 (1.7) 的约定——样本按行存放，\(\mathbf{X}\in\mathbb{R}^{B\times d_{\text{in}}}\)，必须用 \(\mathbf{W}^{\top}\) 把形状对齐成 \((B\times d_{\text{in}})\cdot(d_{\text{in}}\times d_{\text{out}})\to(B\times d_{\text{out}})\)。这是推出来的，不是试出来的。</p>
@@ -152,6 +165,7 @@
   <p>则称 \(\mathbf{v}\) 为<span class="kt">特征向量</span>（eigenvector），\(\lambda\) 为<span class="kt">特征值</span>（eigenvalue）。式 (1.12) 左边是「被机器变换」，右边是「只乘一个数」——两者相等，正是「只缩放、不转向」的代数写法。怎么求？把式 (1.12) 移项得 \((\mathbf{A}-\lambda\mathbf{I})\mathbf{v}=\mathbf{0}\)（\(\mathbf{I}\) 是单位矩阵，对角线是 1 其余是 0）。我们要的是非零解 \(\mathbf{v}\)，而「一个矩阵乘某非零向量等于零」当且仅当这个矩阵把某个方向整个压扁——这等价于它的行列式为零：</p>
   \[ \det(\mathbf{A}-\lambda\mathbf{I})=0 \tag{1.13} \]
   <p>式 (1.13) 叫特征方程，左端展开是关于 \(\lambda\) 的多项式，解方程就得到特征值。听起来抽象，我们完整手算一个。</p>
+  <aside class="mn">背景｜行列式从哪来：解线性方程组做消元时，会自然冒出「主对角线乘积减副对角线乘积」这个组合；几何上，行列式量的是这台变换机器把面积（高维时是体积）放大或缩小多少倍——行列式为零，就是把某个方向整个压扁。下面例 1.6 只用 \(2\times2\) 的算法：主对角线乘积减副对角线乘积。</aside>
   <div class="example"><span class="box-tag">例 1.6 · 动手算</span>
     <p><strong>题目</strong>　求对称矩阵 \(\mathbf{A}=\begin{pmatrix}3 &amp; 1\\1 &amp; 3\end{pmatrix}\) 的全部特征值与对应的单位特征向量，并逐一验证。</p>
     <p><strong>解</strong>　第一步，写特征方程。先算 \(\mathbf{A}-\lambda\mathbf{I}=\begin{pmatrix}3-\lambda &amp; 1\\1 &amp; 3-\lambda\end{pmatrix}\)。二阶行列式的算法是「主对角线乘积减副对角线乘积」：</p>
@@ -162,6 +176,7 @@
     <p>第一行给出 \(-v_1+v_2=0\)，即 \(v_1=v_2\)（第二行给出同一个方程，不矛盾——这正说明行列式为零、方程有无穷多解）。所以方向是 \((1,1)^{\top}\)，把它除以自身长度 \(\sqrt{2}\) 化成单位向量：\(\mathbf{v}_1=(1,1)^{\top}/\sqrt{2}\)。再 \(\lambda_2=2\)：\((\mathbf{A}-2\mathbf{I})=\begin{pmatrix}1 &amp; 1\\1 &amp; 1\end{pmatrix}\)，方程是 \(v_1+v_2=0\)，即 \(v_1=-v_2\)，取 \(\mathbf{v}_2=(1,-1)^{\top}/\sqrt{2}\)。</p>
     <p>第四步，验证。把式 (1.12) 两边都硬算出来：\(\mathbf{A}(1,1)^{\top}=(3\times 1+1\times 1,\ 1\times 1+3\times 1)^{\top}=(4,4)^{\top}=4\,(1,1)^{\top}\)，确实只缩放了 4 倍没转向；\(\mathbf{A}(1,-1)^{\top}=(3-1,\ 1-3)^{\top}=(2,-2)^{\top}=2\,(1,-1)^{\top}\)，同样成立。再附赠一个观察：\(\mathbf{v}_1\cdot\mathbf{v}_2=1\times 1+1\times(-1)=0\)，两个特征向量互相垂直——这不是巧合，正是下面谱定理保证的。</p>
   </div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这道例题</span><p>刚才四步走了求特征值的标准流程：写特征方程（行列式为零）→ 解出 \(\lambda\) → 代回去逐个求特征向量 → 硬算验证。这条路对任何 \(2\times2\) 矩阵都通用。结论意味着什么：找到一台机器的「轴」，它的性格就被浓缩成几个数——下面谱定理（结论 1.4）说的无非是：对称矩阵的轴总是又实又正交。</p></div>
   <div class="thm"><span class="box-tag">结论 1.4</span><p>（谱定理，只给结论不证；证明见 Strang《Introduction to Linear Algebra》）实对称矩阵 \(\mathbf{A}\in\mathbb{R}^{n\times n}\) 的特征值全为实数，且能取到 \(n\) 个两两正交的单位特征向量。把它们按列排成正交矩阵 \(\mathbf{Q}\in\mathbb{R}^{n\times n}\) 后，有</p></div>
   \[ \mathbf{A}=\mathbf{Q}\mathbf{\Lambda}\mathbf{Q}^{\top},\qquad \mathbf{\Lambda}=\operatorname{diag}(\lambda_1,\dots,\lambda_n) \tag{1.14} \]
   <p>读法：任何对称矩阵这台机器，都可以拆成「转到特征方向（\(\mathbf{Q}^{\top}\)）→ 沿各轴各自伸缩（\(\mathbf{\Lambda}\)）→ 转回来（\(\mathbf{Q}\)）」三步。例 1.6 的矩阵就是活的演示：它的轴是 \((1,1)\) 和 \((1,-1)\)，沿两轴分别放大 4 倍和 2 倍。</p>
@@ -244,5 +259,15 @@
     <details><summary>看答案</summary><p>LoRA 把增量拆成 \(\mathbf{B}\in\mathbb{R}^{512\times 8}\) 和 \(\mathbf{A}\in\mathbb{R}^{8\times 512}\)，参数量 \(=512\times 8+8\times 512=4096+4096=8192\)。全量微调要学 \(512^{2}=262\,144\) 个参数。占比 \(8192/262144=3.125\%\)。一般规律：占比 \(=2r/d\)，秩越小、矩阵越大，省得越狠。</p></details>
     <p><strong>第 4 题（概念 + 形状推理）</strong>　设 \(\mathbf{Q}\in\mathbb{R}^{2\times 3}\)、\(\mathbf{K}\in\mathbb{R}^{2\times 3}\)（2 个 token，嵌入维数 3）。注意力要算「每个 token 对每个 token 的相似度」，应该算 \(\mathbf{Q}\mathbf{K}\)、\(\mathbf{Q}^{\top}\mathbf{K}\)、还是 \(\mathbf{Q}\mathbf{K}^{\top}\)？结果形状是多少，每个元素是什么？</p>
     <details><summary>看答案</summary><p>算 \(\mathbf{Q}\mathbf{K}^{\top}\)。推理过程：相似度用点积（式 (1.3)），而点积要求两个向量同维——这里同维的是「嵌入维」3，所以必须让 3 那一维当内维。\(\mathbf{Q}\mathbf{K}\) 的内维是 3 对 2，根本不存在；\(\mathbf{Q}^{\top}\mathbf{K}\) 的内维是 2 对 2，乘出来是 \(3\times 3\)，那是「嵌入维之间的相似度」，答非所问；\(\mathbf{Q}\mathbf{K}^{\top}\) 的内维是 3 对 3，结果取外维 \(2\times 2\)，其 \((i,j)\) 元素正是 \(\mathbf{q}_i\cdot\mathbf{k}_j\)——token \(i\) 对 token \(j\) 的相似度。这正是注意力式 (0.1) 里 \(\mathbf{Q}\mathbf{K}^{\top}\) 的形状逻辑（Vaswani et al., 2017）。记住方法论：形状不是试出来的，是从「谁跟谁做点积」推出来的。</p></details>
+  </div>
+
+  <div class="checkpoint"><span class="box-tag">本章节奏自测（试点章）</span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：785 字（阈值 ≤1,200，位于 1.6 节张量与广播；次长 678 字，位于 1.1 节）；</li>
+      <li><strong>每节例子数</strong>：动手算共 8 例（1.1–1.7 每节 ≥1 例），检查点 4 处；</li>
+      <li><strong>单步推导最大跨度</strong>：≤2 个等号（抽检：1.1 点积桥第三步、1.3 反序式 (1.9)、1.5 特征方程展开）；</li>
+      <li><strong>长推导回头看</strong>：3 处（1.1 点积桥、1.3 反序、1.5 特征值例题），每个 ≥3 步推导后均有；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（余弦定理 / 矩阵 / 行列式）、回头看 3 处、1.2 节数字预热 1 段，原文未删改一字。</li>
+    </ul>
   </div>
 </section>

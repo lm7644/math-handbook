@@ -6,6 +6,14 @@
     <p class="ch-lede">训练神经网络，说到底是反复回答一个问题：每个参数该往哪边调、调多少？答案是梯度，而算梯度的全部数学只有一条链式法则。本章从「山路有多陡」讲起，把导数、偏导数、梯度逐个立起来，再把链式法则从一元慢慢推到向量形式，每一步都交代理由；然后在一个只有 6 个参数的小网络上，把前向和反向的每个数手算到底，并用 python3 逐一复核。学完这一章，autograd 在你眼里将不再是黑箱。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>直觉 → 定义 → 推导 → 例子 → 自测</div>
   </header>
+  <div class="checkpoint"><span class="box-tag">进入本章</span>
+    <ul>
+      <li><strong>前置</strong>：第一章的向量、矩阵乘法与转置（2.3 节起天天用）；不熟先回第一章 1.1–1.3 节。</li>
+      <li><strong>一句话直觉</strong>：下山找谷底——雾太大看不见路，就伸脚探一探哪个方向最陡，往反方向迈一步。</li>
+      <li><strong>最常见误解</strong>：以为反向传播是某种新的高深算法；它只是「链式法则」这条求导规则的批量执行。</li>
+      <li><strong>读不懂回哪</strong>：2.1 节重读「平均变化率 → 逼近极限」的数值实验；矩阵不熟回第一章。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb02-s1">2.1 导数：山路有多陡</a>
     <a href="#tb02-s2">2.2 偏导数与梯度：山坡上的指南针</a>
@@ -76,6 +84,7 @@ h=0.001 -&gt; 6.000999999999479</code></pre>
   \[ f(\mathbf{x}+t\mathbf{u})-f(\mathbf{x})\approx t\left(\frac{\partial f}{\partial x_1}u_1+\cdots+\frac{\partial f}{\partial x_n}u_n\right). \]
   <strong>第三步（除以 \(t\) 取极限）</strong>：两边除以 \(t\)，\(t\) 约掉；\(t\to 0\) 时近似误差是比 \(t\) 更高阶的小量，除掉后消失，近似号变等号。<strong>第四步（认出点积）</strong>：括号里正是 \(\nabla f(\mathbf{x})\) 与 \(\mathbf{u}\) 的对应分量乘积之和，即 \(\nabla f(\mathbf{x})^{\top}\mathbf{u}\)。证毕。</p></div>
 
+  <aside class="mn">背景｜柯西–施瓦茨不等式从哪来：19 世纪分析学的老工具，说的就是第一章式 (1.3) 的几何事实——点积不会超过两边长度相乘（因为夹角余弦的绝对值不超过 1）。它是「证明某个方向最陡」的标准武器，下面结论 2.1 只用它一次。</aside>
   <div class="thm"><span class="box-tag">结论 2.1</span><p><strong>梯度是最陡上升方向，其长度是最陡方向的坡度。</strong>推导只需要柯西–施瓦茨不等式 \(|\mathbf{a}^{\top}\mathbf{b}|\le\|\mathbf{a}\|\,\|\mathbf{b}\|\)——它由第一章式 (1.3) 的点积几何面孔结合 \(|\cos\theta|\le 1\) 立得。对任意单位方向 \(\mathbf{u}\)：
   \[ \left|D_{\mathbf{u}}f(\mathbf{x})\right|=\left|\nabla f(\mathbf{x})^{\top}\mathbf{u}\right|\le \|\nabla f(\mathbf{x})\|\,\|\mathbf{u}\|=\|\nabla f(\mathbf{x})\|. \]
   第一步等号用的是式 (2.4)；第二步不等号是柯西–施瓦茨；第三步因为 \(\mathbf{u}\) 是单位向量。柯西–施瓦茨取等号的条件是两向量同向，所以让 \(D_{\mathbf{u}}f\) 最大的方向是 \(\mathbf{u}^{*}=\nabla f/\|\nabla f\|\)，最大值恰为 \(\|\nabla f\|\)：
@@ -129,6 +138,7 @@ h=0.001 -&gt; 6.000999999999479</code></pre>
   \[ \frac{dz}{dt}=\frac{\partial z}{\partial x}\frac{dx}{dt}+\frac{\partial z}{\partial y}\frac{dy}{dt}=y\times 2+x\times 1=3\times 2+4\times 1=10. \]
   <strong>复核</strong>：先消元，\(z=2t(t+1)=2t^{2}+2t\)，一元求导得 \(\dfrac{dz}{dt}=4t+2\)，代入 \(t=2\) 也是 \(10\) ✓。<strong>反例（「分叉相加」为什么不可省）</strong>：只算 \(t\to x\to z\) 一条路得 \(6\)，只算 \(t\to y\to z\) 得 \(4\)，都不是 \(10\)——\(t\) 一动两路同时动，漏掉哪条都错。（已用 python3 验算：链式法则得 10，消元求导得 10，数值差分得 10.0。）</p></div>
 
+  <aside class="mn">背景｜雅可比矩阵从哪来：19 世纪多变量微积分留下的「记账法」——把全部一阶偏导按「输出 × 输入」排成一张表，省得逐个手写。它不是新运算，只是一种排版约定；下面推导读完，你会看到它的全部作用就是把「路径相加」写成一次矩阵乘法。</aside>
   <p><strong>向量情形：本章最重要的一行。</strong>现在把 \(t\) 换成向量 \(\mathbf{x}\in\mathbb{R}^{n}\)，中间量换成向量 \(\mathbf{y}=\mathbf{g}(\mathbf{x})\in\mathbb{R}^{m}\)，最终输出是标量损失 \(\mathcal{L}=f(\mathbf{y})\in\mathbb{R}\)（损失永远是一个数）。问：\(\mathcal{L}\) 对某个分量 \(x_j\) 的偏导是多少？</p>
   <div class="derive"><span class="box-tag">推导 · 一步步来</span><p><strong>第一步（数路径）</strong>：\(x_j\) 影响每一个中间分量 \(y_1,\dots,y_m\)，每个 \(y_i\) 再影响 \(\mathcal{L}\)——共 \(m\) 条路径。
   <strong>第二步（用式 (2.8) 的路径相加原则，从 2 条推广到 \(m\) 条）</strong>：
@@ -141,6 +151,7 @@ h=0.001 -&gt; 6.000999999999479</code></pre>
   对全部 \(j\) 成立，即
   \[ \nabla_{\mathbf{x}}\mathcal{L}=\mathbf{J}_{\mathbf{g}}^{\top}\,\nabla_{\mathbf{y}}\mathcal{L}. \tag{2.9} \]
   <strong>第五步（维度检查，养成习惯）</strong>：\(\mathbf{J}_{\mathbf{g}}\) 是 \(m\times n\)，转置后是 \(n\times m\)；\(\nabla_{\mathbf{y}}\mathcal{L}\) 是 \(m\times 1\)；乘积是 \(n\times 1\)，与 \(\mathbf{x}\) 同形 ✓。口诀：<strong>上游梯度左乘雅可比的转置</strong>。式 (2.9) 就是反向传播的全部数学，后面所有公式都是它的特例。</p></div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这段推导</span><p>刚才五步干了什么：数路径（\(x_j\) 有 \(m\) 条路影响损失）→ 每条路径贡献两个变化率的乘积 → 各条路径相加 → 把求和排成矩阵 → 发现要转置才对得上维度。结论意味着：反向传播的全部数学就是一行——上游梯度左乘雅可比的转置。后面 2.4 节的每条门规则、PyTorch 的每次 backward，都只是这行公式的具体化。</p></div>
 
   <aside class="mn">记忆钩子：雅可比是「输出 × 输入」排成的 \(m\times n\)；梯度要和输入同形，必须转置回来。维度对不上，十有八九是少了转置。</aside>
 
@@ -337,6 +348,8 @@ grads w11,w12,w21,w22: -0.00872204536694554 0.00872204536694554 -0.0087220453669
   <p>逐项对照：\(0.7311, 0.2689, 0.5, 0.6225, 0.0713\) ✓；\(-0.0649, -0.0239\) ✓；\(\pm 0.0087\) ✓。手推与机器完全一致——你已经亲手执行了一次反向传播。</p>
   </div>
 
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这道大例题</span><p>刚才干了什么：前向逐节点算数并缓存，反向从种子 1 出发过五道环——损失门、sigmoid 门、矩阵乘法门（权重与输入分开算）、两个 sigmoid 门、第一层权重——每环只用一个局部规则，最后手推与 python3 逐数对齐。结论意味着什么：你已经亲手执行了一次反向传播，深层网络只是这张图的放大版。顺带记住那个现场：误差信号过 sigmoid 门被压掉将近一个数量级，那就是 2.6 节「梯度消失」的微观缩影。</p></div>
+
   <div class="warn"><span class="box-tag">常见坑</span><p><strong>链式法则漏乘中间那一项。</strong>最常见的错误是写 \(\partial\mathcal{L}/\partial z_1=\partial\mathcal{L}/\partial h_1\)，把 sigmoid 门的局部导数 \(\sigma'(z_1)\) 丢掉了。手推时数值只差 \(0.1966\) 倍，不易察觉；但深网络里每丢一项，梯度就错一个因子，几十层下来面目全非。养成习惯：每过一道门，问自己一次「这道门的局部雅可比是什么？乘上了吗？」</p></div>
 
   <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：（1）给定小网络的全部权重，独立走一遍前向，写出每个中间量；（2）从 \(\bar{\mathcal{L}}=1\) 出发逐门反向，说清每步用的是式 (2.10)/(2.11)/(2.12) 的哪一条；（3）解释为什么隐藏层梯度比输出层小一个数量级；（4）用 10 行以内的 python3 复核自己的手推；（5）改一个权重（比如把 \(v_1\) 改成 0.8）后能重算全图。</p></div>
@@ -369,6 +382,7 @@ grads w11,w12,w21,w22: -0.00872204536694554 0.00872204536694554 -0.0087220453669
   <h3 id="tb02-s7"><span class="h3-num">2.7</span> autograd：让机器替你推</h3>
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>这是类比：autograd 像行车记录仪加倒带。前向每跑一行，记录仪把这步运算和输入输出录上磁带；喊一声 backward，引擎倒带，每到一站按登记好的反向规则算梯度，记进参数的账。这个类比省掉了什么：记账的显存开销，以及规则由人事先写好——机器不发明法则，只把 2.4 节的门规则执行得又快又不错。</p></div>
   <p>手推一遍是为了理解，工程上没人每天手推。PyTorch 的 autograd 引擎，本质就是「动态计算图 + 式 (2.12) 的自动执行」。两个关键词：</p>
+  <aside class="mn">背景｜自动微分从哪来：求导规则（链式法则）是 17 世纪的发明；把它「编程实现」是 1960 年代控制论时期的老技术；1986 年 Rumelhart、Hinton 与 Williams 让「反向传播」在神经网络圈普及；2015 年后 PyTorch 用「动态图」把它做成写普通 Python 就能用的样子。机器不发明法则，只把 2.4 节的门规则执行得又快又不错。</aside>
   <p><strong>define-by-run</strong>（动态图）：图不是先声明再运行的，而是你的前向代码每跑一行，引擎就当场把对应节点记到一条「磁带」（tape）上——记录每个 op 的类型和输入输出引用。所以 if、for、变长序列随便写，每一步迭代图都可以长得不一样。调用 \(\texttt{loss.backward()}\) 时，引擎沿磁带<strong>倒带</strong>，对每个节点应用它注册的反向规则（就是 2.4 节那些门规则），把梯度累加进每个叶子参数的 \(\texttt{.grad}\)。</p>
   <p>例 2.3 的手推结果，用 autograd 复算只需 8 行：</p>
   <pre><code>import torch
@@ -407,5 +421,15 @@ L.backward()  # W1.grad=[[-0.0087,0.0087],[-0.0087,0.0087]]; w2.grad=[-0.0649,-0
   <details><summary>看答案</summary><p>\(\sigma'(0)=0.5\times(1-0.5)=0.25\)（这正是式 (2.17) 的最大值点）。\(\sigma'(4)\approx 0.9820\times(1-0.9820)=0.9820\times 0.0180\approx 0.0177\)。python3 复核：0.25 与 0.017663…，一致 ✓。结论：输入稍一饱和（\(|z|=4\) 不算极端），局部导数已从 0.25 跌到 0.018，梯度流过这道门就衰减约 14 倍。</p></details>
   <p><strong>题 4（连乘直觉）</strong>　一个 10 层的 sigmoid 网络，假设每层都恰好停在最大斜率点（\(\sigma'=1/4\)）。损失传到第 1 层时，梯度最多还剩原来的多少？若每层的放大倍率是 2 呢？</p>
   <details><summary>看答案</summary><p>每层乘 \(1/4\)，10 层连乘：\((1/4)^{10}\approx 9.5\times 10^{-7}\)——梯度只剩不到百万分之一，第 1 层几乎收不到训练信号（消失）。每层乘 2：\(2^{10}=1024\)，梯度放大一千倍（爆炸的开端；若是 30 层则是约 \(10^9\) 倍）。python3 复核：0.25**10 = 9.5367e-07，2**10 = 1024 ✓。这就是「初始化 + 残差 + 归一化」要把每层放大倍率钉在 1 附近的原因。</p></details>
+  </div>
+
+  <div class="checkpoint"><span class="box-tag">本章节奏自测（试点章）</span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：940 字（阈值 ≤1,200，位于 2.6 节梯度消失与爆炸；次长 774 字，位于 2.3 节链式法则）；</li>
+      <li><strong>每节例子数</strong>：动手算共 6 例（2.1、2.2、2.3 两例、2.4、2.7；2.5 节整节为例 2.3 大推导），检查点 4 处；</li>
+      <li><strong>单步推导最大跨度</strong>：≤2 个等号（抽检：2.2 方向导数四步、2.3 式 (2.9) 五步、2.4 sigmoid 门四步）；</li>
+      <li><strong>长推导回头看</strong>：2 处（2.3 向量链式法则式 (2.9)、2.5 例 2.3 全网手推）；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（柯西–施瓦茨 / 雅可比矩阵 / 自动微分）、回头看 2 处，原文未删改一字。</li>
+    </ul>
   </div>
 </section>
