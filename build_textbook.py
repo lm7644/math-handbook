@@ -15,23 +15,45 @@ def meta(html, num):
     return (re.sub(r'\s+',' ',title.group(1)).strip() if title else f"第{num}章",
             re.sub(r'\s+',' ',sub.group(1)).strip() if sub else "")
 
+# 五单元顺序表：预备章（16-18）在前，原 16 章章号/锚点/xref 编号一律不变
+PREP_LABEL={16:"预备 A",17:"预备 B",18:"预备 C"}
+PLAN=[("band","零起点 · 预备"),(16,),(17,),(18,),
+      ("band","核心概念"),(0,),(1,),(2,),
+      ("band","关键机制"),(3,),(4,),(6,),
+      ("band","进阶"),(5,),(7,),(10,),
+      ("band","按需查阅"),(9,),(11,),(12,),(13,),(14,),(15,),(8,)]
+
 chapters=[]
-for i in range(16):
+for item in PLAN:
+    if item[0]=="band": continue
+    i=item[0]
     f=TB/f"tb{i:02d}.html"
     if not f.exists():
-        print(f"缺 tb{i:02d}.html"); continue
+        print(f"缺 tb{i:02d}.html"); sys.exit(1)
     h=read(f); t,s=meta(h,f"{i:02d}")
-    chapters.append({"num":f"{i:02d}","label":CH_LABEL[i],"title":t,"sub":s,"html":h})
+    if i in PREP_LABEL:
+        label=PREP_LABEL[i]; disp=label.replace("预备 ","预")
+    else:
+        label=CH_LABEL[i]; disp=f"{i:02d}"
+    chapters.append({"num":f"{i:02d}","label":label,"title":t,"sub":s,"html":h,"disp":disp})
 
 # 短名取「：」前；无「：」用全名
 def short_name(t): return t.split("：")[0] if "：" in t else t
 
-nav="\n".join(f'<li><a href="#tb{c["num"]}" data-nav="tb{c["num"]}"><span class="n">{c["num"]}</span><span class="nt">{c["title"]}</span><span class="ns">{short_name(c["title"])}</span></a></li>' for c in chapters)
-toc_rows="\n".join(
-    f'''<a class="toc-row" href="#tb{c["num"]}"><span class="toc-num">{c["num"]}</span>
+cmap={c["num"]:c for c in chapters}
+nav_parts=[]; toc_parts=[]
+for item in PLAN:
+    if item[0]=="band":
+        nav_parts.append(f'<li class="nav-band">{item[1]}</li>')
+        toc_parts.append(f'<div class="toc-band">{item[1]}</div>')
+        continue
+    c=cmap[f"{item[0]:02d}"]
+    nav_parts.append(f'<li><a href="#tb{c["num"]}" data-nav="tb{c["num"]}"><span class="n">{c["disp"]}</span><span class="nt">{c["title"]}</span><span class="ns">{short_name(c["title"])}</span></a></li>')
+    toc_parts.append(f'''<a class="toc-row" href="#tb{c["num"]}"><span class="toc-num">{c["disp"]}</span>
     <span class="toc-body"><span class="toc-title">{c["title"]}</span>
-    {f'<span class="toc-sub">{c["sub"]}</span>' if c["sub"] else '<span class="toc-sub toc-sub-none">（目录原图无副标题）</span>'}</span></a>'''
-    for c in chapters)
+    {f'<span class="toc-sub">{c["sub"]}</span>' if c["sub"] else '<span class="toc-sub toc-sub-none">（目录原图无副标题）</span>'}</span></a>''')
+nav="\n".join(nav_parts)
+toc_rows="\n".join(toc_parts)
 # ---------- 交叉引用链接化 ----------
 # 1) 建立全书锚点映射（式 eq-n-m / 图 fig-n-m / 例 ex-n-m）
 eq_map, fig_map, ex_map = {}, {}, {}
