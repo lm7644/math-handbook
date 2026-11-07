@@ -6,6 +6,14 @@
     <p class="ch-lede">训练大模型时，屏幕上那条往下掉的损失曲线，为什么偏偏是「负对数概率」这个样子？为什么不用平方误差、不用别的？这一章给出信息论的回答：从「一条消息有多意外」讲起，定义熵、交叉熵、KL 散度，然后一步一步推出「最小化交叉熵 ⇔ 极大似然」——你会发现损失函数的形状不是拍脑袋选的，而是被数学钉死的。最后讲困惑度，把损失翻译成「模型每一步在几个词之间犹豫」的人话。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>直觉（意外程度） → 熵 → 交叉熵 → 推导：损失为何长这样 → KL 散度 → 困惑度 → 自测</div>
   </header>
+  <div class="checkpoint"><span class="box-tag">进入本章</span>
+    <ul>
+      <li><strong>前置</strong>：会换底、会 \(\log(ab)=\log a+\log b\) 的对数运算；用到第三章的期望（3.3 节）与极大似然（3.5 节式 (3.13)），这两处忘了先回去补。</li>
+      <li><strong>一句话直觉</strong>：一条消息越意外、信息量越大；熵是平均意外程度，交叉熵是拿别人的尺子量意外，困惑度是把损失翻译成「在几个词之间犹豫」。</li>
+      <li><strong>最常见误解</strong>：把交叉熵当成「两个分布的距离」。它不对称、也不满足三角不等式；像距离的那部分是 KL 散度，而 KL 同样不是距离（4.4 节）。</li>
+      <li><strong>读不懂回哪</strong>：回 4.1 节开头「太阳升起 vs 下暴雨」的直觉块；若卡在对数计算上，回第零章的记号约定。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb04-s1">4.1 自信息量与熵</a>
     <a href="#tb04-s2">4.2 交叉熵：用别人的尺子量我的事</a>
@@ -16,7 +24,9 @@
   </nav>
 
   <h3 id="tb04-s1"><span class="h3-num">4.1</span> 自信息量与熵</h3>
+  <aside class="mn">背景｜信息论从哪来：1948 年香农为回答「一条信道每秒最多能无错传多少信息」而创立它——在那之前通信靠工程经验试错，他给出了可计算的极限，熵就是这个极限的度量。这里需要它，因为训练大模型的损失函数，本质正是「用模型分布编码真实文本的平均代价」。</aside>
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>信息量 = 这件事有多意外</strong>。朋友说「明天太阳会升起」，你毫无收获——必然发生的事不携带任何信息。朋友说「明天本地要下暴雨」，你立刻收起晾的衣服——小概率事件一旦发生，携带的信息量巨大。所以信息量应该是概率的<strong>减函数</strong>：概率越小，信息量越大；概率为 1，信息量为 0。还要满足一个好心肠的要求：两件独立的事同时发生，总信息量应该等于各自相加（「明天下雨」加「硬币出正面」的意外程度 = 两者之和）。概率相乘、信息量相加——什么函数能把乘法变加法？对数。</p></div>
+  <p>先用两个数字把「意外」量化。均匀硬币出正面，概率 \(1/2\)；从 8 张牌里摸中指定那张，概率 \(1/8\)。哪件发生了你更意外？显然后者。给它俩各贴一个数：取概率的负对数（底 2），前者得 \(1\)，后者得 \(3\)——概率每减半一次，这个数恰好加 1。下面定义 4.1 不过是把这两个数背后的规律写成通式。</p>
   <div class="def"><span class="box-tag">定义 4.1 · 自信息量</span><p>事件 \(x\) 的<span class="kt">自信息量</span>（self-information）定义为</p>
   \[ I(x)=-\log p(x) \tag{4.1} \]
   <p>负号把「小于 1 的概率的对数（负数）」翻成正数。对数的底决定单位：底 2 时单位是 <span class="kt">bit</span>（比特），底 \(e\) 时单位是 <span class="kt">nat</span>（奈特）。换算：\(1\ \text{bit}=\ln 2\approx0.693\ \text{nat}\)。动手算两个：事件概率 \(1/8\)（如 8 个等可能的 token 里抽中某一个），\(I=-\log_2(1/8)=3\) bit；事件概率 \(1/16\)，\(I=-\log_2(1/16)=4\) bit——概率减半，信息量恰好加 1 bit，这正是对数的本性。</p></div>
@@ -31,6 +41,7 @@
   <div class="warn"><span class="box-tag">常见坑</span><p><strong>bit 与 nat 混用</strong>。同一个分布的熵，用 bit 算出来的数值是用 nat 算的 \(1/\ln 2\approx1.443\) 倍（反过来 1 bit = 0.693 nat）。PyTorch 等框架的交叉熵损失内部用 nat（取 \(\ln\)），而不少论文报的是 bit。比较两个来源的数值之前先查底数——发现别人的损失比你「低 30%」，先别慌，很可能只是单位不同。</p></div>
 
   <h3 id="tb04-s2"><span class="h3-num">4.2</span> 交叉熵：用别人的尺子量我的事</h3>
+  <aside class="mn">背景｜交叉熵从哪来：它出自编码理论——为分布 \(q\) 量身设计的最优编码，给事件 \(x\) 分配的码长是 \(-\log q(x)\)；拿这套编码去编真实分布 \(p\) 产生的数据，平均码长就是交叉熵。它替代不了熵：熵是「用自己的尺子」时的理论下限。这里需要它，因为训练时数据分布固定、模型分布可调，交叉熵恰是「用模型编码数据」的实际代价。</aside>
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>交叉熵 = 用别人的尺子量我的事</strong>。熵 \(H(p)\) 是「真相 \(p\) 用自己的尺子量自己」——每个事件按自己的真实概率分配惊讶度。交叉熵 \(H(p,q)\) 是：事件还是按真相 \(p\) 的频率出现（权重仍是 \(p\)），但每个事件的「惊讶度」改由另一个分布 \(q\) 来认定（用 \(-\log q(x)\)）。编码理论里有精确的含义：用为 \(q\) 量身定做的编码方案去编码来自 \(p\) 的数据，所需的平均码长（Cover &amp; Thomas）。尺用对了（\(q=p\)）最省；尺用错了，平均就要多付代价——多付的那部分，就是下一节的 KL 散度。</p></div>
   <div class="def"><span class="box-tag">定义 4.3 · 交叉熵</span><p>分布 \(p\) 与 \(q\) 之间的<span class="kt">交叉熵</span>（cross-entropy）：</p>
   \[ H(p,q)=-\sum_x p(x)\log q(x) \tag{4.3} \]
@@ -41,6 +52,7 @@
   <div class="example"><span class="box-tag">例 4.2 · 动手算（分解式数字验证）</span><p><strong>题目</strong>　取 \(p=(0.7,\ 0.2,\ 0.1)\)，\(q=(0.5,\ 0.3,\ 0.2)\)（用 bit）。分别算 \(H(p,q)\)、\(H(p)\)、\(\operatorname{KL}(p\|q)\)，验证式 (4.4)。</p>
   <p><strong>解</strong>　<strong>第 1 步，交叉熵</strong>：\(H(p,q)=-(0.7\log_2 0.5+0.2\log_2 0.3+0.1\log_2 0.2)\)。逐项：\(0.7\times1=0.7\)；\(0.2\times1.7370\approx0.3474\)；\(0.1\times2.3219\approx0.2322\)。合计 \(H(p,q)\approx1.2796\) bit。<strong>第 2 步，熵</strong>：例 4.1 已算得 \(H(p)\approx1.1568\) bit。<strong>第 3 步，KL 散度</strong>（按定义 \( \sum_x p\log_2(p/q)\)）：\(0.7\log_2(0.7/0.5)+0.2\log_2(0.2/0.3)+0.1\log_2(0.1/0.2)=0.7\times0.4854+0.2\times(-0.5850)+0.1\times(-1)\approx0.3398-0.1170-0.1=0.1228\) bit。<strong>第 4 步，验证</strong>：\(1.1568+0.1228=1.2796\)，与第 1 步一致。</p>
   <p><strong>读数</strong>：拿 \(q\) 的尺子量 \(p\) 的事，平均每个样本多付 0.1228 bit。这 0.1228 就是「尺不准」的罚款，它不会为负——自己的尺子永远最合自己的身。</p></div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这道例题</span><p>刚才四步干了什么：用 \(q\) 的尺子算交叉熵（1.2796 bit）→ 复用例 4.1 的熵（1.1568）→ 按定义算 KL（0.1228）→ 两边相加验证分解式。结论意味着：「用错尺的罚款」可以精确算到小数点后四位——4.3 节推训练损失的下界，靠的正是这个分解。</p></div>
   <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：
     <br>1. 用「意外程度」解释 \(I(x)=-\log p(x)\)，并说出为什么用对数；
     <br>2. 手算一个小型离散分布的熵，并解释「均匀分布熵最大」；
@@ -63,9 +75,11 @@
   <p><strong>第 4 步：减掉常数，露出 KL</strong>。用分解式 (4.4)：\(H(\hat p,q_\theta)=H(\hat p)+\operatorname{KL}(\hat p\|q_\theta)\)。其中 \(H(\hat p)\) 只由数据决定、与参数 \(\theta\) 无关——对优化而言它是个常数，最小化「常数 + KL」等价于最小化 KL。于是三件事完全等价：</p>
   \[ \arg\max_\theta\ \sum_{i=1}^{N}\ln q_\theta(y_i)\ \Longleftrightarrow\ \arg\min_\theta\ H(\hat p,q_\theta)\ \Longleftrightarrow\ \arg\min_\theta\ \operatorname{KL}(\hat p\,\|\,q_\theta) \tag{4.8} \]
   <p><strong>收拢</strong>：损失函数长成 \(-\ln q_\theta(y_i)\) 的样子，因为最小化交叉熵就是在做极大似然，也就是在让模型分布向数据分布靠拢（缩小 KL）。这不是某个工程师的偏好，是式 (4.8) 钉死的。顺带一个推论：因 \(\operatorname{KL}\ge0\)，交叉熵有下界 \(H(\hat p)\)——自然语言本身有不可消除的不确定性，所以训练损失降不到 0，困惑度也永远大于 1。</p></div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这段推导</span><p>刚才四步干了什么：写下极大似然并取对数 → 取负号把 max 变 min（NLL 现身）→ 按词表归并认出交叉熵 → 减掉常数 \(H(\hat p)\) 露出 KL。结论意味着：每下降一格训练损失，都是在做极大似然、缩小模型与数据的 KL；损失降到数据自身的熵就触底——这也是 4.5 节困惑度永远大于 1、第十一章 KL 约束的共同源头。</p></div>
   <div class="example"><span class="box-tag">例 4.3 · 动手算（逐样本求和 = 按类别归并）</span><p><strong>题目</strong>　词表只有 3 类（A、B、C），小训练集共 \(N=6\) 个位置，正确 token 依次为 A、B、A、C、A、B。简化起见，设模型在每个位置输出同一分布 \(q\)：\(q(\mathrm{A})=0.5\)，\(q(\mathrm{B})=0.25\)，\(q(\mathrm{C})=0.25\)（用 bit）。（a）按式 (4.6) 逐样本算平均损失；（b）数出经验分布 \(\hat p\)，按式 (4.7) 归并后的交叉熵形式再算一遍，验证两式相等；（c）这个训练集上的损失最低能压到多少？</p>
   <p><strong>解</strong>　<strong>（a）逐样本</strong>：三个类别各自的 NLL 为 \(-\log_2 0.5=1\)、\(-\log_2 0.25=2\)、\(-\log_2 0.25=2\) bit。序列 A、B、A、C、A、B 的逐项损失即 1、2、1、2、1、2，总和 9，平均 \(9/6=1.5\) bit。<strong>（b）归并</strong>：计数 \(N_{\mathrm{A}}=3\)、\(N_{\mathrm{B}}=2\)、\(N_{\mathrm{C}}=1\)，故经验分布 \(\hat p=(0.5,\ 1/3,\ 1/6)\)。按式 (4.7)：\(H(\hat p,q)=0.5\times1+\dfrac{1}{3}\times2+\dfrac{1}{6}\times2=0.5+0.6667+0.3333=1.5\) bit——与（a）一致。归并没有任何近似：3 个 A 在逐样本算法里贡献 \(3\times1\)，在归并算法里贡献 \(6\times\hat p(\mathrm{A})\times1=6\times0.5\times1=3\)，同一笔账。<strong>（c）下界</strong>：由式 (4.8)，最小化交叉熵等价于最小化 \(\operatorname{KL}(\hat p\|q)\)，而 KL 非负、当 \(q=\hat p\) 时取 0，所以损失下界是 \(H(\hat p)=0.5\times1+\dfrac{1}{3}\times1.5850+\dfrac{1}{6}\times2.5850\approx0.5+0.5283+0.4308\approx1.459\) bit。数据自身带着 1.459 bit 的熵，损失降不到它以下。</p>
   <p><strong>读数</strong>：式 (4.7) 不是新损失，只是同一笔账换个算法——这正是「训练损失 = 交叉熵」的全部秘密。反面对照：若模型把质量押错位置，比如 \(q=(0.25,\ 0.5,\ 0.25)\)，则 \(H(\hat p,q)=0.5\times2+\dfrac{1}{3}\times1+\dfrac{1}{6}\times2\approx1.667\) bit，比押对的 1.5 高出一截——尺子押错地方，平均必多付。</p></div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这道例题</span><p>刚才三步干了什么：逐样本算平均损失得 1.5 bit → 数出经验分布按类别归并再算，仍是 1.5 → 由 KL 非负求出下界 \(H(\hat p)\approx1.459\)。结论意味着：式 (4.7) 不是新损失，是同一笔账换个算法；「损失降不到数据熵以下」从口号变成了 6 个 token 就能验出来的数。</p></div>
   <aside class="mn">推导链只有三步：取负号（max 变 min）、除以 \(N\) 并归并（露出经验分布）、减掉常数 \(H(\hat p)\)（露出 KL）。损失的形状是被 MLE 唯一钉死的。</aside>
 
   <h3 id="tb04-s4"><span class="h3-num">4.4</span> KL 散度：像距离，但不是距离</h3>
@@ -81,6 +95,7 @@
   <aside class="mn">口诀：KL(p‖q) 是「真相 p 在前」。前向怕漏（全覆盖），反向怕错（收缩求稳）。</aside>
 
   <h3 id="tb04-s5"><span class="h3-num">4.5</span> 困惑度：模型在每个位置犹豫几个词</h3>
+  <aside class="mn">背景｜困惑度从哪来：20 世纪 70 年代，语音识别研究者用它给语言模型打分——把模型看成「每一步在若干个等可能候选里猜」，等效候选数越少模型越好。它替代了「直接报平均对数概率」这种没有手感的做法。这里需要它，因为交叉熵的数值跨任务难以直观比较，换成「等效候选数」人人都听得懂。</aside>
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>损失 0.8 nat，这算好还是坏？缺少手感。<strong>困惑度（PPL）把损失翻译回「等效候选数」</strong>：PPL = 2.24 的意思是——模型在这个测试序列上，平均每个位置的纠结程度，相当于在 2.24 个等可能的候选词里挑一个。PPL = 1 是完美（每个位置都笃定）；PPL 等于词表大小，说明模型和闭着眼瞎猜没区别。这个刻度跨任务、跨数据都好懂，所以成了语言模型的标准体温计。</p></div>
   <div class="def"><span class="box-tag">定义 4.5 · 困惑度</span><p>语言模型在测试序列上的<span class="kt">困惑度</span>（perplexity，PPL）是平均负对数似然的指数：</p>
   \[ \mathrm{PPL}=\exp\!\left(-\dfrac{1}{N}\sum_{i=1}^{N}\ln q(y_i)\right) \tag{4.10} \]
@@ -88,6 +103,7 @@
   <div class="example"><span class="box-tag">例 4.5 · 动手算（4 个 token 的完整流程）</span><p><strong>题目</strong>　一个 4 token 的测试序列，模型在各步赋给正确 token 的概率依次为 0.8、0.5、0.4、0.25。求困惑度。</p>
   <p><strong>解</strong>　<strong>第 1 步，逐 token 算 NLL</strong>（nat，即 \(-\ln\)）：\(-\ln 0.8\approx0.2231\)；\(-\ln 0.5\approx0.6931\)；\(-\ln 0.4\approx0.9163\)；\(-\ln 0.25\approx1.3863\)。<strong>第 2 步，求平均</strong>：\((0.2231+0.6931+0.9163+1.3863)/4=3.2188/4\approx0.8047\) nat。<strong>第 3 步，取指数</strong>：\(\mathrm{PPL}=e^{0.8047}\approx2.24\)。<strong>换 bit 复核</strong>：每个 NLL 除以 \(\ln 2\) 换成 bit，平均约 \(1.1610\) bit，\(2^{1.1610}\approx2.24\)——同一个数，刻度无关。</p>
   <p><strong>读数</strong>：模型平均每个位置的「有效分支数」约 2.24，相当于每步在 2.24 个等可能候选里犹豫。哪一步最纠结？看 NLL 最大的是第 4 步（概率只有 0.25）——token 级 NLL 还能用来定位模型在序列哪一步栽了跟头。</p></div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这道例题</span><p>刚才三步干了什么：逐 token 算 NLL → 求平均（0.8047 nat）→ 取指数得 \(\mathrm{PPL}\approx2.24\)，并换 bit 复核同一答案。结论意味着：「NLL → 平均 → 指数」是读任何语言模型报告的通用流程；逐 token 的 NLL 还能当定位器，指出模型在序列哪一步栽了跟头。</p></div>
   <div class="example"><span class="box-tag">例 4.6 · 动手算（PPL 与损失互相换算）</span><p><strong>题目</strong>　同一测试集上，三个模型的 PPL 分别为 16、4、2。（a）各自的平均 NLL 是多少 bit？（b）换算成 nat（\(\ln 2\approx0.6931\)）；（c）PPL 从 16 降到 4、从 4 降到 2，损失各降了多少 bit？这说明 PPL 是什么刻度？</p>
   <p><strong>解</strong>　<strong>（a）</strong>由定义 4.5 下方说的刻度无关性，用 bit 表示时 \(\mathrm{PPL}=2^{\text{平均 NLL}}\)，两边取 \(\log_2\) 得「平均 NLL \(=\log_2\mathrm{PPL}\)」。\(\log_2 16=4\)、\(\log_2 4=2\)、\(\log_2 2=1\)，即三个模型的损失分别为 4、2、1 bit。<strong>（b）</strong>乘换算系数 \(\ln 2\)：\(4\times0.6931\approx2.7726\) nat，\(2\times0.6931\approx1.3863\) nat，\(1\times0.6931\approx0.6931\) nat。<strong>（c）</strong>16→4：损失降 \(4-2=2\) bit；4→2：损失降 \(2-1=1\) bit。PPL 在<strong>等比</strong>缩（除以 4、再除以 2），损失在<strong>等差</strong>减（减 2、再减 1）——PPL 是损失的<strong>指数刻度</strong>，损失是 PPL 的对数刻度。</p>
   <p><strong>读数</strong>：高 PPL 区「降一半」对应巨大的损失进步；低 PPL 区 PPL 只差 1，也可能是难啃的硬骨头——比较进展要看损失差，不只看 PPL 差。反面教材：若把 4 nat 的损失误当 4 bit 代入换算，PPL 会从 \(2^{4}=16\) 错算成 \(e^{4}\approx54.6\)，虚高 3 倍多——报 PPL 之前，先报对数的底。</p></div>
@@ -118,5 +134,15 @@
     <details><summary>看答案</summary><p>\(\operatorname{KL}(p\|q)=0.8\log_2(0.8/0.4)+0.2\log_2(0.2/0.6)=0.8\times1+0.2\times(-1.5850)\approx0.8-0.3170=0.483\) bit。\(\operatorname{KL}(q\|p)=0.4\log_2(0.4/0.8)+0.6\log_2(0.6/0.2)=0.4\times(-1)+0.6\times1.5850\approx-0.4+0.9510=0.551\) bit。两个方向不相等，再次确认 KL 不是距离。</p></details>
     <p><strong>题 4（困惑度）</strong>　一个 3 token 的测试序列，模型赋给正确 token 的概率依次为 0.5、0.25、0.125。求 PPL（提示：这组数用 bit 算特别整齐）。</p>
     <details><summary>看答案</summary><p>逐 token NLL（bit）：\(-\log_2 0.5=1\)，\(-\log_2 0.25=2\)，\(-\log_2 0.125=3\)。平均 \((1+2+3)/3=2\) bit。PPL \(=2^{2}=4\)。读法：模型平均每个位置像在 4 个等可能候选里猜。若用 nat 复核：平均 \(2\ln 2\approx1.386\) nat，\(e^{1.386}\approx4\)，一致。</p></details>
+  </div>
+
+  <div class="checkpoint"><span class="box-tag">本章节奏自测（试点章）</span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：649 字（阈值 ≤1,200，位于 4.3 节核心推导；次长 475 字，位于 4.4 节）；</li>
+      <li><strong>每节例子数</strong>：动手算共 6 例（4.1–4.5 每节 ≥1 例，其中 4.5 节两例），检查点 4 处；</li>
+      <li><strong>单步推导最大跨度</strong>：等式链最长 3 个等号（式 (4.7) 按类别归并，逐步只做定义替换）；其余抽检 ≤2 个等号（4.3 节推导第 1、2 步各 1 个；例 4.2 第 4 步验证 1 个）；</li>
+      <li><strong>长推导回头看</strong>：4 处（例 4.2 分解验证、4.3 节 MLE 推导、例 4.3 归并账、例 4.5 PPL 流程）；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（信息论 / 交叉熵 / 困惑度）、回头看 4 处、4.1 节数字预热 1 段，原文未删改一字。</li>
+    </ul>
   </div>
 </section>

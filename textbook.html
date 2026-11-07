@@ -369,6 +369,14 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p class="ch-lede">你给模型发一句话，它回你一句话，中间那几秒钟机器里到底发生了什么？本章不急着讲任何一门数学的细节，而是先带你跟着一个 token 把这条流水线完整走一遍：每一站停下来，问一句「这里需要哪门数学」。走完你会发现，答案只有五门——线性代数、微积分、概率论、信息论、优化方法，各管一段，刚好够用。读完这章，你手里就有了全书的地图。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>一个故事 → 五门数学 → 一个玩具例子 → 一张对照表</div>
   </header>
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">进入本章</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>前置</strong>：会高中代数（展开括号、解一元二次方程）即可，本章是全书起点，无先修章节；其余符号现用现定义，0.3 节有完整的先修说明。</li>
+      <li><strong>一句话直觉</strong>：大模型是一家餐厅的后厨流水线，五门数学是流水线上五个工种各自的操作手册。</li>
+      <li><strong>最常见误解</strong>：「得先把数学系的课全学完才能碰大模型」——本章就是来纠正这句话的：主干只用五门数学的各一部分，刚好够用。</li>
+      <li><strong>读不懂回哪</strong>：回 0.1 节的餐厅类比和图 <a class="xref" href="#fig-0-1">0.1</a>，先把「九站」走顺；某门数学的细节，回<a class="xref" href="#tb01">第一章</a>到<a class="xref" href="#tb05">第五章</a>中对应的那一章。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb00-s1">0.1 一个 token 的旅程</a><a href="#tb00-s2">0.2 五门数学，为什么刚好够</a><a href="#tb00-s3">0.3 这本书怎么用</a><a href="#tb00-s4">0.4 把整条链走一遍</a><a href="#tb00-ai">0.5 在 AI 中的位置</a>
   </nav>
@@ -381,6 +389,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p>我们现在就充当质检员，跟着一个 token 走完全程。每到一个工位，我们只问一个问题：<strong>「这一站，用的是哪门数学？」</strong>先走推理（模型回答你时走的路线，六站），再看训练额外多走的三站。</p>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p>把大模型想成一家餐厅的后厨流水线。你点菜（输入一句话），后厨开始忙活：<strong>配菜工</strong>把菜名换成原料（嵌入：把字换成向量）；<strong>灶台</strong>是真正的加工区，切配、翻炒（注意力和 FFN：矩阵乘法在算账）；<strong>装盘师傅</strong>决定这一勺菜摆成什么样子端出去（softmax：把内部的分数变成「下一个字上谁」的概率）；<strong>传菜员</strong>有时还要掷一下骰子，决定上常规菜还是冒个险（采样）。五门数学，就是这条流水线上五个工种各自的操作手册。</p></div>
   <p><strong>第 1 站，分词。</strong>你的句子被切成一个个 token——大致相当于「字」或「词块」，每个 token 发一张工牌：一个整数编号（id）。比如「北」分到 1024 号。这一步是纯查表，掰着手指头就能干，<strong>不需要数学</strong>。</p>
+  <aside class="mn">背景｜嵌入从哪来：早年计算机用 one-hot 编码表示词——每个词独占一个编号位，任意两个词的相似度都是 0，没法算「意思近不近」。2013 年前后兴起的词嵌入把每个词塞进连续向量空间，让「距离近」对应「意思近」，查表取向量从此成了语言模型的第一道手续。</aside>
   <p><strong>第 2 站，嵌入查表。</strong>工牌没法直接参与计算——「1024 号」和「1025 号」之间没有任何关系可言。所以模型第一件事，是拿工牌去一张巨大的表（<span class="kt">嵌入矩阵</span> \(\mathbf{E}\in\mathbb{R}^{V\times d}\)，\(V\) 是词表大小，\(d\) 是嵌入维数）里取出第 \(t\) 行，得到一个向量 \(\mathbf{e}\in\mathbb{R}^{d}\)。从这一步起，你的字变成了能加减乘除的数。<strong>这一站需要：线性代数（<a class="xref" href="#tb01">第一章</a>）。</strong></p>
   <p><strong>第 3 站，注意力。</strong>一个字的意思取决于上下文——「苹果」在「我吃苹果」和「苹果发布会」里不是一回事。注意力机制让每个 token 跟其他 token「打招呼」：互相用点积算相似度，再用 softmax 把相似度换算成权重，最后按权重把别人的信息加权求和进来。整条公式长这样：</p>
   <span id="eq-0-1" class="anchor"></span>\[ \operatorname{Attention}(\mathbf{Q},\mathbf{K},\mathbf{V})=\operatorname{softmax}\!\left(\dfrac{\mathbf{Q}\mathbf{K}^{\top}}{\sqrt{d_k}}\right)\mathbf{V},\qquad \mathbf{Q}\in\mathbb{R}^{n\times d_k},\ \mathbf{K}\in\mathbb{R}^{m\times d_k},\ \mathbf{V}\in\mathbb{R}^{m\times d_v} \tag{0.1} \]
@@ -392,10 +401,13 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p><strong>第 6 站，采样。</strong>模型手里现在有了一副「骰子」：词表上每个字的概率。按概率抽出下一个字，接在句子后面，然后整个流程再来一遍。抽的时候可以用<span class="kt">温度</span>（temperature）\(T\) 调节骰子的「偏心程度」：</p>
   <span id="eq-0-3" class="anchor"></span>\[ p_i(T)=\dfrac{e^{z_i/T}}{\sum_{j} e^{z_j/T}} \tag{0.3} \]
   <p>\(T&lt;1\) 时分布变尖，模型更保守，总挑概率最大的字；\(T&gt;1\) 时分布变平，冷僻字也有机会上场，输出更发散。<strong>这一站需要：概率论。</strong>至此，屏幕上蹦出了第一个字——推理的六站走完。</p>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">盘点推理六站</span></span><p>刚才六站干了什么：分词发工牌 → 查表取向量 → 点积打分加归一化 → FFN 矩阵乘法 → logits 变成概率 → 掷骰子采样。结论意味着：屏幕上蹦出的每个字都是这五门数学里某几门算出来的，没有一步是魔法——训练多走的三站，马上见分晓。</p></div>
   <p><strong>训练还要多走三站。</strong>推理是「用」模型，训练是「改」模型。改的前提是知道错在哪、错多少、每个参数负多大责任。</p>
+  <aside class="mn">背景｜交叉熵从哪来：它出自信息论——香农 1948 年研究「用最短的编码传消息」时，发现编码长度由概率的对数决定。交叉熵量的是「用模型的分布去编码真实答案，平均多花多少信息量」，它替代了不可求导的「数对错」式准确率，训练才有了能沿着走的坡度。</aside>
   <p><strong>第 7 站，损失。</strong>训练时我们知道正确答案（语料里下一个真实的字）。<span class="kt">交叉熵</span>（cross-entropy）用一个数字度量「模型给的分布」离「正确答案」有多远：</p>
   <span id="eq-0-4" class="anchor"></span>\[ \mathcal{L}=-\sum_{c=1}^{V} y_c \ln p_c=-\ln p_{c^{*}} \tag{0.4} \]
   <p>其中 \(\mathbf{y}\) 是正确答案的 one-hot 向量（正确位是 1，其余是 0），\(c^{*}\) 是正确字的下标。这个损失有明确的信息论含义：用模型的分布去编码真实数据，平均每条要多花多少信息量——式 (<a class="xref" href="#eq-0-4">0.4</a>) 用的是 \(\ln\)，单位叫 nat；若换 \(\log_2\) 单位就是比特，<a class="xref" href="#tb04">第四章</a>会专门分清这两把尺子。<strong>这一站需要：信息论（<a class="xref" href="#tb04">第四章</a>）。</strong></p>
+  <aside class="mn">背景｜链式法则从哪来：它是微积分里复合函数求导的老规则，已有三百年历史。反向传播的贡献不是发明新数学，而是把这条规则组织成一条从输出端逐层回传的流水线——替代了对每个参数逐个数值扰动的天价做法，几十亿参数的梯度一次算清。</aside>
   <p><strong>第 8 站，反向传播。</strong>损失是一个数字，但模型里有几十亿个参数，每个参数该往哪边调、调多少？答案藏在「损失对每个参数的偏导数」里。<span class="kt">反向传播</span>（backpropagation）就是一条流水线，用链式法则把梯度从输出端一路传回每一层。链式法则本身只有一句话：若 \(h=f(g(x))\)，则</p>
   <span id="eq-0-5" class="anchor"></span>\[ \dfrac{\mathrm{d}h}{\mathrm{d}x}=\dfrac{\mathrm{d}f}{\mathrm{d}g}\cdot\dfrac{\mathrm{d}g}{\mathrm{d}x} \tag{0.5} \]
   <p>「复合函数求导，等于各段导数相乘。」<strong>这一站需要：微积分（<a class="xref" href="#tb02">第二章</a>）。</strong></p>
@@ -575,11 +587,13 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
       <p>第三步，逐一代入 \(y_c\) 的值。除了正确位置 \(c^{*}\) 上的 \(y_{c^{*}}=1\)，其他 \(y_c\) 全是 0。而 0 乘任何数都是 0，所以所有 \(c\neq c^{*}\) 的项整块消失，一项不剩。</p>
       <p>第四步，剩下的只有 \(-\big(1\times\ln p_{c^{*}}\big)=-\ln p_{c^{*}}\)。化简完成。这个化简意义重大：算交叉熵根本不用管模型给其他词分了多少概率，<strong>只问一件事——你给正确答案分了多大把握</strong>。</p>
     </div>
+    <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才四步干了什么：认清 one-hot 向量只有一个 1 → 把求和展开 → 0 乘任何数是 0、整块消失 → 只剩正确类那一项。结论意味着：交叉熵只问「你给正确答案分了多大把握」，其余词分了多少它不问——第 8 步那个干净的梯度，根子就在这里。</p></div>
     <p><strong>第 8 步，梯度与采样（数学：微积分、优化、概率论）。</strong>损失对 logits 的梯度有一个出了名干净的结果（softmax 加交叉熵的组合下，链式法则推出来正好是「预测减答案」，完整推导见<a class="xref" href="#tb10">第十章</a>式 (<a class="xref" href="#eq-10-9">10.9</a>)，<a class="xref" href="#tb15">第十五章</a>例 <a class="xref" href="#ex-15-3">15.3</a> 还会再算一遍）：</p>
     <span id="eq-0-9" class="anchor"></span>\[ \dfrac{\partial \mathcal{L}}{\partial \mathbf{z}}=\mathbf{p}-\mathbf{y}=(0.6313-1,\ 0.3687-0)=(-0.3687,\ 0.3687) \tag{0.9} \]
     <p>读一下这个梯度的含义：第一个分量是负的（梯度下降要往负梯度的反方向走，即应该<strong>提高</strong>「天」的 logit），第二个分量是正的（应该<strong>压低</strong>「地」的 logit）。方向完全合理：模型这次对「天」的把握不够，下次多给点。这个梯度会被链式法则继续往 FFN、注意力、嵌入矩阵一路传回去，每个参数按责任大小各领一份，再由优化器统一执行更新——第 8、9 站干的就是这件事。</p>
     <p>最后是采样。由式 (<a class="xref" href="#eq-0-3">0.3</a>)，把 logits 除以温度再走一遍 softmax。\(T=0.5\) 时 \(\mathbf{z}/T=(2.0000,\ 0.9242)\)，取指数得 \(e^{2}=7.3891\)、\(e^{0.9242}=2.5199\)，总和 \(9.9089\)，概率变成 \((0.7457,\ 0.2543)\)——比原来更尖。\(T=2\) 时 \(\mathbf{z}/T=(0.5000,\ 0.2311)\)，取指数得 \(1.6487\)、\(1.2599\)，总和 \(2.9087\)，概率变成 \((0.5668,\ 0.4332)\)——比原来更平。回答问题 (d)：温度压低，模型更「笃定」；温度拉高，模型更「天马行空」。以上每个数字都可以用 <code>python3</code> 验算，我们也已经验过。</p>
   </div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这道例题</span></span><p>刚才八步干了什么：查表 → 打分 → 归一化 → 加权求和 → FFN → 输出概率 → 算损失 → 求梯度带采样，除分词外九站全走了一遍，每站都标了用的是哪门数学。结论意味着：这条链就是本书的目录——哪一步的数字你复算不出来，就去读它对应的那一章。</p></div>
   <div class="example" id="ex-0-5"><span class="box-tag"><span class="ctab">0.5</span><span class="clabel">例· 动手算</span></span>
     <p><strong>题目</strong>　同一道二分类题，正确答案是类 0。三个模型给类 0 分配的概率分别是 \(0.9\)、\(0.5\)、\(0.1\)。分别求交叉熵损失，并解释这条损失曲线的「脾气」。</p>
     <p><strong>解</strong>　由式 (<a class="xref" href="#eq-0-8">0.8</a>)，损失只跟正确类的概率有关：\(\mathcal{L}=-\ln p_{c^{*}}\)。逐个代入：</p>
@@ -634,6 +648,16 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <details><summary>看答案</summary><p>第一步取指数：\(e^{2}=7.3891\)，\(e^{0}=1\)。取指数的目的：把可正可负的分数全部变正。第二步求和：\(7.3891+1=8.3891\)。第三步逐个相除：\(p_1=7.3891/8.3891=0.8808\)，\(p_2=1/8.3891=0.1192\)。相除的目的：让两个数加起来等于 1，成为合法的概率分布。所以 \(\mathbf{p}=(0.8808,\ 0.1192)\)。对比一下：logits 差 2 分时领先方拿到约 88%，而例 <a class="xref" href="#ex-0-4">0.4</a> 中 logits \((1.0000,\ 0.4621)\) 只差约 0.54 分，领先方只拿到约 63%——softmax 的指数操作会放大分差。（python3 验算：<code>np.exp([2,0])/np.exp([2,0]).sum()</code>。）</p></details>
     <p><strong>第 3 题（概念）</strong>　推理和训练各走图 <a class="xref" href="#fig-0-1">0.1</a> 里的哪几站？为什么同样的模型，推理比训练省显存得多？</p>
     <details><summary>看答案</summary><p>推理只走前六站：token id、嵌入查表、注意力、FFN、softmax、采样输出。训练在此基础上多走三站：交叉熵损失、反向传播、参数更新。省显存的原因正在多走的这三站里：反向传播要用「每一层的中间结果」来算梯度，所以训练时必须把前向过程的所有中间激活都存下来，层数越深、批次越大，存的越多；另外优化器还要为每个参数额外保存梯度和动量等状态（Adam 一个参数要配两份动量状态）。推理一概不用——算完就扔，梯度、动量、中间激活全都不存。所以同一个模型，训练的显存开销常常是推理的好几倍。</p></details>
+  </div>
+
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">本章节奏自测（试点章）</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：1,039 字（阈值 ≤1,200，位于 0.4 节例 <a class="xref" href="#ex-0-4">0.4</a> 前半；次长 1,000 字，位于 0.1 节推理六站）；</li>
+      <li><strong>每节例子数</strong>：动手算共 6 例（0.1 节例 <a class="xref" href="#ex-0-1">0.1</a>、0.2 节例 <a class="xref" href="#ex-0-2">0.2</a>、0.3 节例 <a class="xref" href="#ex-0-3">0.3</a>、0.4 节例 <a class="xref" href="#ex-0-4">0.4</a>–0.6，0.5 节为对照表加自测），检查点 3 处；</li>
+      <li><strong>单步推导最大跨度</strong>：≤2 个等号（抽检：例 <a class="xref" href="#ex-0-4">0.4</a> 第 3 步 softmax 归一化、第 4 步加权求和、例 <a class="xref" href="#ex-0-6">0.6</a> 取幂相除）；</li>
+      <li><strong>长推导回头看</strong>：3 处（0.1 节推理六站盘点、0.4 节交叉熵化简推导后、0.4 节例 <a class="xref" href="#ex-0-4">0.4</a> 八步全链后）；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（嵌入 / 交叉熵 / 链式法则）、回头看 3 处、数字预热 0 段（本章无形式定义块，无定义先于算例的情形），原文未删改一字。</li>
+    </ul>
   </div>
 </section>
 
@@ -1342,6 +1366,14 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p class="ch-lede">大语言模型从头到尾就是一台「概率机器」：它输出的不是答案，而是「下一个词可能是什么」的概率分布；训练它，是让它给正确答案赋更高的概率；用它写作，是从分布里抽签。本章不假设你学过概率论，从「抛硬币到底意味着什么」讲起，一步步走到极大似然估计和温度采样。读完这一章，「训练 = 拟合分布、推理 = 从分布里采样」这句话你会真正懂。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>直觉（概率是长期频率） → 三公理与条件概率 → 三个分布 → 期望与方差 → 贝叶斯 → 极大似然 → 温度采样 → 自测</div>
   </header>
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">进入本章</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>前置</strong>：会高中代数即可；logits 与 softmax 的第一次接触在<a class="xref" href="#tb00">第零章</a> 0.1 节（第 5 站），没读过可先回看那一段。</li>
+      <li><strong>一句话直觉</strong>：概率就是「长期来看的频率」——抛硬币抛得足够多，正面占比会稳定在一个数上，这个数就是概率。</li>
+      <li><strong>最常见误解</strong>：把 \(P(A\mid B)\) 当成 \(P(B\mid A)\)。「有病检出阳性的概率」和「检出阳性者真有病的概率」能差 50 倍，3.4 节会算给你看。</li>
+      <li><strong>读不懂回哪</strong>：公式卡住回 3.1 节的频率直觉；「训练为什么是极大似然」卡住回 3.5 节的硬币推导。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb03-s1">3.1 概率是什么：三公理、条件概率与独立性</a>
     <a href="#tb03-s2">3.2 三个必须认识的分布</a>
@@ -1378,9 +1410,11 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p>本节最后一个工具：<span class="kt">全概率公式</span>（law of total probability）。若事件 \(A_1,\dots,A_n\) 把样本空间切成不重不漏的若干块（每一块必居其一、彼此不重叠），则任何事件 \(B\) 的概率可以分块计算：</p>
   <span id="eq-3-3" class="anchor"></span>\[ P(B)=\sum_{i=1}^{n} P(B\mid A_i)\,P(A_i) \tag{3.3} \]
   <p>直觉：\(B\) 可以在第 1 块里发生、也可以在第 2 块里发生……把这些互斥的路径的概率加起来（公理三允许我们加），就是 \(B\) 的总概率。例：某班 40% 男生、60% 女生，男生戴眼镜比例 30%、女生 20%，随机抽一人戴眼镜的概率为 \(0.3\times0.4+0.2\times0.6=0.24\)。§3.4 的医学检测例题，全靠式 (<a class="xref" href="#eq-3-3">3.3</a>) 算分母。</p>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">盘点 3.1 的工具箱</span></span><p>刚才一节干了什么：三条公理立规矩 → 条件概率给「新世界」重新定大小 → 乘法法则与链式法则把联合概率拆成一步步 → 独立性提醒什么时候不能乱拆 → 全概率公式把分母分块算。结论意味着：3.4 的贝叶斯定理、3.5 的似然连乘，全是用这几件工具现场拼出来的。</p></div>
 
   <h3 id="tb03-s2"><span class="h3-num">3.2</span> 三个必须认识的分布</h3>
   <p>随机试验的结果用<span class="kt">随机变量</span> \(X\) 来表示，它取每个值的规律叫<span class="kt">分布</span>（distribution）。离散变量（取值为有限或可数个）用概率质量函数 \(p(x)=P(X=x)\) 描述，所有取值的概率加起来等于 1。下面三个分布，是读懂大模型论文的最低配置。</p>
+  <p>先看三个带数字的小场面，再进定义。场面一：抛一枚不均匀的硬币，正面概率 0.6、反面 0.4——只有两种结果的试验。场面二：某玩具模型词表只有 3 个词，某一步给出概率 (0.5, 0.3, 0.2)——有有限个类别的试验。场面三：成年男性身高大多落在 170 cm 附近，离得越远人越少，画出来是一条钟形曲线——取值为连续数的试验。下面三个定义，就是把这三个场面各自写成一行公式。</p>
   <div class="def"><span class="box-tag"><span class="ctab">3.3</span><span class="clabel">定义· 伯努利分布</span></span><p>做一次只有两种结果的试验：\(X=1\)（成功）概率为 \(p\)，\(X=0\)（失败）概率为 \(1-p\)。可以统一写成一行：</p>
   <span id="eq-3-4" class="anchor"></span>\[ P(X=x)=p^{x}(1-p)^{1-x},\qquad x\in\{0,1\} \tag{3.4} \]
   <p>验证这行写法没耍花招：代入 \(x=1\) 得 \(p^1(1-p)^0=p\)，代入 \(x=0\) 得 \(p^0(1-p)^1=1-p\)，都对。<strong>AI 里的身影</strong>：RLHF 中一次偏好比较（回答 A 是否比 B 好）、dropout 里每个神经元「这次开不开」、二值奖励信号，都是伯努利变量。</p></div>
@@ -1400,7 +1434,9 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p><strong>读数</strong>：单次成功率只有 0.3，连试 3 次「至少成一次」就到 0.657——best-of-n 采样的收益就是这么算的。反例提示：若 3 次生成共用同一份有 bug 的上文，失败互相传染、不再独立，0.657 不成立。</p></div>
 
   <h3 id="tb03-s3"><span class="h3-num">3.3</span> 期望、方差、协方差</h3>
+  <aside class="mn">背景｜期望从哪来：17 世纪帕斯卡与费马为「赌局中途叫停、赌本怎么分」争执通信，按「每种结局的收益 × 发生的概率」加权分摊，这就是期望的雏形——它替代了「对半平分」的粗办法。这里需要它，是因为 batch 平均损失、强化学习的期望回报，都要先回答「长期平均下来是多少」。</aside>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>期望 = 长期平均</strong>。一个随机试验重复一万次，把结果全加起来除以一万，得到的数几乎就是期望。期望 0.9 不是「某次会得 0.9」（可能根本没有这个结果值），而是「玩久了平均每把得 0.9」。<strong>方差 = 波动有多大</strong>：两个平均月薪相同的行业，一个收入稳定、一个大起大落，区别全在方差。期望告诉你「水平线在哪」，方差告诉你「浪有多高」。</p></div>
+  <p>先算两笔小账再进定义。某抽奖：1% 得 100 元、99% 得 0 元，玩一次平均进账 \(0.01\times100+0.99\times0=1\) 元——「取值 × 概率」逐个相加，就是期望的算法。另一个抽奖 100% 稳得 1 元，平均同样是 1 元，但一个心跳加速、一个毫无波澜——「离平均多远」取平方再平均，就是方差的算法。下面两行定义，只是把这两笔账写成符号。</p>
   <div class="def"><span class="box-tag"><span class="ctab">3.6</span><span class="clabel">定义· 期望</span></span><p>离散随机变量的<span class="kt">期望</span>（expectation）是「取值 × 概率」的加权和：</p>
   <span id="eq-3-8" class="anchor"></span>\[ \mathbb{E}[X]=\sum_x x\,p(x) \tag{3.8} \]
   <p>最常用也最好用的性质是<span class="kt">线性性</span>：对任意常数 \(a,b,c\) 和任意随机变量（<strong>不需要独立</strong>），</p>
@@ -1428,6 +1464,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <br>4. 给定小型概率表，手算期望、方差（用 \(\mathbb{E}[X^2]-(\mathbb{E}[X])^2\)）和协方差。</p></div>
 
   <h3 id="tb03-s4"><span class="h3-num">3.4</span> 贝叶斯定理：新证据更新旧判断</h3>
+  <aside class="mn">背景｜贝叶斯定理从哪来：18 世纪贝叶斯想解「逆概率」问题——已知结果，反推原因的概率；拉普拉斯随后独立给出同款公式，用于天文误差与法庭证据。它替代了「只看证据强度、不问基础率」的直觉判案。下面的医学检测例题，正是「由阳性反推患病」这一反转的演示。</aside>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p>贝叶斯定理回答的问题是：<strong>来了一条新证据，我该怎么更新原来的判断？</strong>看证据前你有一个旧判断（先验），证据本身有一个「如果旧判断为真、它出现的可能性」（似然），看完证据你得到新判断（后验）。贝叶斯定理就是这三者之间的换算公式。它的核心精神只有一句：<strong>后验正比于「似然 × 先验」</strong>——新判断既要看证据多有力，也要看这件事本来有多罕见。</p></div>
   <div class="derive"><span class="box-tag bare"><span class="ctab">推导</span><span class="clabel">一步步来</span></span><p>贝叶斯定理只用两步就推出来，每步都有交代。</p>
   <p><strong>第 1 步</strong>：\(A\cap B\) 和 \(B\cap A\) 是同一个集合，对它们分别用乘法法则（式 (<a class="xref" href="#eq-3-1">3.1</a>) 两边乘分母）：\(P(A\mid B)\,P(B)=P(A\cap B)\)，且 \(P(B\mid A)\,P(A)=P(B\cap A)\)。左边相等，因为它们都等于同一个 \(P(A\cap B)\)。</p>
@@ -1445,6 +1482,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p>贝叶斯视角对读 AI 评测也很有用：评测结论是个后验，它同时取决于证据强度（题量、题目区分度）和先验（这种能力在同类模型中的基础率）。小样本上的惊艳表现，先按低基础率打个折再信。</p>
 
   <h3 id="tb03-s5"><span class="h3-num">3.5</span> 极大似然估计：让数据自己挑参数</h3>
+  <aside class="mn">背景｜极大似然从哪来：高斯处理天文观测误差时已用过同类想法，20 世纪初费舍尔把它立成统计估计的标准框架，替代了凭均值、方差随手凑估计量的老办法。这里需要它，是因为语言模型的预训练目标就是 next-token 的对数似然——不懂 MLE，就看不懂交叉熵损失从哪来。</aside>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p>你面前有一枚不知道多歪的硬币，抛 10 次，7 正 3 反。问：正面概率 \(p\) 最可能是多少？极大似然估计（MLE）的思路直白得可爱：<strong>挨个试候选参数，看哪个参数最可能产生我亲眼看到的这批数据，就选它</strong>。\(p=0.1\) 的世界几乎不可能抛出 7 个正面；\(p=0.7\) 的世界抛出 7 正 3 反稀松平常。所以 MLE 把票投给 \(p=0.7\)。「最可能产生数据」的数学说法，就是让「数据的联合概率」最大——这个联合概率换个角度看是参数的函数，叫<span class="kt">似然</span>（likelihood）。</p></div>
   <div class="def"><span class="box-tag"><span class="ctab">3.8</span><span class="clabel">定义· 极大似然估计</span></span><p>设数据 \(x_1,\dots,x_N\) 独立同分布地来自含参数 \(\theta\) 的分布 \(p_\theta\)。<span class="kt">极大似然估计</span>（maximum likelihood estimation，MLE）选让已观测数据出现概率最大的参数：</p>
   <span id="eq-3-13" class="anchor"></span>\[ \hat{\theta}_{\mathrm{MLE}}=\arg\max_{\theta}\ \prod_{i=1}^{N}p_\theta(x_i)=\arg\max_{\theta}\ \sum_{i=1}^{N}\ln p_\theta(x_i) \tag{3.13} \]
@@ -1459,6 +1497,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p><strong>第 4 步，令导数为 0</strong>：极大值处切线水平（直觉：顶点处既不升也不降）。令 \(7/p=3/(1-p)\)，交叉相乘得 \(7(1-p)=3p\)，展开 \(7-7p=3p\)，解得 \(\hat p=7/10=0.7\)。</p>
   <p><strong>第 5 步，确认是最大而非最小</strong>：再求一次导，\(\ell''(p)=-7/p^{2}-3/(1-p)^{2}\)。两项都带负号、分母都是平方（恒正），所以 \(\ell''(p)&lt;0\) 在 \(0&lt;p&lt;1\) 处处成立——函数处处上凸（倒扣的碗），唯一驻点必是最大点。</p>
   <p><strong>结论</strong>：伯努利分布的 MLE 就是样本频率 \(7/10\)。一个看起来高大上的估计方法，在最简单的场合里就是「数频率」——MLE 做的事是把数频率合法化、并推广到任意复杂的模型。语言模型训练就是这件事的超大规模版：参数从 1 个 \(p\) 变成几千亿个 \(\theta\)，数据从 10 次抛掷变成上万亿 token。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才五步干了什么：写似然 → 取对数（单调性保最大值位置，还防下溢）→ 求导 → 令导数为零解出 \(\hat p=0.7\) → 二阶导确认是最大。结论意味着：MLE 在最简单场合就是「数频率」，语言模型训练是它放大到几千亿参数、万亿 token 的版本——式 (<a class="xref" href="#eq-3-13">3.13</a>) 从此有了手感。</p></div>
   <div class="example" id="ex-3-5"><span class="box-tag"><span class="ctab">3.5</span><span class="clabel">例</span></span><p><strong>题目</strong>　对上面的硬币，算几个候选 \(p\) 的似然 \(L(p)=p^7(1-p)^3\)，看最大值落在哪。</p>
   <p><strong>解</strong>　逐个代入：\(L(0.5)\approx0.000977\)；\(L(0.6)\approx0.001792\)；\(L(0.7)\approx0.002224\)；\(L(0.8)\approx0.001678\)。似然在 \(p=0.7\) 处最大，向两边递减——与推导框的解析解一致。注意似然数值本身很小（10 个小于 1 的数相乘），数据量再大些就会下溢，这就是式 (<a class="xref" href="#eq-3-13">3.13</a>) 必须取对数的现实原因。</p></div>
   <p>也要看到 MLE 的边界：若 10 次全正，MLE 会给出 \(\hat p=1\)，对「下次必正」过度自信。MLE 把样本当成世界的全部，数据少时就会过拟合——正则化、平滑这些技术的存在理由，就是给 MLE 的自信踩刹车。</p>
@@ -1519,6 +1558,16 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p><strong>题 4（温度方向）</strong>　两个候选的 logits 为 \((1,\ 3)\)。分别算 \(T=1\) 与 \(T=0.5\) 时第一个候选的 softmax 概率。哪个温度下分布更尖锐？</p>
     <details><summary>看答案</summary><p>\(T=1\)：\(p_1=e^{1}/(e^{1}+e^{3})\approx2.718/(2.718+20.086)\approx0.1192\)。\(T=0.5\)：\(p_1=e^{2}/(e^{2}+e^{6})\approx7.389/(7.389+403.43)\approx0.0180\)。\(T=0.5\) 时头名（候选 2）拿走 98% 的概率，分布更尖锐——低温 = 更确定，方向别记反。</p></details>
   </div>
+
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">本章节奏自测（试点章）</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：786 字（阈值 ≤1,200，位于 3.1 节条件概率至全概率一段；次长 686 字，位于 3.1 节）；</li>
+      <li><strong>每节例子数</strong>：动手算共 7 例（3.2 节例 <a class="xref" href="#ex-3-1">3.1</a>、3.3 节例 <a class="xref" href="#ex-3-2">3.2</a>–3.3、3.4 节例 <a class="xref" href="#ex-3-4">3.4</a>、3.5 节例 <a class="xref" href="#ex-3-5">3.5</a>、3.6 节例 <a class="xref" href="#ex-3-6">3.6</a>、3.7 节例 <a class="xref" href="#ex-3-7">3.7</a>），检查点 4 处；</li>
+      <li><strong>单步推导最大跨度</strong>：≤2 个等号（抽检：3.5 节对数似然求导、3.5 节令导数为零的交叉相乘、3.6 节温度 softmax）；</li>
+      <li><strong>长推导回头看</strong>：2 处（3.1 节工具箱盘点、3.5 节 MLE 五步推导后；3.4 节贝叶斯推导仅 2 步，按规范不另加）；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（期望 / 贝叶斯定理 / 极大似然）、回头看 2 处、数字预热 2 段（3.2 节定义 3.3 前、3.3 节定义 3.6 前），原文未删改一字。</li>
+    </ul>
+  </div>
 </section>
 
 </div>
@@ -1532,6 +1581,14 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p class="ch-lede">训练大模型时，屏幕上那条往下掉的损失曲线，为什么偏偏是「负对数概率」这个样子？为什么不用平方误差、不用别的？这一章给出信息论的回答：从「一条消息有多意外」讲起，定义熵、交叉熵、KL 散度，然后一步一步推出「最小化交叉熵 ⇔ 极大似然」——你会发现损失函数的形状不是拍脑袋选的，而是被数学钉死的。最后讲困惑度，把损失翻译成「模型每一步在几个词之间犹豫」的人话。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>直觉（意外程度） → 熵 → 交叉熵 → 推导：损失为何长这样 → KL 散度 → 困惑度 → 自测</div>
   </header>
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">进入本章</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>前置</strong>：会换底、会 \(\log(ab)=\log a+\log b\) 的对数运算；用到<a class="xref" href="#tb03">第三章</a>的期望（3.3 节）与极大似然（3.5 节式 (<a class="xref" href="#eq-3-13">3.13</a>)），这两处忘了先回去补。</li>
+      <li><strong>一句话直觉</strong>：一条消息越意外、信息量越大；熵是平均意外程度，交叉熵是拿别人的尺子量意外，困惑度是把损失翻译成「在几个词之间犹豫」。</li>
+      <li><strong>最常见误解</strong>：把交叉熵当成「两个分布的距离」。它不对称、也不满足三角不等式；像距离的那部分是 KL 散度，而 KL 同样不是距离（4.4 节）。</li>
+      <li><strong>读不懂回哪</strong>：回 4.1 节开头「太阳升起 vs 下暴雨」的直觉块；若卡在对数计算上，回<a class="xref" href="#tb00">第零章</a>的记号约定。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb04-s1">4.1 自信息量与熵</a>
     <a href="#tb04-s2">4.2 交叉熵：用别人的尺子量我的事</a>
@@ -1542,7 +1599,9 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   </nav>
 
   <h3 id="tb04-s1"><span class="h3-num">4.1</span> 自信息量与熵</h3>
+  <aside class="mn">背景｜信息论从哪来：1948 年香农为回答「一条信道每秒最多能无错传多少信息」而创立它——在那之前通信靠工程经验试错，他给出了可计算的极限，熵就是这个极限的度量。这里需要它，因为训练大模型的损失函数，本质正是「用模型分布编码真实文本的平均代价」。</aside>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>信息量 = 这件事有多意外</strong>。朋友说「明天太阳会升起」，你毫无收获——必然发生的事不携带任何信息。朋友说「明天本地要下暴雨」，你立刻收起晾的衣服——小概率事件一旦发生，携带的信息量巨大。所以信息量应该是概率的<strong>减函数</strong>：概率越小，信息量越大；概率为 1，信息量为 0。还要满足一个好心肠的要求：两件独立的事同时发生，总信息量应该等于各自相加（「明天下雨」加「硬币出正面」的意外程度 = 两者之和）。概率相乘、信息量相加——什么函数能把乘法变加法？对数。</p></div>
+  <p>先用两个数字把「意外」量化。均匀硬币出正面，概率 \(1/2\)；从 8 张牌里摸中指定那张，概率 \(1/8\)。哪件发生了你更意外？显然后者。给它俩各贴一个数：取概率的负对数（底 2），前者得 \(1\)，后者得 \(3\)——概率每减半一次，这个数恰好加 1。下面定义 4.1 不过是把这两个数背后的规律写成通式。</p>
   <div class="def"><span class="box-tag"><span class="ctab">4.1</span><span class="clabel">定义· 自信息量</span></span><p>事件 \(x\) 的<span class="kt">自信息量</span>（self-information）定义为</p>
   <span id="eq-4-1" class="anchor"></span>\[ I(x)=-\log p(x) \tag{4.1} \]
   <p>负号把「小于 1 的概率的对数（负数）」翻成正数。对数的底决定单位：底 2 时单位是 <span class="kt">bit</span>（比特），底 \(e\) 时单位是 <span class="kt">nat</span>（奈特）。换算：\(1\ \text{bit}=\ln 2\approx0.693\ \text{nat}\)。动手算两个：事件概率 \(1/8\)（如 8 个等可能的 token 里抽中某一个），\(I=-\log_2(1/8)=3\) bit；事件概率 \(1/16\)，\(I=-\log_2(1/16)=4\) bit——概率减半，信息量恰好加 1 bit，这正是对数的本性。</p></div>
@@ -1557,6 +1616,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <div class="warn"><span class="box-tag bare"><span class="ctab">常见坑</span><span class="clabel"></span></span><p><strong>bit 与 nat 混用</strong>。同一个分布的熵，用 bit 算出来的数值是用 nat 算的 \(1/\ln 2\approx1.443\) 倍（反过来 1 bit = 0.693 nat）。PyTorch 等框架的交叉熵损失内部用 nat（取 \(\ln\)），而不少论文报的是 bit。比较两个来源的数值之前先查底数——发现别人的损失比你「低 30%」，先别慌，很可能只是单位不同。</p></div>
 
   <h3 id="tb04-s2"><span class="h3-num">4.2</span> 交叉熵：用别人的尺子量我的事</h3>
+  <aside class="mn">背景｜交叉熵从哪来：它出自编码理论——为分布 \(q\) 量身设计的最优编码，给事件 \(x\) 分配的码长是 \(-\log q(x)\)；拿这套编码去编真实分布 \(p\) 产生的数据，平均码长就是交叉熵。它替代不了熵：熵是「用自己的尺子」时的理论下限。这里需要它，因为训练时数据分布固定、模型分布可调，交叉熵恰是「用模型编码数据」的实际代价。</aside>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>交叉熵 = 用别人的尺子量我的事</strong>。熵 \(H(p)\) 是「真相 \(p\) 用自己的尺子量自己」——每个事件按自己的真实概率分配惊讶度。交叉熵 \(H(p,q)\) 是：事件还是按真相 \(p\) 的频率出现（权重仍是 \(p\)），但每个事件的「惊讶度」改由另一个分布 \(q\) 来认定（用 \(-\log q(x)\)）。编码理论里有精确的含义：用为 \(q\) 量身定做的编码方案去编码来自 \(p\) 的数据，所需的平均码长（Cover &amp; Thomas）。尺用对了（\(q=p\)）最省；尺用错了，平均就要多付代价——多付的那部分，就是下一节的 KL 散度。</p></div>
   <div class="def"><span class="box-tag"><span class="ctab">4.3</span><span class="clabel">定义· 交叉熵</span></span><p>分布 \(p\) 与 \(q\) 之间的<span class="kt">交叉熵</span>（cross-entropy）：</p>
   <span id="eq-4-3" class="anchor"></span>\[ H(p,q)=-\sum_x p(x)\log q(x) \tag{4.3} \]
@@ -1567,6 +1627,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <div class="example" id="ex-4-2"><span class="box-tag"><span class="ctab">4.2</span><span class="clabel">例· 动手算（分解式数字验证）</span></span><p><strong>题目</strong>　取 \(p=(0.7,\ 0.2,\ 0.1)\)，\(q=(0.5,\ 0.3,\ 0.2)\)（用 bit）。分别算 \(H(p,q)\)、\(H(p)\)、\(\operatorname{KL}(p\|q)\)，验证式 (<a class="xref" href="#eq-4-4">4.4</a>)。</p>
   <p><strong>解</strong>　<strong>第 1 步，交叉熵</strong>：\(H(p,q)=-(0.7\log_2 0.5+0.2\log_2 0.3+0.1\log_2 0.2)\)。逐项：\(0.7\times1=0.7\)；\(0.2\times1.7370\approx0.3474\)；\(0.1\times2.3219\approx0.2322\)。合计 \(H(p,q)\approx1.2796\) bit。<strong>第 2 步，熵</strong>：例 <a class="xref" href="#ex-4-1">4.1</a> 已算得 \(H(p)\approx1.1568\) bit。<strong>第 3 步，KL 散度</strong>（按定义 \( \sum_x p\log_2(p/q)\)）：\(0.7\log_2(0.7/0.5)+0.2\log_2(0.2/0.3)+0.1\log_2(0.1/0.2)=0.7\times0.4854+0.2\times(-0.5850)+0.1\times(-1)\approx0.3398-0.1170-0.1=0.1228\) bit。<strong>第 4 步，验证</strong>：\(1.1568+0.1228=1.2796\)，与第 1 步一致。</p>
   <p><strong>读数</strong>：拿 \(q\) 的尺子量 \(p\) 的事，平均每个样本多付 0.1228 bit。这 0.1228 就是「尺不准」的罚款，它不会为负——自己的尺子永远最合自己的身。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这道例题</span></span><p>刚才四步干了什么：用 \(q\) 的尺子算交叉熵（1.2796 bit）→ 复用例 <a class="xref" href="#ex-4-1">4.1</a> 的熵（1.1568）→ 按定义算 KL（0.1228）→ 两边相加验证分解式。结论意味着：「用错尺的罚款」可以精确算到小数点后四位——4.3 节推训练损失的下界，靠的正是这个分解。</p></div>
   <div class="checkpoint"><span class="box-tag bare"><span class="ctab">检查点 ✓</span><span class="clabel"></span></span><p>你现在应该能：
     <br>1. 用「意外程度」解释 \(I(x)=-\log p(x)\)，并说出为什么用对数；
     <br>2. 手算一个小型离散分布的熵，并解释「均匀分布熵最大」；
@@ -1589,9 +1650,11 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p><strong>第 4 步：减掉常数，露出 KL</strong>。用分解式 (<a class="xref" href="#eq-4-4">4.4</a>)：\(H(\hat p,q_\theta)=H(\hat p)+\operatorname{KL}(\hat p\|q_\theta)\)。其中 \(H(\hat p)\) 只由数据决定、与参数 \(\theta\) 无关——对优化而言它是个常数，最小化「常数 + KL」等价于最小化 KL。于是三件事完全等价：</p>
   <span id="eq-4-8" class="anchor"></span>\[ \arg\max_\theta\ \sum_{i=1}^{N}\ln q_\theta(y_i)\ \Longleftrightarrow\ \arg\min_\theta\ H(\hat p,q_\theta)\ \Longleftrightarrow\ \arg\min_\theta\ \operatorname{KL}(\hat p\,\|\,q_\theta) \tag{4.8} \]
   <p><strong>收拢</strong>：损失函数长成 \(-\ln q_\theta(y_i)\) 的样子，因为最小化交叉熵就是在做极大似然，也就是在让模型分布向数据分布靠拢（缩小 KL）。这不是某个工程师的偏好，是式 (<a class="xref" href="#eq-4-8">4.8</a>) 钉死的。顺带一个推论：因 \(\operatorname{KL}\ge0\)，交叉熵有下界 \(H(\hat p)\)——自然语言本身有不可消除的不确定性，所以训练损失降不到 0，困惑度也永远大于 1。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才四步干了什么：写下极大似然并取对数 → 取负号把 max 变 min（NLL 现身）→ 按词表归并认出交叉熵 → 减掉常数 \(H(\hat p)\) 露出 KL。结论意味着：每下降一格训练损失，都是在做极大似然、缩小模型与数据的 KL；损失降到数据自身的熵就触底——这也是 4.5 节困惑度永远大于 1、<a class="xref" href="#tb11">第十一章</a> KL 约束的共同源头。</p></div>
   <div class="example" id="ex-4-3"><span class="box-tag"><span class="ctab">4.3</span><span class="clabel">例· 动手算（逐样本求和 = 按类别归并）</span></span><p><strong>题目</strong>　词表只有 3 类（A、B、C），小训练集共 \(N=6\) 个位置，正确 token 依次为 A、B、A、C、A、B。简化起见，设模型在每个位置输出同一分布 \(q\)：\(q(\mathrm{A})=0.5\)，\(q(\mathrm{B})=0.25\)，\(q(\mathrm{C})=0.25\)（用 bit）。（a）按式 (<a class="xref" href="#eq-4-6">4.6</a>) 逐样本算平均损失；（b）数出经验分布 \(\hat p\)，按式 (<a class="xref" href="#eq-4-7">4.7</a>) 归并后的交叉熵形式再算一遍，验证两式相等；（c）这个训练集上的损失最低能压到多少？</p>
   <p><strong>解</strong>　<strong>（a）逐样本</strong>：三个类别各自的 NLL 为 \(-\log_2 0.5=1\)、\(-\log_2 0.25=2\)、\(-\log_2 0.25=2\) bit。序列 A、B、A、C、A、B 的逐项损失即 1、2、1、2、1、2，总和 9，平均 \(9/6=1.5\) bit。<strong>（b）归并</strong>：计数 \(N_{\mathrm{A}}=3\)、\(N_{\mathrm{B}}=2\)、\(N_{\mathrm{C}}=1\)，故经验分布 \(\hat p=(0.5,\ 1/3,\ 1/6)\)。按式 (<a class="xref" href="#eq-4-7">4.7</a>)：\(H(\hat p,q)=0.5\times1+\dfrac{1}{3}\times2+\dfrac{1}{6}\times2=0.5+0.6667+0.3333=1.5\) bit——与（a）一致。归并没有任何近似：3 个 A 在逐样本算法里贡献 \(3\times1\)，在归并算法里贡献 \(6\times\hat p(\mathrm{A})\times1=6\times0.5\times1=3\)，同一笔账。<strong>（c）下界</strong>：由式 (<a class="xref" href="#eq-4-8">4.8</a>)，最小化交叉熵等价于最小化 \(\operatorname{KL}(\hat p\|q)\)，而 KL 非负、当 \(q=\hat p\) 时取 0，所以损失下界是 \(H(\hat p)=0.5\times1+\dfrac{1}{3}\times1.5850+\dfrac{1}{6}\times2.5850\approx0.5+0.5283+0.4308\approx1.459\) bit。数据自身带着 1.459 bit 的熵，损失降不到它以下。</p>
   <p><strong>读数</strong>：式 (<a class="xref" href="#eq-4-7">4.7</a>) 不是新损失，只是同一笔账换个算法——这正是「训练损失 = 交叉熵」的全部秘密。反面对照：若模型把质量押错位置，比如 \(q=(0.25,\ 0.5,\ 0.25)\)，则 \(H(\hat p,q)=0.5\times2+\dfrac{1}{3}\times1+\dfrac{1}{6}\times2\approx1.667\) bit，比押对的 1.5 高出一截——尺子押错地方，平均必多付。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这道例题</span></span><p>刚才三步干了什么：逐样本算平均损失得 1.5 bit → 数出经验分布按类别归并再算，仍是 1.5 → 由 KL 非负求出下界 \(H(\hat p)\approx1.459\)。结论意味着：式 (<a class="xref" href="#eq-4-7">4.7</a>) 不是新损失，是同一笔账换个算法；「损失降不到数据熵以下」从口号变成了 6 个 token 就能验出来的数。</p></div>
   <aside class="mn">推导链只有三步：取负号（max 变 min）、除以 \(N\) 并归并（露出经验分布）、减掉常数 \(H(\hat p)\)（露出 KL）。损失的形状是被 MLE 唯一钉死的。</aside>
 
   <h3 id="tb04-s4"><span class="h3-num">4.4</span> KL 散度：像距离，但不是距离</h3>
@@ -1607,6 +1670,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <aside class="mn">口诀：KL(p‖q) 是「真相 p 在前」。前向怕漏（全覆盖），反向怕错（收缩求稳）。</aside>
 
   <h3 id="tb04-s5"><span class="h3-num">4.5</span> 困惑度：模型在每个位置犹豫几个词</h3>
+  <aside class="mn">背景｜困惑度从哪来：20 世纪 70 年代，语音识别研究者用它给语言模型打分——把模型看成「每一步在若干个等可能候选里猜」，等效候选数越少模型越好。它替代了「直接报平均对数概率」这种没有手感的做法。这里需要它，因为交叉熵的数值跨任务难以直观比较，换成「等效候选数」人人都听得懂。</aside>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p>损失 0.8 nat，这算好还是坏？缺少手感。<strong>困惑度（PPL）把损失翻译回「等效候选数」</strong>：PPL = 2.24 的意思是——模型在这个测试序列上，平均每个位置的纠结程度，相当于在 2.24 个等可能的候选词里挑一个。PPL = 1 是完美（每个位置都笃定）；PPL 等于词表大小，说明模型和闭着眼瞎猜没区别。这个刻度跨任务、跨数据都好懂，所以成了语言模型的标准体温计。</p></div>
   <div class="def"><span class="box-tag"><span class="ctab">4.5</span><span class="clabel">定义· 困惑度</span></span><p>语言模型在测试序列上的<span class="kt">困惑度</span>（perplexity，PPL）是平均负对数似然的指数：</p>
   <span id="eq-4-10" class="anchor"></span>\[ \mathrm{PPL}=\exp\!\left(-\dfrac{1}{N}\sum_{i=1}^{N}\ln q(y_i)\right) \tag{4.10} \]
@@ -1614,6 +1678,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <div class="example" id="ex-4-5"><span class="box-tag"><span class="ctab">4.5</span><span class="clabel">例· 动手算（4 个 token 的完整流程）</span></span><p><strong>题目</strong>　一个 4 token 的测试序列，模型在各步赋给正确 token 的概率依次为 0.8、0.5、0.4、0.25。求困惑度。</p>
   <p><strong>解</strong>　<strong>第 1 步，逐 token 算 NLL</strong>（nat，即 \(-\ln\)）：\(-\ln 0.8\approx0.2231\)；\(-\ln 0.5\approx0.6931\)；\(-\ln 0.4\approx0.9163\)；\(-\ln 0.25\approx1.3863\)。<strong>第 2 步，求平均</strong>：\((0.2231+0.6931+0.9163+1.3863)/4=3.2188/4\approx0.8047\) nat。<strong>第 3 步，取指数</strong>：\(\mathrm{PPL}=e^{0.8047}\approx2.24\)。<strong>换 bit 复核</strong>：每个 NLL 除以 \(\ln 2\) 换成 bit，平均约 \(1.1610\) bit，\(2^{1.1610}\approx2.24\)——同一个数，刻度无关。</p>
   <p><strong>读数</strong>：模型平均每个位置的「有效分支数」约 2.24，相当于每步在 2.24 个等可能候选里犹豫。哪一步最纠结？看 NLL 最大的是第 4 步（概率只有 0.25）——token 级 NLL 还能用来定位模型在序列哪一步栽了跟头。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这道例题</span></span><p>刚才三步干了什么：逐 token 算 NLL → 求平均（0.8047 nat）→ 取指数得 \(\mathrm{PPL}\approx2.24\)，并换 bit 复核同一答案。结论意味着：「NLL → 平均 → 指数」是读任何语言模型报告的通用流程；逐 token 的 NLL 还能当定位器，指出模型在序列哪一步栽了跟头。</p></div>
   <div class="example" id="ex-4-6"><span class="box-tag"><span class="ctab">4.6</span><span class="clabel">例· 动手算（PPL 与损失互相换算）</span></span><p><strong>题目</strong>　同一测试集上，三个模型的 PPL 分别为 16、4、2。（a）各自的平均 NLL 是多少 bit？（b）换算成 nat（\(\ln 2\approx0.6931\)）；（c）PPL 从 16 降到 4、从 4 降到 2，损失各降了多少 bit？这说明 PPL 是什么刻度？</p>
   <p><strong>解</strong>　<strong>（a）</strong>由定义 4.5 下方说的刻度无关性，用 bit 表示时 \(\mathrm{PPL}=2^{\text{平均 NLL}}\)，两边取 \(\log_2\) 得「平均 NLL \(=\log_2\mathrm{PPL}\)」。\(\log_2 16=4\)、\(\log_2 4=2\)、\(\log_2 2=1\)，即三个模型的损失分别为 4、2、1 bit。<strong>（b）</strong>乘换算系数 \(\ln 2\)：\(4\times0.6931\approx2.7726\) nat，\(2\times0.6931\approx1.3863\) nat，\(1\times0.6931\approx0.6931\) nat。<strong>（c）</strong>16→4：损失降 \(4-2=2\) bit；4→2：损失降 \(2-1=1\) bit。PPL 在<strong>等比</strong>缩（除以 4、再除以 2），损失在<strong>等差</strong>减（减 2、再减 1）——PPL 是损失的<strong>指数刻度</strong>，损失是 PPL 的对数刻度。</p>
   <p><strong>读数</strong>：高 PPL 区「降一半」对应巨大的损失进步；低 PPL 区 PPL 只差 1，也可能是难啃的硬骨头——比较进展要看损失差，不只看 PPL 差。反面教材：若把 4 nat 的损失误当 4 bit 代入换算，PPL 会从 \(2^{4}=16\) 错算成 \(e^{4}\approx54.6\)，虚高 3 倍多——报 PPL 之前，先报对数的底。</p></div>
@@ -1645,6 +1710,16 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p><strong>题 4（困惑度）</strong>　一个 3 token 的测试序列，模型赋给正确 token 的概率依次为 0.5、0.25、0.125。求 PPL（提示：这组数用 bit 算特别整齐）。</p>
     <details><summary>看答案</summary><p>逐 token NLL（bit）：\(-\log_2 0.5=1\)，\(-\log_2 0.25=2\)，\(-\log_2 0.125=3\)。平均 \((1+2+3)/3=2\) bit。PPL \(=2^{2}=4\)。读法：模型平均每个位置像在 4 个等可能候选里猜。若用 nat 复核：平均 \(2\ln 2\approx1.386\) nat，\(e^{1.386}\approx4\)，一致。</p></details>
   </div>
+
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">本章节奏自测（试点章）</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：649 字（阈值 ≤1,200，位于 4.3 节核心推导；次长 475 字，位于 4.4 节）；</li>
+      <li><strong>每节例子数</strong>：动手算共 6 例（4.1–4.5 每节 ≥1 例，其中 4.5 节两例），检查点 4 处；</li>
+      <li><strong>单步推导最大跨度</strong>：等式链最长 3 个等号（式 (<a class="xref" href="#eq-4-7">4.7</a>) 按类别归并，逐步只做定义替换）；其余抽检 ≤2 个等号（4.3 节推导第 1、2 步各 1 个；例 <a class="xref" href="#ex-4-2">4.2</a> 第 4 步验证 1 个）；</li>
+      <li><strong>长推导回头看</strong>：4 处（例 <a class="xref" href="#ex-4-2">4.2</a> 分解验证、4.3 节 MLE 推导、例 <a class="xref" href="#ex-4-3">4.3</a> 归并账、例 <a class="xref" href="#ex-4-5">4.5</a> PPL 流程）；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（信息论 / 交叉熵 / 困惑度）、回头看 4 处、4.1 节数字预热 1 段，原文未删改一字。</li>
+    </ul>
+  </div>
 </section>
 
 </div>
@@ -1658,6 +1733,14 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p class="ch-lede">训练大模型，表面上是一堆神秘术语——lr、warmup、grad clip、AdamW——骨子里只在做一件事：沿一条「下山路线」反复挪步子。本章把这件事从头到尾讲透：为什么朝负梯度方向走最划算，步子迈多大会翻车，动量和 Adam 各自解决了什么麻烦，为什么开局要「热身」再冲刺，以及 AdamW 比普通 Adam 多了哪一小步。每一步推导都不跳，每个数字都用 python3 核过。学完你看训练日志就像看仪表盘：每个指针抖动，你都知道是哪个零件在响。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>直觉 → 定义 → 推导 → 例子 → 自测</div>
   </header>
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">进入本章</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>前置</strong>：<a class="xref" href="#tb02">第二章</a>的梯度与一阶泰勒近似（2.1、2.2 节，5.1 节推导直接用）、柯西–施瓦茨不等式（<a class="xref" href="#tb02">第二章</a>结论 2.1 已证）；<a class="xref" href="#tb03">第三章</a>的期望与方差（3.3 节，SGD 的无偏性靠它）。</li>
+      <li><strong>一句话直觉</strong>：训练就是蒙眼下山——脚探四周找最陡下坡方向（负梯度），每步迈多大（学习率）是唯一要命的旋钮。</li>
+      <li><strong>最常见误解</strong>：以为 AdamW 就是「Adam 的损失里加 L2」。L2 混进 Adam 的梯度会被逐坐标扭曲，AdamW 的关键是把衰减项拿出梯度（5.7 节）。</li>
+      <li><strong>读不懂回哪</strong>：回 5.1 节「蒙眼下山」直觉块与例 <a class="xref" href="#ex-5-1">5.1</a> 的三种学习率表格——本章每个概念在那张表里都有对应画面。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb05-s1">5.1 梯度下降：蒙眼下山</a>
     <a href="#tb05-s2">5.2 凸性：碗形与山地</a>
@@ -1671,7 +1754,10 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   </nav>
 
   <h3 id="tb05-s1"><span class="h3-num">5.1</span> 梯度下降：蒙眼下山</h3>
+  <aside class="mn">背景｜梯度下降从哪来：1847 年柯西为求解方程组提出「沿最陡下降方向反复迭代」，比电子计算机早了约一百年；20 世纪中叶它随数值分析复兴，替代了「一步解出解析解」这类算不动的办法。这里需要它，因为千亿参数的损失函数没有解析解，只能靠当前位置的梯度情报一小步一小步挪。</aside>
   <p>先交代问题。模型里有 \(d\) 个参数（\(d\) 可以是几千亿），把它们排成一个长向量 \(\boldsymbol{\theta}\in\mathbb{R}^{d}\)。损失函数 \(\mathcal{L}(\boldsymbol{\theta})\) 是一个「评分器」：给定一组参数，它告诉你模型当前有多差，数越大越差。训练 = 不断调整 \(\boldsymbol{\theta}\) 让 \(\mathcal{L}\) 变小。难处在：\(d\) 太大，你不可能「一眼看到」整张地形图，只能靠当前位置的一点局部情报，一步步挪。</p>
+
+  <p>先在最简单的函数上走一遍。设 \(f(x)=x^2\)，在 \(x=3\) 处的斜率是 \(f'(3)=6\)：往右走函数变大，往左走变小。迈一步试试——步长取 \(0.1\)，从 \(3\) 挪到 \(3-0.1\times6=2.4\)，函数值从 \(9\) 降到 \(5.76\)，一步砍掉三分之一还多。本章所有更新式，说到底就是把这一个小数乘减的动作搬进千亿维。</p>
 
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>梯度下降 = 蒙眼下山。</strong>想象你被蒙着眼放在一座山的山坡上，要走到谷底。你看不见整座山，但能感觉脚下哪边最陡。最朴素的策略是：用脚探一圈，找到「最陡的下坡方向」，朝那边迈一小步；站稳，再探一圈，再迈一步。重复下去，海拔大致会越来越低。<strong>学习率就是「每步迈多大」</strong>：步子太小，天黑了还在半山腰；步子太大，一脚踏空越过谷底、撞到对面崖壁上——而且下一脚可能撞得更高。本章第一件要做的事，就是把这个画面变成一条精确的更新式，再亲眼看看「步子太大」是怎么翻车的。</p></div>
 
@@ -1687,6 +1773,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <strong>第三步（取等条件给出最优方向）</strong>：柯西–施瓦茨取等号的条件是两向量共线。要取到下界（最负），\(\Delta\boldsymbol{\theta}\) 必须与 \(\mathbf{g}\) 反方向、且长度顶满 \(\varepsilon\)：
   <span id="eq-5-2" class="anchor"></span>\[ \Delta\boldsymbol{\theta}=-\varepsilon\,\frac{\mathbf{g}}{\lVert\mathbf{g}\rVert}. \tag{5.2} \]
   结论：<strong>单位步长内让损失下降最多的方向，就是负梯度方向</strong>。蒙眼下山的最优策略被严格证出来了。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才三步干了什么：一阶泰勒把「走一小步的损失变化」写成线性式 → 柯西–施瓦茨给这个变化压出下界 → 取等条件锁定反梯度方向。结论意味着：「朝负梯度走」不是口诀，是柯西–施瓦茨逼出来的最优；方向问题到此了结，剩下的自由度全在学习率——例 <a class="xref" href="#ex-5-1">5.1</a> 马上演示它怎么翻车。</p></div>
 
   <p>于是得到全部深度学习的发动机——<span class="kt">梯度下降</span>（gradient descent，GD）更新式：</p>
   <span id="eq-5-3" class="anchor"></span>\[ \boldsymbol{\theta}_{t+1}=\boldsymbol{\theta}_{t}-\eta\,\nabla_{\boldsymbol{\theta}}\mathcal{L}(\boldsymbol{\theta}_{t}) \tag{5.3} \]
@@ -1712,6 +1799,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   </tbody></table>
   <p>逐列看发生了什么。<strong>\(\eta=1.1\)</strong>：第 1 步 \(1\times(-1.2)=-1.2\)——一步跨过谷底 \(x=0\)，还冲到对面比出发点更远的地方；第 2 步再乘 \(-1.2\) 又跳回右侧 \(1.44\)。因子绝对值 \(1.2&gt;1\)，每步放大 20%，符号来回翻转：不是「下山」，是「在两壁之间越弹越高」，loss 会爆炸。这就是 <strong>lr 太大发散</strong> 的全部机理，没有更复杂的原因。<strong>\(\eta=0.1\)</strong>：因子 \(0.8\)，每步砍掉 20%，五步到 \(0.33\)，稳定奔向最小值。<strong>\(\eta=0.01\)</strong>：因子 \(0.98\)，方向完全正确，但 5 步只从 1 挪到 0.904——收敛，却<strong>慢得无法接受</strong>；换成千亿参数、几十万步的训练，慢就等于烧钱。</p>
   <p>把结论推而广之：对一般二次型 \(f=\tfrac12\mathbf{x}^{\top}\mathbf{A}\mathbf{x}\)（\(\mathbf{A}\) 对称正定），同样的分析给出稳定条件 \(\eta&lt;2/\lambda_{\max}(\mathbf{A})\)——<strong>学习率的上限被最陡方向的曲率卡住</strong>。直觉不变：最陡的那个方向最容易「跨过谷」，它先翻车，所以它决定你能迈多大步。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这道例题</span></span><p>刚才干了什么：把 \(f(x)=x^2\) 的梯度下降化成一个乘数 \(1-2\eta\)，再用三种学习率各走五步——\(1.1\) 越弹越高、\(0.1\) 稳定砍半、\(0.01\) 慢得烧钱。结论意味着：收敛与否只看这个乘数的绝对值；推广到二次型，上限被最陡方向的曲率卡住——这就是 5.6 节一切调度设计的前提。</p></div>
 
   <aside class="mn">lr 太大不是「走得快」，是「跨过谷底撞到对面墙上，而且越撞越高」。loss 曲线上的表现：先上下震荡，然后一飞冲天变 NaN（NaN 哪来的，<a class="xref" href="#tb07">第七章</a>讲）。</aside>
 
@@ -1746,6 +1834,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <div class="checkpoint"><span class="box-tag bare"><span class="ctab">检查点 ✓</span><span class="clabel"></span></span><p>你现在应该能：（1）用一句话写出凸函数的定义并解释「弦在图像上方」；（2）说明为什么 LLM 损失面非凸（对称性论证）；（3）写出式 (<a class="xref" href="#eq-5-6">5.6</a>) 并解释「无偏」的含义；（4）说出噪声方差随 \(1/B\) 缩小、标准差随 \(1/\sqrt{B}\) 缩小；（5）各举一条 SGD 噪声的坏处（谷底抖动）与好处（逃离鞍点）。</p></div>
 
   <h3 id="tb05-s4"><span class="h3-num">5.4</span> 动量：有惯性的小球</h3>
+  <aside class="mn">背景｜动量从哪来：1964 年 Polyak 提出「重球法」，把迭代类比成有质量的小球滚下山，要解决的正是纯梯度下降在狭长峡谷里之字形弹跳、前进太慢的老毛病。这里需要它，因为 LLM 的损失面满是峡谷，而动量正是后面 Adam 一阶矩项的原型。</aside>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>动量 = 小球滚下山，有惯性。</strong>蒙眼下山的人每一步都重新探方向，像个没有记忆的徒步者；换成一颗小球从坡上滚下来，情况不同：它越滚越快，方向一致时速度不断累加；遇到左右颠簸的碎石路，小球的惯性会把「左一下右一下」的抖动平均掉，保持向前的冲量。滚到谷底它不会立刻停——会冲过头，再被坡拉回来，荡几个来回才稳住。「方向一致的力会累积成速度，方向来回变的力相互抵消」——这就是动量法的全部物理直觉。</p></div>
   <p>把直觉写成式子。维护一个「速度」\(\mathbf{v}_t\)，它是历史梯度的指数加权平均；更新参数时沿速度走，而不是沿瞬时梯度走：</p>
   <span id="eq-5-7" class="anchor"></span>\[ \mathbf{v}_{t}=\beta\,\mathbf{v}_{t-1}+\mathbf{g}_{t},\qquad \boldsymbol{\theta}_{t+1}=\boldsymbol{\theta}_{t}-\eta\,\mathbf{v}_{t}. \tag{5.7} \]
@@ -1762,10 +1851,12 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   </tbody></table>
   <p>逐步解释为什么这么走。第 1 步与纯 GD 相同（速度从零起步，等于只用当前梯度）。第 2 步不同了：速度里除了当前梯度 1.6，还残留着上一步的 \(0.9\times2.0\)——「惯性」让这一步迈得比纯 GD 大（纯 GD 走 \(0.16\)，这里走了 \(0.34\)）。第 3 步惯性继续累积，速度 \(3.98\) 接近梯度的 4 倍，一步冲到 \(0.062\)，几乎到谷底。第 4 步，梯度已经很小（\(0.124\)），但速度里还存着前几步的冲量，于是<strong>冲过了谷底</strong>，落到 \(-0.3086\)。</p>
   <p>对比纯 GD 的 4 步：\(0.8\to0.64\to0.512\to0.4096\)。同样的 \(\eta\)，动量快得多，但代价是在谷底附近「荡秋千」——冲过去、被反向梯度刹住、拉回来、再冲。这不是 bug，是惯性系统的本性；工程上靠后期的学习率衰减把秋千的幅度收掉。真正的收益要到「峡谷地形」才看清：狭长的山谷里，横向（两侧壁之间）梯度来回翻转，纯 GD 之字形弹跳；纵向（沿谷底）梯度方向稳定。动量把横向分量相互抵消、纵向分量持续累加——横向震荡被按住，沿谷底的速度越滚越快。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这道例题</span></span><p>刚才四步干了什么：每步按「梯度进速度、速度推参数」滚一遍，眼看惯性让步子越滚越大、第 4 步冲过谷底。结论意味着：动量一边抵消来回抖动的分量、一边累加方向一致的分量；过冲不是 bug 是本性，靠后期的学习率衰减把秋千收掉——5.6 节的调度因此必不可少。</p></div>
 
   <aside class="mn">对比记忆：纯 GD 是「每步重新探路的徒步者」，动量是「有记忆有惯性的小球」。同样的 lr，动量更冲——别把动量的过冲误判成 lr 过大。</aside>
 
   <h3 id="tb05-s5"><span class="h3-num">5.5</span> Adam：每个参数各配一个油门</h3>
+  <aside class="mn">背景｜Adam 从哪来：2015 年 Kingma 与 Ba 把两股思路拧进一个算法——动量管方向、RMSProp 式的逐坐标幅度统计管步长，再补上零初始化的偏差修正。它替代的是「千亿参数共用一个学习率」的朴素 SGD。这里需要它，因为它至今是 GPT-3、LLaMA 等主流大模型默认优化器的直系祖先。</aside>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>Adam = 对每个参数单独调步长：走得猛的压一压，走得稳的放一放。</strong>动量对所有参数一视同仁，但千亿个参数的「脾气」千差万别：有的参数梯度常年很大（更新猛），有的梯度常年很小（更新慢），有的方向稳定，有的来回摇摆。统一的学习率照顾不了所有人。Adam 给每个参数各装一只「油门表」：记录这个参数梯度的<strong>平均方向</strong>（一阶矩，相当于动量）和<strong>平均幅度</strong>（二阶矩，梯度平方的平均）。更新时用「方向 ÷ 幅度」——幅度大的参数，步长被自身的幅度除小（压一压）；幅度小而方向稳定的参数，相对步长被放大（放一放）。每个参数都获得近似「一视同仁」的有效步长。</p></div>
   <p>完整公式组。对梯度 \(\mathbf{g}_t\)，逐坐标维护两个滑动平均：</p>
   <span id="eq-5-8" class="anchor"></span>\[ \mathbf{m}_{t}=\beta_{1}\mathbf{m}_{t-1}+(1-\beta_{1})\,\mathbf{g}_{t} \tag{5.8} \]
@@ -1783,6 +1874,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   \[ \Delta\theta=\eta\,\frac{\hat{m}_1}{\sqrt{\hat{v}_1}+\varepsilon}=10^{-3}\times\frac{0.3}{0.3+10^{-8}}=10^{-3}\times 0.99999997\approx 10^{-3}. \]
   （python3 验算：\(9.9999997\times 10^{-4}\)。）</p>
   <p>读一下这个结果，有两个值得记住的事实。<strong>其一</strong>：第 1 步的更新幅度几乎恰好等于 \(\eta\)。原因：只见过一个梯度时，\(\hat{m}_1/\sqrt{\hat{v}_1}=g/|g|=\pm 1\)——「方向均值 ÷ 幅度均值」在起步时退化为「只取符号」，Adam 的第一步永远大约走一个学习率的距离。<strong>其二</strong>：\(\varepsilon=10^{-8}\) 相对 \(0.3\) 完全没有存在感——它只在 \(\hat{v}\) 小到接近零时才登场救场。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这道例题</span></span><p>刚才四步干了什么：一阶矩 → 二阶矩 → 偏差修正 → 合成更新，把 Adam 的第一步逐行走完。结论意味着：起步时 \(\hat m/\sqrt{\hat v}=\pm1\)，Adam 第一步必走约一个学习率的距离——开局 lr 不能猛，这正是 5.6 节 warmup 存在的理由；\(\varepsilon\) 只是除零时登场的保险丝。</p></div>
 
   <aside class="mn">更深一层的直觉：\(\hat{m}/\sqrt{\hat{v}}\) 是「信噪比」。某坐标梯度方向稳定，则 \(|\hat m|\approx\sqrt{\hat v}\)，比值接近 ±1，走满步长；方向反复横跳，则 \(\hat m\approx 0\) 而 \(\sqrt{\hat v}\) 不小，比值接近 0，几乎不动。Adam = 每个参数各装一只动量 + 一只自动步长。</aside>
 
@@ -1825,6 +1917,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p>再算 (a) 错误做法。惩罚项 \(\lambda\theta=0.1\times1.0=0.1\) 被当作梯度的一部分，更新时要除以 \(\sqrt{\hat v}+\varepsilon\)，所以它引起的收缩量是 \(\eta\lambda\theta/(\sqrt{\hat v}+\varepsilon)\)。</p>
   <p>参数 A：\(10^{-3}\times\dfrac{0.1}{2.0+10^{-8}}\approx 5.0\times10^{-5}\)，只有应有值 \(10^{-4}\) 的一半——衰减被压住。参数 B：\(10^{-3}\times\dfrac{0.1}{0.05+10^{-8}}\approx 2.0\times10^{-3}\)，是应有值的 20 倍——衰减过量（python3 验算：\(4.99999998\times10^{-5}\) 与 \(1.99999996\times10^{-3}\)）。</p>
   <p>看清扭曲的来源：混进梯度的 \(\lambda\theta\) 对两参数完全相同（都是 \(0.1\)），差异全部来自除数 \(\sqrt{\hat v}+\varepsilon\)。等价地说，实际税率 = 名义税率 \(\times\,\dfrac{1}{\sqrt{\hat v}+\varepsilon}\)：A 领到「0.5 倍税率」，B 领到「20 倍税率」，同一个 \(\lambda=0.1\) 名存实亡。后果正好对上本节第一个常见坑：A 这类梯度大的参数几乎不衰减、越长越大（正则失效，走向过拟合）；B 这类梯度小的参数被压向零（正则过量，走向欠拟合）——宏观表现就是「weight decay 怎么调都不对」。修法只有一行：式 (<a class="xref" href="#eq-5-16">5.16</a>) 把 \(\lambda\theta\) 从梯度里拿出来直接乘在参数上，税率恢复统一。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这道例题</span></span><p>刚才干了什么：同一税率两种做法各算一遍——AdamW 让两个参数精确收缩 \(10^{-4}\)；L2 混进梯度后被 \(\sqrt{\hat v}\) 扭曲成 0.5 倍与 20 倍。结论意味着：扭曲机理就是「名义税率除以幅度统计」，大梯度参数欠衰减、小梯度参数过衰减；修法只有一行：衰减项不进梯度，直接乘在参数上（式 (<a class="xref" href="#eq-5-16">5.16</a>)）。</p></div>
 
   <h3 id="tb05-ai"><span class="h3-num">5.9</span> 在 AI 中的位置</h3>
   <table class="tbl"><thead><tr><th>本章结论</th><th>具体 AI 组件 / 机制</th><th>缺了会怎样</th></tr></thead><tbody>
@@ -1848,6 +1941,16 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p><strong>题 4（读调度曲线）</strong>　某训练：\(\eta_{\max}=4\times10^{-4}\)、\(\eta_{\min}=4\times10^{-5}\)、warmup 1000 步、总步数 11000，余弦衰减。求 \(t=500\) 与 \(t=6000\) 时的学习率。</p>
   <details><summary>看答案</summary><p>\(t=500\) 在 warmup 段：\(\eta=4\times10^{-4}\times\frac{500}{1000}=2\times10^{-4}\)。\(t=6000\) 在衰减段：相位 \(\frac{(6000-1000)\pi}{11000-1000}=\frac{5000}{10000}\pi=\frac{\pi}{2}\)，\(\cos\frac{\pi}{2}=0\)，所以 \(\eta=\eta_{\min}+\tfrac12(\eta_{\max}-\eta_{\min})=4\times10^{-5}+\tfrac12\times3.6\times10^{-4}=4\times10^{-5}+1.8\times10^{-4}=2.2\times10^{-4}\)（python3 验算一致）。恰好是峰值与谷底的中点——余弦中点处 \(\cos=0\) 的取值规律值得记住。</p></details>
   </div>
+
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">本章节奏自测（试点章）</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：549 字（阈值 ≤1,200，位于章首；次长 548 字，位于 5.1 节）；</li>
+      <li><strong>每节例子数</strong>：动手算共 6 例（5.1、5.2、5.4、5.5、5.6、5.8 节各 1 例），检查点 5 处；</li>
+      <li><strong>单步推导最大跨度</strong>：≤2 个等号（抽检：式 (<a class="xref" href="#eq-5-15">5.15</a>) 合并同类项 2 个；例 <a class="xref" href="#ex-5-1">5.1</a> 化乘数 \(x_{t+1}=(1-2\eta)x_t\) 2 个；5.1 节推导每步 1 个）；</li>
+      <li><strong>长推导回头看</strong>：5 处（5.1 节最速下降推导、例 <a class="xref" href="#ex-5-1">5.1</a> 三种 lr、例 <a class="xref" href="#ex-5-3">5.3</a> 动量四步、例 <a class="xref" href="#ex-5-4">5.4</a> Adam 一步、例 <a class="xref" href="#ex-5-6">5.6</a> 两种衰减对比）；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（梯度下降 / 动量 / Adam）、回头看 5 处、5.1 节数字预热 1 段，原文未删改一字。</li>
+    </ul>
+  </div>
 </section>
 
 </div>
@@ -1861,6 +1964,14 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
     <p class="ch-lede">前五章各自为战：矩阵、链式法则、期望方差、交叉熵、优化器。这一章把它们全部装上同一台机器——一个完整的 Transformer 块。我们沿数据通路慢慢走：嵌入怎么查表、位置怎么编码、注意力怎么一个数一个数算出来、为什么要除以根号 d、残差凭什么救梯度、LayerNorm 怎么手算、FFN 为什么最吃参数。每个数字都用 python3 复核，每个零件都标明它来自前面哪一章。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>流水线总览 → 嵌入与位置 → 注意力全程手算 → 缩放推导 → 多头 → 残差与归一化 → FFN → 参数总账 → 自测</div>
   </header>
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">进入本章</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>前置</strong>：<a class="xref" href="#tb01">第一章</a>（矩阵乘法与维度推演，6.3、6.5 节全程在用）、<a class="xref" href="#tb02">第二章</a>（链式法则，6.6 节推残差梯度）、<a class="xref" href="#tb03">第三章</a>（期望与方差，6.4 节推缩放因子）、<a class="xref" href="#tb04">第四章</a>（交叉熵，softmax 的损失视角）；哪章不稳先回哪章。</li>
+      <li><strong>一句话直觉</strong>：一个 Transformer 块就是一条装配流水线——每个工位只做一件小事（互相看、各自深加工、拉回标准身材），流水线两侧各有一条直通传送带，把原件原样垫在加工结果下面。</li>
+      <li><strong>最常见误解</strong>：以为注意力里藏着什么新数学——其实全是查表、矩阵乘、softmax、均值方差这些旧零件，本章一个都不新发明，只负责把它们拧到正确位置。</li>
+      <li><strong>读不懂回哪</strong>：维度链对不齐回<a class="xref" href="#tb01">第一章</a> 1.3 节；方差为什么能相加回<a class="xref" href="#tb03">第三章</a> 3.3 节；梯度连乘消失回<a class="xref" href="#tb02">第二章</a> 2.6 节；为什么要先减最大值回<a class="xref" href="#tb07">第七章</a> 7.2 节。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb06-s1">6.1 总览：一条装配流水线</a>
     <a href="#tb06-s2">6.2 嵌入与位置编码</a>
@@ -1958,6 +2069,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <aside class="mn">记忆钩子：注意力管「token 之间互相看」，FFN 管「每个 token 自己关起门想」，残差和 LN 管「信息不丢、尺度不炸」。</aside>
 
   <h3 id="tb06-s2"><span class="h3-num">6.2</span> 嵌入与位置编码</h3>
+  <aside class="mn">背景｜词嵌入从哪来：2013 年 word2vec 证明「意义相近的词，向量也相近」可以用浅层网络从海量语料里学出来，替代了最早稀疏、彼此等距的 one-hot 表示；后来的模型干脆把这张大表当作第一层参数，和整个网络一起训练。这里需要它，是因为机器只认数字——先查表把 token 编号变成向量，后面所有矩阵运算才有原料。</aside>
   <p><strong>词嵌入：其实是查表。</strong>模型眼里没有「猫」这个字，只有编号。设词表大小为 \(V\)（比如 5 万个不同的 token），嵌入矩阵 \(\mathbf{W}_E\in\mathbb{R}^{V\times d_{\text{model}}}\)——一张 \(V\) 行的大表，每行是一个 \(d_{\text{model}}\) 维向量。第 \(t\) 个 token 的编号是 \(i_t\)，它的嵌入向量就是</p>
   \[\mathbf{e}_t=\mathbf{W}_E[\,i_t\,]\in\mathbb{R}^{d_{\text{model}}}\]
   <p>用<a class="xref" href="#tb01">第一章</a>的语言说，这等价于「one-hot 向量乘矩阵」：one-hot 向量 \(\mathbf{x}_t\in\mathbb{R}^{V}\) 只在第 \(i_t\) 位是 1，乘任何矩阵的结果就是挑出第 \(i_t\) 行。所以工程实现里根本没有矩阵乘法，只有一次行索引（查表）。把 \(n\) 个 token 查到的行堆起来，就是 \(\mathbf{E}\in\mathbb{R}^{n\times d_{\text{model}}}\)。</p>
@@ -1981,8 +2093,11 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
 
   <h3 id="tb06-s3"><span class="h3-num">6.3</span> 缩放点积注意力：一次完整演算</h3>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>注意力 = 开会时每个人抬头看看别人，按「和我多相关」分配注意力权重。</strong>想象一个圆桌会议，每个 token 都是与会者。轮到整理会议纪要时，每个人都要写一段「综合大家意见后的新理解」。怎么综合？每人先发一张「我在找什么」的寻物启事（这是查询向量 \(\mathbf{q}\)），其他人桌上各摆着一张「我这里有啥」的标签（这是键向量 \(\mathbf{k}\)）。把寻物启事和每张标签比对一下相似度（点积），相似度高的多分配注意力，低的少分配；然后按这个权重把每个人的实际发言内容（值向量 \(\mathbf{v}\)）加权平均，就得到自己的新表示。三个角色——「我找什么」「我有什么」「我的实际内容」——就是 Q、K、V 的全部含义。</p></div>
+  <aside class="mn">背景｜注意力机制从哪来：2014 年前后神经机器翻译撞上瓶颈——编码器要把整句话压进一个固定长度的向量，句子一长必丢信息。Bahdanau 等人让解码器每生成一个词就回头「看」一遍源句、按相关度加权取样，对齐分数取代了单向量瓶颈，这就是注意力的雏形；2017 年《Attention Is All You Need》干脆把循环结构整个扔掉，只留注意力。这里需要它，是因为 token 之间必须互通信息，而矩阵乘加 softmax 恰好把「互相看」写成了可微的运算。</aside>
+  <p><strong>先看一道三个数的迷你注意力，再立骨架。</strong>某 token 的查询是 \(\mathbf{q}=(1,1)\)，三个候选键 \(\mathbf{k}_1=(1,0)\)、\(\mathbf{k}_2=(0,1)\)、\(\mathbf{k}_3=(2,1)\)。点积打分：\(1\)、\(1\)、\(3\)——第三个明显更对得上。把分数取指数：\(e^1\approx2.72\)、\(e^1\approx2.72\)、\(e^3\approx20.09\)，求和得 \(25.52\)，逐个除掉得权重 \((0.11,\ 0.11,\ 0.79)\)。若三个值向量是 \((1,0)\)、\((0,1)\)、\((10,10)\)，加权平均得 \(0.11\times(1,0)+0.11\times(0,1)+0.79\times(10,10)\approx(8.0,\ 8.0)\)——输出几乎被「最对得上」的那个值接管。把这套动作对 \(n\) 个 token 同时做、并写成矩阵形式，就是下面的骨架。</p>
   <p>先把数学骨架立起来。输入 \(\mathbf{X}\in\mathbb{R}^{n\times d_{\text{model}}}\) 通过三套可学习的投影矩阵变成三份材料：</p>
   \[\mathbf{Q}=\mathbf{X}\mathbf{W}_Q\in\mathbb{R}^{n\times d_k},\qquad \mathbf{K}=\mathbf{X}\mathbf{W}_K\in\mathbb{R}^{n\times d_k},\qquad \mathbf{V}=\mathbf{X}\mathbf{W}_V\in\mathbb{R}^{n\times d_v}\]
+  <aside class="mn">背景｜softmax 从哪来：它源自统计物理的玻尔兹曼分布——能量越低的状态概率越高，形式就是「取指数再归一化」；在机器学习里它作为 logistic 函数的多分类推广被长期使用，<a class="xref" href="#tb04">第四章</a>的交叉熵损失正是它的天然搭档。这里需要它，是因为 \(\mathbf{Q}\mathbf{K}^{\top}\) 算出的 \(n\) 个匹配分数可正可负、大小任意，必须先变成「非负、和为 1」的一行数，才有资格当加权平均的权重。</aside>
   <p>其中 \(\mathbf{W}_Q,\mathbf{W}_K\in\mathbb{R}^{d_{\text{model}}\times d_k}\)，\(\mathbf{W}_V\in\mathbb{R}^{d_{\text{model}}\times d_v}\)。然后本书统一写法（后面各章都一样）：</p>
   <span id="eq-6-3" class="anchor"></span>\[\operatorname{Attention}(\mathbf{Q},\mathbf{K},\mathbf{V})=\operatorname{softmax}\!\left(\frac{\mathbf{Q}\mathbf{K}^{\top}}{\sqrt{d_k}}\right)\mathbf{V} \tag{6.3}\]
   <p>先做维度体检，这是<a class="xref" href="#tb01">第一章</a>的纪律：\(\mathbf{Q}\) 是 \(n\times d_k\)，\(\mathbf{K}^{\top}\) 是 \(d_k\times n\)，乘积 \(\mathbf{Q}\mathbf{K}^{\top}\) 是 \(n\times n\)——第 \(i\) 行第 \(j\) 列正是「token \(i\) 对 token \(j\) 的匹配分数」。除以一个标量 \(\sqrt{d_k}\) 不改形状。softmax 逐行作用，把每行变成一个和为 1 的权重分布，形状仍是 \(n\times n\)。最后乘 \(\mathbf{V}\)（\(n\times d_v\)）：\((n\times n)(n\times d_v)=n\times d_v\)。输出与输入行数一致，每行是对所有 token 的 \(\mathbf{v}\) 向量按注意力权重的加权平均。✓</p>
@@ -2012,6 +2127,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <pre> 4 </pre>
   <pre> 5 </pre>
   </div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才五步干了什么：三次矩阵乘出 \(\mathbf{Q},\mathbf{K},\mathbf{V}\)→\(\mathbf{Q}\mathbf{K}^{\top}\) 两两配对打分→除以 \(\sqrt{2}\) 压住尺度→逐行 softmax 换成和为 1 的权重（顺手用「每行和为 1」自查）→按权重对 \(\mathbf{V}\) 加权平均。结论意味着：注意力全程只有矩阵乘和 softmax 两样东西，输出不过是 \(\mathbf{V}\) 各行的加权平均——后面的多头、FlashAttention 都是在这副骨架上做文章。</p></div>
   <aside class="mn">记忆钩子：Q 是「我要找什么」，K 是「我这里有什么」，V 是「我的实际内容」。\(\mathbf{Q}\mathbf{K}^{\top}\) 是配对打分，softmax 是把分数变成配额，乘 \(\mathbf{V}\) 是按配额取货。</aside>
   <div class="checkpoint"><span class="box-tag bare"><span class="ctab">检查点 ✓</span><span class="clabel"></span></span><p>你现在应该能：（1）默写式 (<a class="xref" href="#eq-6-3">6.3</a>) 并说出每个矩阵的形状；（2）徒手完成例 <a class="xref" href="#ex-6-2">6.2</a> 的五步演算，不跳步；（3）用「每行和为 1」自查 softmax 结果；（4）解释为什么输出是 \(\mathbf{V}\) 各行的加权平均、为什么叫「软」查表；（5）用不到 10 行 python3 复核自己的手算。</p></div>
 
@@ -2032,6 +2148,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <strong>第 6 步（除掉标准差）。</strong>方差的尺度性质 \(\operatorname{Var}(cZ)=c^2\operatorname{Var}(Z)\)（常数提出来要平方）。取 \(c=1/\sqrt{d_k}\)：
   \[\operatorname{Var}\!\left(\frac{\mathbf{q}\cdot\mathbf{k}}{\sqrt{d_k}}\right)=\frac{1}{d_k}\operatorname{Var}(\mathbf{q}\cdot\mathbf{k})=\frac{d_k}{d_k}=1.\]
   结论：除以 \(\sqrt{d_k}\) 之后，无论维度 \(d_k\) 是 64 还是 512，点积分数的方差都恰好回到 1——分数的「典型大小」被钉死在 \(\pm1\) 附近。证毕。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才六步干了什么：把点积展成 \(d_k\) 项求和→假设各分量独立、零均值、单位方差→单项均值 0→单项方差 1→独立项相加、方差累成 \(d_k\)→除以 \(\sqrt{d_k}\) 把方差压回 1。结论意味着：缩放常数不是调参调出来的，是方差守恒逼出来的——初始化大致零均值单位方差时，无论维度多大，分数都落在 softmax 不饱和、梯度活着的区间。</p></div>
   <p>「钉死在 \(\pm1\) 附近」为什么生死攸关？因为 softmax 对分数的<strong>差距</strong>极其敏感：两个 logit 相差 \(\Delta\)，权重就相差 \(e^{\Delta}\) 倍。不缩放时，分数的典型大小是 \(\sqrt{d_k}\)（式 (<a class="xref" href="#eq-6-5">6.5</a>)），把两种维度摆在一起看：</p>
   \[d_k=8:\ \operatorname{std}\approx 2.83\ \Rightarrow\ e^{2.83}\approx 17;\qquad d_k=512:\ \operatorname{std}\approx 22.63\ \Rightarrow\ e^{22.63}\approx 6.7\times 10^{9}\]
   <p>（python3 验算：\(\sqrt{8}=2.8284\)、\(e^{2.8284}\approx16.92\)；\(\sqrt{512}=22.6274\)、\(e^{22.6274}\approx6.71\times10^{9}\)。）\(d_k=512\) 时，一个 token 仅仅落后别人一个标准差，拿到的权重就只有领先者的约 \(1/(6.7\times10^9)\)——softmax 输出变成事实上的 one-hot，「赢者通吃」。<a class="xref" href="#tb02">第二章</a>说过 \(\sigma\) 型函数在饱和区梯度趋零：one-hot 化的 softmax 每个分量都落在 \(p(1-p)\approx0\) 的死角，梯度流不动，注意力还没开始学就已经「冻僵」了。除以 \(\sqrt{d_k}\) 后，典型差距回到 \(\mathcal{O}(1)\)，权重比约 \(e^1\approx2.7\) 倍——有偏好但不独裁，注意力保持「软」，梯度保持活着。</p>
@@ -2059,6 +2176,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
 
   <h3 id="tb06-s6"><span class="h3-num">6.6</span> 残差连接与 LayerNorm</h3>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>残差 = 高速公路 / 直通车。</strong>想象 96 层楼的写字楼，每层都要把文件加工一遍再传给上一层。如果每层的规矩都是「只收上一层的产出」，那么一楼原始文件的内容想影响顶层，必须穿过 95 道转手——每道转手都可能损耗一点（梯度连乘），传到顶层早已面目全非。残差连接的做法是：每层楼除了收上一层的产出，还<strong>永远保留一份原件的副本</strong>，加工只是在原件上做「增量修改」：新文件 = 原件 + 本次修改。反向传话（反向传播）时，梯度也能顺着这条直通车原路流回底层，一路上至少有一条「不缩水」的通道。Transformer 能堆几十上百层，靠的就是这条直通带。</p></div>
+  <aside class="mn">背景｜残差连接从哪来：2015 年 ResNet 发现网络堆到几十层后遭遇的不是过拟合而是「退化」——更深的网络训练误差反而更高，梯度在层层连乘中消失是主因之一；给每层加一条 \(\mathbf{x}\) 的直通旁路、让层只学增量 \(F(\mathbf{x})\)，上百层的网络立刻训得动。这里需要它，是因为 Transformer 动辄几十上百层，没有这条直通车，<a class="xref" href="#tb02">第二章</a>算过的梯度消失会原样重演。</aside>
   <p>数学上只有一句话。设 \(F\) 是任意子层（MHA 或 FFN），残差连接是</p>
   \[\mathbf{y}=\mathbf{x}+F(\mathbf{x})\]
   <p>对 \(\mathbf{x}\) 求导。用<a class="xref" href="#tb02">第二章</a>的规则：和的导数 = 导数的和；\(\mathbf{x}\) 对自身的导数是单位矩阵 \(\mathbf{I}\)（因为 \(y_i=x_i+\cdots\)，\(\partial y_i/\partial x_i\) 里总含一个 1）；第二项照链式法则写。于是</p>
@@ -2067,6 +2185,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   \[\frac{\partial \mathbf{x}_L}{\partial \mathbf{x}_1}=\prod_{l=1}^{L-1}\Bigl(\mathbf{I}+\frac{\partial F_l}{\partial \mathbf{x}_l}\Bigr)\]
   <p>每个因子都是「\(\mathbf{I}\) 加一个小量」。对比没有残差的世界：那里每个因子是单纯的小量矩阵，一批「模小于 1」的矩阵连乘，梯度随层数指数缩水消失（<a class="xref" href="#tb02">第二章</a> 2.6 节算过 \(0.5^{30}\approx10^{-9}\)）。有了 \(\mathbf{I}\)，乘积里始终存在一条「全程只乘单位矩阵」的路径，梯度至少有一份原封不动地到达浅层——这就是「梯度高速路」，是深层 Transformer 训得动的结构性前提。</p>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>LayerNorm = 把每组数据拉回标准身材：减均值，除标准差。</strong>一条流水线上，如果每个工位送来的零件尺寸忽大忽小，下一工位就没法用固定的夹具加工。LayerNorm 这个质检员的做法是：对单个 token 的 \(d_{\text{model}}\) 个特征值，先量出这组的「平均水平」（均值 \(\mu\)），每个值都减去它——数据中心化到 0 附近；再量出这组的「胖瘦程度」（方差 \(\sigma^2\)），每个值除以标准差——数据宽度压到 1 附近。最后发两个可学习的「调节旋钮」\(\boldsymbol{\gamma}\) 和 \(\boldsymbol{\beta}\)：如果模型发现标准身材不利于表达，可以学着自己把尺度和偏移调回去。先强制归一、再允许学回——既稳又不死板。</p></div>
+  <p><strong>先拿四个数把这件事做一遍，再下定义。</strong>某 token 的特征向量是 \((2,\ 4,\ 4,\ 10)\)。四个数的平均水平是 \((2+4+4+10)/4=5\)；每个数减 5，得 \((-3,\ -1,\ -1,\ 5)\)——现在它们围着 0 转。再量胖瘦：偏差平方是 \(9,1,1,25\)，平均得 \(9\)，开根号得 \(3\)；每个偏差除以 3，得 \((-1,\ -1/3,\ -1/3,\ 5/3)\)。新向量均值恰好为 0、方差恰好为 1——原本随意的一组数被拉回了标准身材。下面的定义只是把这件事写成对任意维度都成立的公式，再配两个可学旋钮。</p>
   <div class="def"><span class="box-tag"><span class="ctab">6.2</span><span class="clabel">定义</span></span><p><span class="kt">LayerNorm</span>（层归一化）。对单个 token 的特征向量 \(\mathbf{x}\in\mathbb{R}^{d_{\text{model}}}\)：</p>
   <span id="eq-6-9" class="anchor"></span>\[\operatorname{LN}(\mathbf{x})=\boldsymbol{\gamma}\odot\frac{\mathbf{x}-\mu}{\sqrt{\sigma^2+\epsilon}}+\boldsymbol{\beta},\qquad \mu=\frac{1}{d_{\text{model}}}\sum_{j=1}^{d_{\text{model}}}x_j,\qquad \sigma^2=\frac{1}{d_{\text{model}}}\sum_{j=1}^{d_{\text{model}}}(x_j-\mu)^2 \tag{6.9}\]
   <p>其中 \(\odot\) 是逐元素乘；\(\boldsymbol{\gamma},\boldsymbol{\beta}\in\mathbb{R}^{d_{\text{model}}}\) 是可学习参数；\(\epsilon\) 是约 \(10^{-5}\) 的小常数，防止方差为 0 时除零。注意方差的分母是 \(d_{\text{model}}\)（总体方差），不是 \(d_{\text{model}}-1\)（样本方差）——这里不做统计推断，只做确定性变换。</p></div>
@@ -2080,12 +2199,14 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <p><strong>第 5 步：逐分量除标准差。</strong></p>
   \[\operatorname{LN}(\mathbf{x})=\frac{(-1.5,\ -0.5,\ 0.5,\ 1.5)}{1.1180}\approx(-1.3416,\ -0.4472,\ 0.4472,\ 1.3416)\]
   <p>（python3 验算：\(\sqrt{1.25001}=1.1180385\)，归一化向量为 \((-1.341635,\ -0.447212,\ 0.447212,\ 1.341635)\)。）由于 \(\boldsymbol{\gamma}=\mathbf{1},\boldsymbol{\beta}=\mathbf{0}\)，到此结束。<strong>第 6 步：验收。</strong>结果的均值约为 0（四个数两两相反 ✓），方差约为 1——原本「身材随意」的输入被拉回了标准身材，交给下一个工位加工就稳了。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才六步干了什么：算均值→减均值（偏差和为 0，白送的自查）→算方差→开根号、加 \(\epsilon\) 兜底→逐分量除标准差→验收均值 0、方差 1。结论意味着：LayerNorm 没有新数学，就是<a class="xref" href="#tb03">第三章</a>「减均值、除标准差」照搬到单个 token 的特征维上，外加 \(\boldsymbol{\gamma},\boldsymbol{\beta}\) 两个可学旋钮；每个 token 各算各的、与 batch 无关，所以训练和推理行为一致。</p></div>
   <p>顺便一句话对比 BatchNorm（为什么 Transformer 不用它）：BN 按<strong>特征维</strong>跨 batch 统计均值方差，而 NLP 里序列变长、同 batch 样本语义差异巨大，统计量不稳，推理时还得维护全局滑动平均；LN 按<strong>样本</strong>（每个 token 自己）统计，与 batch 里有什么完全无关，训练和推理行为一致。所以 Transformer 全线用 LN。</p>
   <div class="warn"><span class="box-tag bare"><span class="ctab">常见坑</span><span class="clabel"></span></span><p><strong>pre-norm 与 post-norm 张冠李戴。</strong>式 (<a class="xref" href="#eq-6-1">6.1</a>) 与图 <a class="xref" href="#fig-6-1">6.1</a> 画的是原始论文的 post-norm：\(\operatorname{LN}(\mathbf{x}+F(\mathbf{x}))\)——LN 在残差加和之<strong>后</strong>；而 GPT 系等现代实现多用 pre-norm：\(\mathbf{x}+F(\operatorname{LN}(\mathbf{x}))\)——LN 在残差加和之<strong>前</strong>、残差干线全程裸露。两者不是同一个网络：post-norm 在深网下梯度范数逐层失衡，不配学习率 warmup 就训不动；pre-norm 训练稳，但深层的有效深度略打折扣。抄代码、读论文时先看清楚 LN 在残差的里侧还是外侧——把 post-norm 写成 pre-norm（或反过来）不会报错，但训练曲线会和你引用的论文怎么也对不上。</p></div>
   <div class="checkpoint"><span class="box-tag bare"><span class="ctab">检查点 ✓</span><span class="clabel"></span></span><p>你现在应该能：（1）从 \(\mathbf{y}=\mathbf{x}+F(\mathbf{x})\) 推出式 (<a class="xref" href="#eq-6-8">6.8</a>)，并用「梯度高速路」解释 \(\mathbf{I}\) 的作用；（2）解释残差为什么能让几十层网络训得动（对比无残差的连乘消失）；（3）默写式 (<a class="xref" href="#eq-6-9">6.9</a>)，说清 \(\mu\)、\(\sigma^2\)、\(\epsilon\)、\(\boldsymbol{\gamma}\)、\(\boldsymbol{\beta}\) 各自的角色；（4）徒手对任意 4 维向量完成 LayerNorm 并自查「均值 0、方差 1」；（5）说清 LN 与 BN 的统计方向差别及 Transformer 选 LN 的原因。</p></div>
 
   <h3 id="tb06-s7"><span class="h3-num">6.7</span> 前馈网络 FFN</h3>
   <div class="intuition"><span class="box-tag bare"><span class="ctab">直觉</span><span class="clabel">先建立感觉</span></span><p><strong>FFN = 散会后回工位独自复盘。</strong>这是类比：注意力像开会互通有无，FFN 像散会后每人回工位，把要点摊到大四倍的台面上（升维），逐条打勾划叉——不相关的划掉（激活压零），再浓缩成结论（降维）。这个类比省掉了什么：真实的「打勾划叉」是矩阵乘法加逐元素非线性，没有人判断；什么算「有用」是训练学出来的。</p></div>
+  <p><strong>先用指尖大小的数走一遍动作，再写通式。</strong>取 \(\mathbf{x}=(1,2)\)、\(\mathbf{W}_1=\begin{pmatrix}1&0\\1&1\end{pmatrix}\)：\(\mathbf{x}\mathbf{W}_1=(3,2)\)；加偏置 \(\mathbf{b}_1=(-4,1)\) 得 \((-1,3)\)；ReLU 把负的砍掉，得 \((0,3)\)；再乘 \(\mathbf{W}_2=\begin{pmatrix}1&1\\0&1\end{pmatrix}\) 得 \((0,3)\)，加 \(\mathbf{b}_2=(1,0)\) 得 \((1,3)\)。输入 2 维、输出回到 2 维，中间经历一次「变换—筛选」。真正的 FFN 会把中间层撑到 4 倍宽，但动作一模一样：升维、筛选、压回。下面把它写成对任意维度成立的通式。</p>
   <p>注意力解决的是「token 之间互通有无」，但互通完之后，每个 token 还需要一段「自己关起门来深加工」的时间——这就是<span class="kt">前馈网络</span>（feed-forward network, FFN）。它对<strong>每个位置独立</strong>地做同一个变换（\(n\) 个 token 用同一组权重，谁也不看谁）：</p>
   <span id="eq-6-10" class="anchor"></span>\[\operatorname{FFN}(\mathbf{x})=\varphi\!\left(\mathbf{x}\mathbf{W}_1+\mathbf{b}_1\right)\mathbf{W}_2+\mathbf{b}_2 \tag{6.10}\]
   <p>其中 \(\mathbf{x}\) 取某个 token 的行向量（与 6.3 节 \(\mathbf{X}\mathbf{W}\) 同一约定）。维度走一个「先升后降」的梭形：\(\mathbf{W}_1\in\mathbb{R}^{d_{\text{model}}\times d_{\text{ff}}}\) 把向量撑宽，\(\varphi\) 是逐元素的非线性激活，\(\mathbf{W}_2\in\mathbb{R}^{d_{\text{ff}}\times d_{\text{model}}}\) 再压回原宽，并约定 \(d_{\text{ff}}=4\,d_{\text{model}}\)：</p>
@@ -2103,6 +2224,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   \[\operatorname{FFN}(\mathbf{x})=(2,\ 5)\]
   （python3 验算：中间量依次为 \((1,-1,0,-2)\)、\((2,-1,-1,-2)\)、\((2,0,0,0)\)，输出 \((2,5)\) ✓。）</p>
   <p><strong>读结果。</strong>四个中间维度里三个被清零，输出完全由第 1 个「探测器」携带：升维提供候选模式、激活负责筛选、降维把命中的结论压回原宽度——一趟走完，输出仍是 \(d_{\text{model}}=2\) 维，正好接上残差加号。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才五步干了什么：摆维度链→\(\mathbf{x}\mathbf{W}_1\) 升宽→加偏置→ReLU 把三个不命中的负值清零→乘 \(\mathbf{W}_2\)、加 \(\mathbf{b}_2\) 压回原宽。结论意味着：FFN 的「智能」全在筛选——升维只是摆出候选模式，激活负责裁掉不命中的，本例四个探测器只剩一个，输出全由它携带；这也解释了 FFN 为什么要占两倍于 MHA 的参数。</p></div>
   <p><strong>参数量（数清楚，后面总账要用）。</strong>权重两块：\(\mathbf{W}_1\) 有 \(d_{\text{model}}\,d_{\text{ff}}\) 个，\(\mathbf{W}_2\) 有 \(d_{\text{ff}}\,d_{\text{model}}\) 个，合计 \(2\,d_{\text{model}}\,d_{\text{ff}}=8\,d_{\text{model}}^2\)；偏置两条：\(\mathbf{b}_1\in\mathbb{R}^{d_{\text{ff}}}\)（\(4d_{\text{model}}\) 个），\(\mathbf{b}_2\in\mathbb{R}^{d_{\text{model}}}\)（\(d_{\text{model}}\) 个）。合计</p>
   \[\#\operatorname{FFN}=2\,d_{\text{model}}\,d_{\text{ff}}+d_{\text{ff}}+d_{\text{model}}=8\,d_{\text{model}}^2+5\,d_{\text{model}}\]
   <p>对比 6.5 节 MHA 的 \(4d_{\text{model}}^2+4d_{\text{model}}\)：FFN 的权重是 MHA 的两倍。记住这个 \(2:1\)，下一节算总账时它会变成一个醒目的结论。</p>
@@ -2123,6 +2245,7 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   \[\#_{\text{layer}}=288+552+32=872,\qquad \#\text{total}=\underbrace{800}_{\text{嵌入}}+2\times872+\underbrace{16}_{\text{末尾 LN}}=2560\]
   <p>（末尾还有一处最终 LayerNorm，参数 \(8+8=16\)；输出头与嵌入共享，不另计。python3 验算：<code>800 + 2*872 + 16 = 2560</code>；若输出头不共享，要再加 \(100\times8=800\)，共 \(3360\)。）</p>
   <p><strong>读账。</strong>块内（去掉嵌入）FFN 占 \(2\times552/1744\approx63\%\)——还没到三分之二，但已经很接近了。</p></div>
+  <div class="intuition"><span class="box-tag bare"><span class="ctab">回头看</span><span class="clabel">复盘这段推导</span></span><p>刚才五步干了什么：嵌入表 \(800\)→每层 MHA \(288\)→每层 FFN \(552\)→每层两处 LN \(32\)→小计乘层数、加末尾 LN，总计 \(2560\)。结论意味着：账本里 FFN 已占块内约 \(63\%\)，逼近下一行的结构极限 \(2/3\)——以后估显存、砍参数、做 MoE 改造，第一刀永远先落在 FFN 上。</p></div>
   <p>这个 \(63\%\) 不是巧合，而是结构性结论。只看大矩阵、忽略偏置，按 \(d_{\text{ff}}=4d_{\text{model}}\) 的标准约定：</p>
   \[\frac{\#\text{FFN}}{\#\text{FFN}+\#\text{MHA}}=\frac{8\,d_{\text{model}}^2}{8\,d_{\text{model}}^2+4\,d_{\text{model}}^2}=\frac{8}{12}=\frac{2}{3}\]
   <p>所以「大模型里约 2/3 的参数在 FFN」是个恒等式层面的结论，与规模无关。它的实用推论：想砍参数、估显存、做 MoE 改造，先动 FFN——它占大头。</p>
@@ -2159,6 +2282,15 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   <details><summary>看答案</summary><p>均值 \(\mu=(2+4+4+4)/4=14/4=3.5\)。偏差 \((-1.5,\ 0.5,\ 0.5,\ 0.5)\)，和为 0 ✓。偏差平方 \(2.25,0.25,0.25,0.25\)，和为 3，方差 \(\sigma^2=3/4=0.75\)。标准差 \(\sqrt{0.75001}\approx0.8660\)。归一化：\((-1.5/0.8660,\ 0.5/0.8660,\dots)=(-1.7320,\ 0.5774,\ 0.5774,\ 0.5774)\)。python3 验算：\(\sqrt{0.75001}=0.866031\)，结果 \((-1.732039,\ 0.577346,\ 0.577346,\ 0.577346)\) ✓。验收：均值 \((-1.7320+3\times0.5774)/4\approx0\) ✓；方差 \(\approx(3+3\times0.3333)/4\approx1\) ✓。</p></details>
   <p><strong>题 4（参数量算账）</strong>　单层 Transformer：\(d_{\text{model}}=16\)、\(d_{\text{ff}}=64\)、\(h=4\)、词表 \(V=1000\)，线性层含偏置，两处 LN，输出头与嵌入共享。求嵌入、MHA、FFN、LN 各多少参数，总计多少（含嵌入）。</p>
   <details><summary>看答案</summary><p>嵌入：\(1000\times16=16000\)。MHA：\(4\times16^2+4\times16=1024+64=1088\)（头数 \(h=4\) 不改总量，式 (<a class="xref" href="#eq-6-7">6.7</a>)：\(d_k=16/4=4\)）。FFN：\(16\times64+64+64\times16+16=1024+64+1024+16=2128\)。LN：\(2\times(16+16)=64\)。单层小计 \(1088+2128+64=3280\)。总计（含嵌入，共享输出头）\(16000+3280=19280\)。python3 验算：<code>4*16**2+4*16=1088</code>，<code>16*64+64+64*16+16=2128</code>，<code>16000+1088+2128+64=19280</code> ✓。块内 FFN 占比 \(2128/3280\approx64.9\%\)，再次逼近 \(2/3\)。</p></details>
+  </div>
+  <div class="checkpoint"><span class="box-tag bare"><span class="ctab">本章节奏自测（试点章）</span><span class="clabel"></span></span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：874 字（阈值 ≤1,200，位于 6.8 节；次长 751 字，位于 6.1 节）；</li>
+      <li><strong>每节例子数</strong>：动手算共 8 例（例 <a class="xref" href="#ex-6-1">6.1</a>–6.8，分布于 6.1、6.2、6.3、6.5、6.6、6.7、6.8、6.9 节，仅 6.4 推导节无例题），检查点 6 处（章首锚点 1 处、节内检查点 4 处、本块 1 处）；</li>
+      <li><strong>单步推导最大跨度</strong>：≤2 个等号（抽检：6.4 节第 4 步 \(\operatorname{Var}(q_i k_i)=\mathbb{E}[q_i^2]\,\mathbb{E}[k_i^2]=1\)；6.4 节第 6 步 \(\operatorname{Var}((\mathbf{q}\cdot\mathbf{k})/\sqrt{d_k})=d_k/d_k=1\)；例 <a class="xref" href="#ex-6-3">6.3</a> 第 1 步逐矩阵元算 \(\mathbf{Q}\)）；</li>
+      <li><strong>长推导回头看</strong>：5 处（6.3 节例 <a class="xref" href="#ex-6-3">6.3</a> 后、6.4 节缩放推导后、6.6 节例 <a class="xref" href="#ex-6-5">6.5</a> 后、6.7 节例 <a class="xref" href="#ex-6-6">6.6</a> 后、6.8 节例 <a class="xref" href="#ex-6-7">6.7</a> 后）；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 4 处、回头看 5 处、数字预热 3 段，原文未删改一字。</li>
+    </ul>
   </div>
 </section>
 
