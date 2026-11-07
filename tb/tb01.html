@@ -1,0 +1,248 @@
+<section class="chapter" id="tb01" data-num="01">
+  <header class="ch-open">
+    <p class="ch-kicker">第一章 · 据原文目录 · 教科书版</p>
+    <h2 class="ch-title">线性代数：大模型的「表示语言」</h2>
+    <p class="ch-sub">矩阵、向量、特征值，大模型运算的底</p>
+    <p class="ch-lede">大模型做的每一次计算——查嵌入、过线性层、注意力打分、LoRA 微调——拆开看全是向量与矩阵运算。本章从零开始备齐八件工具：向量、点积、矩阵乘法、转置、秩、特征值、SVD、张量广播。每件都按同一个节奏来：先给生活类比，再给严格定义，然后一步步推导，最后用真实数字带你手算一遍。读完你会看得懂大模型里每一层到底在算什么。</p>
+    <div class="ch-map"><span class="map-tag">本章路线</span>向量 → 矩阵乘法 → 转置规则 → 秩与 LoRA → 特征值 → 张量广播</div>
+  </header>
+  <nav class="ch-toc" aria-label="章内目录">
+    <a href="#tb01-s1">1.1 向量：嵌入就是向量</a><a href="#tb01-s2">1.2 矩阵：一台变换机器</a><a href="#tb01-s3">1.3 转置与乘法规则</a><a href="#tb01-s4">1.4 秩与低秩：LoRA 为什么省参数</a><a href="#tb01-s5">1.5 特征值与特征向量</a><a href="#tb01-s6">1.6 张量与广播：numpy 语义入门</a><a href="#tb01-ai">1.7 在 AI 中的位置</a>
+  </nav>
+
+  <h3 id="tb01-s1"><span class="h3-num">1.1</span> 向量：嵌入就是向量</h3>
+  <p>大模型里第一种、也是最根本的一种数据形态，是向量。原因很简单：模型只认数，而词、句子、图片都不是数。所以一切的第一步，是把它们变成一列数——词进了模型，先被变成向量；你这一章学的每样东西，都是围绕着「怎么算这些向量」展开的。</p>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>把向量想成两样东西的合体。第一样是<strong>带方向的箭头</strong>：从原点出发，向东走 \(x_1\) 步、向北走 \(x_2\) 步，箭头指到的那个点就代表这个向量。第二样是<strong>一个词在语义空间里的住址</strong>：想象一座巨大的城市，每个词在里面有一套房，地址就是一列坐标。城市规划得很讲究——意思近的词住得近，「猫」和「狗」是对门邻居，「猫」和「有限责任公司」隔着半个城。向量的每个分量就是门牌号上的一位数字。</p></div>
+  <div class="def"><span class="box-tag">定义 1.1</span><p><span class="kt">向量</span>（vector）是 \(\mathbb{R}^{n}\) 中的有序 \(n\) 元数组，记作粗体小写 \(\mathbf{x}=(x_1,\dots,x_n)^{\top}\)。\(n\) 称为维数，\(x_i\) 称为第 \(i\) 个分量。「有序」两个字要紧：\((1,2)\) 和 \((2,1)\) 是两个不同的向量，就像门牌号「1 栋 2 单元」和「2 栋 1 单元」不是同一套房。</p></div>
+  <p>词表大小为 \(V\)、嵌入维数为 \(d\) 的模型，把全部 \(V\) 个词向量按行存成一张大表——<span class="kt">嵌入矩阵</span> \(\mathbf{E}\in\mathbb{R}^{V\times d}\)。查第 \(t\) 个词，数学上等于做一次矩阵乘法：用一个「第 \(t\) 位是 1、其余全是 0」的 one-hot 向量 \(\mathbf{o}_t\in\mathbb{R}^{V}\) 去乘：</p>
+  \[ \mathbf{e}_t=\mathbf{o}_t^{\top}\mathbf{E},\qquad \mathbf{o}_t\in\mathbb{R}^{V},\ \mathbf{E}\in\mathbb{R}^{V\times d},\ \mathbf{e}_t\in\mathbb{R}^{1\times d} \tag{1.1} \]
+  <p>为什么这一乘刚好取出第 \(t\) 行？因为 one-hot 向量里那个孤零零的 1 像一根手指，点到哪一行，哪一行就被选中，其余行全被 0 抹掉。所以「嵌入查表」在数学上是一次矩阵乘法，工程上按行号直接取，连乘法都省了——第零章例 0.1 的第 1 步，干的就是这件事。</p>
+  <div class="def"><span class="box-tag">定义 1.2</span><p>向量 \(\mathbf{x}\in\mathbb{R}^{n}\) 的 <span class="kt">范数</span>（norm）度量它的长度。最常用的是 \(L_2\) 范数，就是把勾股定理推广到 \(n\) 维：</p></div>
+  \[ \|\mathbf{x}\|_2=\sqrt{\sum_{i=1}^{n} x_i^{2}} \tag{1.2} \]
+  <p>二维时 \(\|(3,4)^{\top}\|_2=\sqrt{9+16}=\sqrt{25}=5\)，正是你高中学的那个直角三角形斜边。偶尔也会遇到 \(L_1\) 范数 \(\|\mathbf{x}\|_1=\sum_i|x_i|\)（各分量绝对值相加，像在城市街区里走路只能横平竖直），同一个 \((3,4)^{\top}\) 的 \(L_1\) 范数是 \(7\)。</p>
+  <p>接下来是全章最重要的运算：<span class="kt">点积</span>。它回答的问题是——两个向量有多像？</p>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>点积有两种看法，请记住是同一件事的两张面孔。面孔一（代数）：对应分量相乘再相加，像「按位打分再加总」。面孔二（几何）：把一个向量投到另一个的方向上，取投影长度，再乘上对方的长度——两个向量方向越一致，投影越长，点积越大；方向垂直，投影是零，点积就是零；方向相反，点积为负。所以点积天生是一把「方向像不像」的尺子。</p></div>
+  <div class="def"><span class="box-tag">定义 1.3</span><p>两个同维向量 \(\mathbf{x},\mathbf{y}\in\mathbb{R}^{n}\) 的<span class="kt">点积</span>（dot product），代数上是分量乘积之和，几何上是长度乘夹角余弦：</p></div>
+  \[ \mathbf{x}\cdot\mathbf{y}=\sum_{i=1}^{n} x_i y_i=\|\mathbf{x}\|_2\,\|\mathbf{y}\|_2\cos\theta \tag{1.3} \]
+  <p>其中 \(\theta\) 是两向量的夹角。为什么按位算出来的和，恰好等于带夹角的几何量？这不是巧合，值得推一遍——这也是本书第一条完整推导，我们慢慢走。</p>
+  <div class="derive"><span class="box-tag">推导 · 一步步来</span><p>目标：证明式 (1.3) 的两种写法相等。我们在二维平面里推（高维时两向量也总落在某个平面里，结论不变）。</p>
+    <p>第一步，构造一个三角形。把 \(\mathbf{x}\)、\(\mathbf{y}\) 画成从原点出发的两个箭头，连接两个箭头尖端，得到的第三条边正好是向量 \(\mathbf{x}-\mathbf{y}\)。为什么？因为向量减法 \(\mathbf{x}-\mathbf{y}\) 的几何意义就是「从 \(\mathbf{y}\) 的尖端指向 \(\mathbf{x}\) 的尖端」的那条边。</p>
+    <p>第二步，用代数算这条边的长度平方。长度的平方等于自己和自己的点积（把式 (1.2) 两边平方即知），所以 \(\|\mathbf{x}-\mathbf{y}\|_2^2=(\mathbf{x}-\mathbf{y})\cdot(\mathbf{x}-\mathbf{y})\)。点积对加减法可以像乘法一样展开分配（这由点积的定义逐分量验证），展开得：\(\mathbf{x}\cdot\mathbf{x}-2\,\mathbf{x}\cdot\mathbf{y}+\mathbf{y}\cdot\mathbf{y}\)。再用一次「自己点自己等于长度平方」，得到 \(\|\mathbf{x}-\mathbf{y}\|_2^2=\|\mathbf{x}\|_2^2+\|\mathbf{y}\|_2^2-2\,\mathbf{x}\cdot\mathbf{y}\)。</p>
+    <p>第三步，用几何算同一条边的长度平方。平面几何里的余弦定理说：三角形任一边的平方，等于另两边平方和减去两倍乘积乘夹角余弦。套到我们的三角形上：\(\|\mathbf{x}-\mathbf{y}\|_2^2=\|\mathbf{x}\|_2^2+\|\mathbf{y}\|_2^2-2\|\mathbf{x}\|_2\|\mathbf{y}\|_2\cos\theta\)。</p>
+    <p>第四步，两式算的是同一条边，必然相等。两边同时消去 \(\|\mathbf{x}\|_2^2+\|\mathbf{y}\|_2^2\)，再同时除以 \(-2\)，剩下的就是 \(\mathbf{x}\cdot\mathbf{y}=\|\mathbf{x}\|_2\|\mathbf{y}\|_2\cos\theta\)。推导完成。这座桥意义重大：<strong>计算机只会按位乘加（代数面孔），而它能因此获得方向信息（几何面孔）</strong>——注意力机制拿点积当「相关度」用，靠的就是这座桥。</p>
+  </div>
+  <aside class="mn">点积 = 一个向量投到另一个方向上的长度，再乘上对方的长度。方向越一致，点积越大；垂直为零；反向为负。</aside>
+  <p>点积有个小毛病：它同时被「方向像不像」和「向量长不长」两件事影响。一个向量光靠自己长得长，就能把点积拱大。做检索时我们只关心方向，于是把两个长度除掉：</p>
+  <div class="thm"><span class="box-tag">结论 1.1</span><p><span class="kt">余弦相似度</span>（cosine similarity）等于点积除以两边长度，消掉「长短」的影响，只留下「方向」：</p></div>
+  \[ \operatorname{cos\_sim}(\mathbf{x},\mathbf{y})=\dfrac{\mathbf{x}\cdot\mathbf{y}}{\|\mathbf{x}\|_2\,\|\mathbf{y}\|_2}=\cos\theta\ \in[-1,\,1] \tag{1.4} \]
+  <p>值域是 \([-1,1]\)：1 表示方向完全相同，0 表示垂直（互不相关），\(-1\) 表示完全相反。它是检索打分的默认度量——RAG（检索增强生成）就是用式 (1.4) 给「问题向量」和「文档向量」配对的。</p>
+  <div class="example"><span class="box-tag">例 1.1 · 动手算</span>
+    <p><strong>题目</strong>　RAG 检索：你的问题被编码成查询向量 \(\mathbf{q}=(1,0)^{\top}\)，候选库里有三篇文档，向量分别是 \(\mathbf{d}_1=(3,4)^{\top}\)、\(\mathbf{d}_2=(2,0)^{\top}\)、\(\mathbf{d}_3=(-1,0)^{\top}\)。用余弦相似度给三篇文档排序，并跟「直接按点积排」对比。</p>
+    <p><strong>解</strong>　先把四个长度备齐（用式 (1.2)）：\(\|\mathbf{q}\|_2=\sqrt{1+0}=1\)，\(\|\mathbf{d}_1\|_2=\sqrt{9+16}=5\)，\(\|\mathbf{d}_2\|_2=\sqrt{4+0}=2\)，\(\|\mathbf{d}_3\|_2=\sqrt{1+0}=1\)。再逐个算点积、套式 (1.4)：</p>
+    \[ \mathbf{q}\cdot\mathbf{d}_1=1\times 3+0\times 4=3\ \Rightarrow\ \dfrac{3}{1\times 5}=0.60 \]
+    \[ \mathbf{q}\cdot\mathbf{d}_2=1\times 2+0\times 0=2\ \Rightarrow\ \dfrac{2}{1\times 2}=1.00,\qquad \mathbf{q}\cdot\mathbf{d}_3=1\times(-1)+0\times 0=-1\ \Rightarrow\ \dfrac{-1}{1\times 1}=-1.00 \]
+    <p>按余弦相似度排序：\(\mathbf{d}_2\)（1.00，方向完全一致）最相关，\(\mathbf{d}_1\)（0.60）次之，\(\mathbf{d}_3\)（\(-1\)，方向相反）最无关。</p>
+    <p>现在看出归一化的价值了：如果<strong>只按点积排</strong>，\(\mathbf{d}_1\)（点积 3）会排在 \(\mathbf{d}_2\)（点积 2）前面——可 \(\mathbf{d}_1\) 跟查询根本不同向，它那 3 分全靠「自己长」（长度 5）撑起来的。余弦相似度把长度除掉之后，这个虚假优势立刻现形。工程里嵌入模型常把输出向量预先归一化（长度统一变成 1），此时点积就等于余弦相似度，连除法都省了。</p>
+  </div>
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：</p>
+    <ul>
+      <li>解释「嵌入查表」为什么等于用 one-hot 向量乘嵌入矩阵，工程上又为什么能省掉这次乘法；</li>
+      <li>手算一个向量的 \(L_2\) 范数（勾股定理推广到 \(n\) 维）；</li>
+      <li>从两个面孔解释点积，并复述「两种算法相等」的四步推导（三角形、代数展开、余弦定理、两边相消）；</li>
+      <li>说清点积和余弦相似度差在哪、什么时候这个差别要命（例 1.1 的 \(\mathbf{d}_1\) 与 \(\mathbf{d}_2\)）。</li>
+    </ul>
+  </div>
+
+  <h3 id="tb01-s2"><span class="h3-num">1.2</span> 矩阵：一台变换机器</h3>
+  <p>向量是数据，矩阵是让数据动起来的东西。大模型里每一层「加工」，都是一次矩阵运算。</p>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>把矩阵想成<strong>一台对向量做变换的机器</strong>：从进料口塞进一个向量，出料口掉出来一个新向量。这台机器能干的活儿概括起来就是「<strong>旋转 + 拉伸</strong>」——把平面上的每个向量转个角度、沿某些方向拉长或压短。也可以把它想成一台绞肉机：向量是肉，矩阵是机器内部那套刀片的结构，肉的形状（数值）进去什么样、出来什么样，完全由刀片（矩阵的元素）决定。学矩阵，就是学着看懂刀片的设计图。</p></div>
+  <div class="def"><span class="box-tag">定义 1.4</span><p><span class="kt">矩阵</span>（matrix）\(\mathbf{A}\in\mathbb{R}^{m\times n}\) 是一个 \(m\) 行 \(n\) 列的数表，同时它是从 \(\mathbb{R}^{n}\) 到 \(\mathbb{R}^{m}\) 的线性映射：\(\mathbf{y}=\mathbf{A}\mathbf{x}\) 把 \(\mathbf{x}\in\mathbb{R}^{n}\) 变成 \(\mathbf{y}\in\mathbb{R}^{m}\)。「线性」的意思是它对加法和数乘都老实：\(\mathbf{A}(\mathbf{x}_1+\mathbf{x}_2)=\mathbf{A}\mathbf{x}_1+\mathbf{A}\mathbf{x}_2\)。还有一个看列的视角：\(\mathbf{A}\mathbf{x}\) 是用 \(\mathbf{x}\) 的各分量当系数，把 \(\mathbf{A}\) 的各列加权混合起来。</p></div>
+  <p>矩阵乘矩阵怎么算？先别背规则，我们用两个最小的矩阵，手把手乘一遍。</p>
+  <div class="example"><span class="box-tag">例 1.2 · 动手算</span>
+    <p><strong>题目</strong>　设 \(\mathbf{A}=\begin{pmatrix}1 &amp; 2\\3 &amp; 4\end{pmatrix}\)、\(\mathbf{B}=\begin{pmatrix}2 &amp; 0\\1 &amp; 3\end{pmatrix}\)，计算 \(\mathbf{C}=\mathbf{A}\mathbf{B}\)；再算 \(\mathbf{B}\mathbf{A}\)，比较两者。</p>
+    <p><strong>解</strong>　规则一句话：<strong>拿左矩阵的每一行，去点乘右矩阵的每一列；第几行点第几列，结果就放第几行第几列。</strong>\(\mathbf{A}\) 有 2 行、\(\mathbf{B}\) 有 2 列，所以结果 \(\mathbf{C}\) 是 \(2\times 2\)，四个位置各做一次点积：</p>
+    \[ C_{11}=(1,2)\cdot(2,1)=1\times 2+2\times 1=4,\qquad C_{12}=(1,2)\cdot(0,3)=1\times 0+2\times 3=6 \]
+    \[ C_{21}=(3,4)\cdot(2,1)=3\times 2+4\times 1=10,\qquad C_{22}=(3,4)\cdot(0,3)=3\times 0+4\times 3=12 \]
+    <p>比如 \(C_{12}\)：取 \(\mathbf{A}\) 的第 1 行 \((1,2)\)、\(\mathbf{B}\) 的第 2 列 \((0,3)\)，对应分量相乘再相加，得 6，放进第 1 行第 2 列。其余三个位置同理。合起来：</p>
+    \[ \mathbf{A}\mathbf{B}=\begin{pmatrix}4 &amp; 6\\10 &amp; 12\end{pmatrix} \]
+    <p>再算反过来的 \(\mathbf{B}\mathbf{A}\)，同样四步：\(2\times 1+0\times 3=2\)，\(2\times 2+0\times 4=4\)，\(1\times 1+3\times 3=10\)，\(1\times 2+3\times 4=14\)，得</p>
+    \[ \mathbf{B}\mathbf{A}=\begin{pmatrix}2 &amp; 4\\10 &amp; 14\end{pmatrix}\neq\mathbf{A}\mathbf{B} \]
+    <p>四个位置里有三个不一样。这就是矩阵乘法和小学乘法最大的不同：<strong>顺序不能交换</strong>。直觉上很好懂：矩阵是变换，「先旋转后拉伸」和「先拉伸后旋转」当然是两回事——就像「先穿鞋后穿袜」和「先穿袜后穿鞋」不是一回事。</p>
+  </div>
+  <p>把例 1.2 的手工操作写成一般规则：</p>
+  <div class="def"><span class="box-tag">定义 1.5</span><p><span class="kt">矩阵乘法</span>：设 \(\mathbf{A}\in\mathbb{R}^{m\times k}\)、\(\mathbf{B}\in\mathbb{R}^{k\times n}\)，则 \(\mathbf{C}=\mathbf{A}\mathbf{B}\in\mathbb{R}^{m\times n}\)，其元素为</p></div>
+  \[ C_{ij}=\sum_{l=1}^{k} A_{il}\,B_{lj} \tag{1.5} \]
+  <p>读法：结果的 \((i,j)\) 元素，是 \(\mathbf{A}\) 的第 \(i\) 行与 \(\mathbf{B}\) 的第 \(j\) 列的点积。维度规则一句话：<strong>内维必须相等（两个 \(k\)），结果取外维（\(m\times n\)）</strong>。内维不等，这个乘法根本不存在——就像拉链两边齿数不同，拉不上。矩阵乘法一般不可交换：\(\mathbf{A}\mathbf{B}\neq\mathbf{B}\mathbf{A}\)，例 1.2 已经让你亲眼看到；有时甚至连形状都不允许交换。</p>
+  <aside class="mn">矩阵乘 = 拿左矩阵的每一行，去点右矩阵的每一列。第 \(i\) 行第 \(j\) 列交出一个数。内维相等、外维定型。</aside>
+  <p>大模型里最常见的矩阵乘法，是线性层（linear layer）——注意力的四个投影、FFN 的两层，全是它：</p>
+  \[ \mathbf{y}=\mathbf{W}\mathbf{x}+\mathbf{b},\qquad \mathbf{W}\in\mathbb{R}^{d_{\text{out}}\times d_{\text{in}}},\ \mathbf{x}\in\mathbb{R}^{d_{\text{in}}},\ \mathbf{b},\mathbf{y}\in\mathbb{R}^{d_{\text{out}}} \tag{1.6} \]
+  <p>每个输出分量，是 \(\mathbf{W}\) 的一行与 \(\mathbf{x}\) 的点积，再加一个偏置。看一个全数字的例子。</p>
+  <div class="example"><span class="box-tag">例 1.3 · 动手算</span>
+    <p><strong>题目</strong>　线性层 \(\mathbf{y}=\mathbf{W}\mathbf{x}+\mathbf{b}\)，其中</p>
+    \[ \mathbf{W}=\begin{pmatrix}1 &amp; 2 &amp; 0\\0 &amp; 1 &amp; 3\end{pmatrix}\in\mathbb{R}^{2\times 3},\qquad \mathbf{x}=\begin{pmatrix}2\\1\\-1\end{pmatrix}\in\mathbb{R}^{3},\qquad \mathbf{b}=\begin{pmatrix}1\\0\end{pmatrix}\in\mathbb{R}^{2} \]
+    <p>求 \(\mathbf{y}\)。</p>
+    <p><strong>解</strong>　先做形状校验：\((2\times 3)\) 乘 \((3\times 1)\)，内维 3 相等，外维给出 \((2\times 1)\)——输出是 2 维，和偏置 \(\mathbf{b}\) 的维数对得上。逐行算点积再加偏置：</p>
+    \[ y_1=1\times 2+2\times 1+0\times(-1)+1=2+2+0+1=5 \]
+    \[ y_2=0\times 2+1\times 1+3\times(-1)+0=0+1-3+0=-2 \]
+    <p>所以 \(\mathbf{y}=(5,\ -2)^{\top}\in\mathbb{R}^{2}\)。每个数字的来由：以 \(y_1\) 为例，\(1\times 2\) 是 \(\mathbf{W}\) 第一行第一列乘 \(\mathbf{x}\) 第一分量，\(2\times 1\) 是第二列乘第二分量，\(0\times(-1)\) 是第三列乘第三分量，最后 \(+1\) 是偏置的第一分量。可以用 <code>python3</code> 验算：<code>W @ x + b</code>。</p>
+  </div>
+  <p>工程上从不一个个向量地算，而是把一个批次的样本按行拼成矩阵，一次算完：</p>
+  \[ \mathbf{Y}=\mathbf{X}\mathbf{W}^{\top}+\mathbf{b},\qquad \mathbf{X}\in\mathbb{R}^{B\times d_{\text{in}}},\ \mathbf{W}\in\mathbb{R}^{d_{\text{out}}\times d_{\text{in}}},\ \mathbf{Y}\in\mathbb{R}^{B\times d_{\text{out}}} \tag{1.7} \]
+  <p>注意这里乘的是 \(\mathbf{W}^{\top}\) 而不是 \(\mathbf{W}\)：因为样本按行存放后，需要把 \(\mathbf{W}\) 转置过来才能让内维对上（\((B\times d_{\text{in}})\) 乘 \((d_{\text{in}}\times d_{\text{out}})\)，内维 \(d_{\text{in}}\) 相等，外维给出 \(B\times d_{\text{out}}\)）。1.3 节会把转置的来龙去脉讲透。</p>
+  <p>为什么要费这个事、拼成大矩阵？算一笔账：\(n\times n\) 的矩阵乘 \(n\times n\)，按式 (1.5) 每个元素要做 \(n\) 次乘加，共约 \(n^{3}\) 次乘加（合 \(2n^{3}\) 次浮点运算），但需要搬运的数据只有约 \(3n^{2}\) 个数（两个输入矩阵加一个输出矩阵）。计算量与搬运量之比（叫算术强度）随 \(n\) 线性增长——矩阵越大，每搬一个数进芯片能做的运算越多。GPU 的算力远大于带宽，最怕「算得快、喂得慢」，大矩阵正好能喂饱它。这就是「批量的矩阵化」，也是 GPU 喜欢大矩阵乘的根本原因。</p>
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：</p>
+    <ul>
+      <li>不看书，把例 1.2 的两个 \(2\times 2\) 矩阵乘法独立重算一遍，说出每个位置是哪行点哪列；</li>
+      <li>背出维度规则「内维相等、外维定型」，并对任意两个形状判断乘法存不存在；</li>
+      <li>解释矩阵乘法为什么不能交换（例 1.2 的数字 + 变换先后的直觉）；</li>
+      <li>解释式 (1.7) 里为什么是 \(\mathbf{W}^{\top}\)，以及「批量矩阵化」为什么能喂饱 GPU。</li>
+    </ul>
+  </div>
+
+  <h3 id="tb01-s3"><span class="h3-num">1.3</span> 转置与乘法规则</h3>
+  <div class="def"><span class="box-tag">定义 1.6</span><p>\(\mathbf{A}\in\mathbb{R}^{m\times n}\) 的<span class="kt">转置</span>（transpose）\(\mathbf{A}^{\top}\in\mathbb{R}^{n\times m}\) 由 \((\mathbf{A}^{\top})_{ij}=A_{ji}\) 定义：把第 \(i\) 行第 \(j\) 列的元素搬到第 \(j\) 行第 \(i\) 列——沿主对角线「翻个个儿」，行变列、列变行。</p></div>
+  <div class="thm"><span class="box-tag">结论 1.2</span><p>转置的三条运算规则：</p></div>
+  \[ (\mathbf{A}^{\top})^{\top}=\mathbf{A},\qquad (\mathbf{A}+\mathbf{B})^{\top}=\mathbf{A}^{\top}+\mathbf{B}^{\top},\qquad (\mathbf{A}\mathbf{B})^{\top}=\mathbf{B}^{\top}\mathbf{A}^{\top} \tag{1.8} \]
+  <p>前两条翻一下就回去、逐个元素成立，都容易接受。第三条「反序」最容易记错，也最值得推一遍——它要求两个矩阵颠倒次序。我们从元素定义出发，一步一步来。</p>
+  <div class="derive"><span class="box-tag">推导 · 一步步来</span><p>目标：证明 \((\mathbf{A}\mathbf{B})^{\top}=\mathbf{B}^{\top}\mathbf{A}^{\top}\)，其中 \(\mathbf{A}\in\mathbb{R}^{m\times k}\)、\(\mathbf{B}\in\mathbb{R}^{k\times n}\)。</p>
+    <p>第零步，先对形状。左边：\(\mathbf{A}\mathbf{B}\) 是 \(m\times n\)，转置后是 \(n\times m\)。右边：\(\mathbf{B}^{\top}\) 是 \(n\times k\)，\(\mathbf{A}^{\top}\) 是 \(k\times m\)，内维 \(k\) 相等，乘出来是 \(n\times m\)。两边形状一致，才有资格谈相等——接下来只要逐元素对上就证完。</p>
+    \[ \big((\mathbf{A}\mathbf{B})^{\top}\big)_{ij}=(\mathbf{A}\mathbf{B})_{ji}=\sum_{l=1}^{k} A_{jl}B_{li}=\sum_{l=1}^{k}(\mathbf{B}^{\top})_{il}(\mathbf{A}^{\top})_{lj}=(\mathbf{B}^{\top}\mathbf{A}^{\top})_{ij} \tag{1.9} \]
+    <p>四个等号，逐个交代。第一个等号：转置的定义（定义 1.6），把 \((j,i)\) 位置的元素搬到 \((i,j)\)。第二个等号：矩阵乘法的定义（式 (1.5)），\(\mathbf{A}\mathbf{B}\) 的 \((j,i)\) 元素是 \(\mathbf{A}\) 的第 \(j\) 行点 \(\mathbf{B}\) 的第 \(i\) 列。第三个等号：只是换写法——\(A_{jl}\) 按转置定义就是 \((\mathbf{A}^{\top})_{lj}\)，\(B_{li}\) 就是 \((\mathbf{B}^{\top})_{il}\)，数还是那些数，座位换了叫法。第四个等号：再认一次式 (1.5)——\(\sum_l(\mathbf{B}^{\top})_{il}(\mathbf{A}^{\top})_{lj}\) 正是 \(\mathbf{B}^{\top}\) 的第 \(i\) 行点 \(\mathbf{A}^{\top}\) 的第 \(j\) 列，即 \(\mathbf{B}^{\top}\mathbf{A}^{\top}\) 的 \((i,j)\) 元素。左右两边每个元素都相等，证毕。</p>
+  </div>
+  <p>用例 1.2 的数字验算一遍，心里更踏实。我们已经算过 \(\mathbf{A}\mathbf{B}=\begin{pmatrix}4 &amp; 6\\10 &amp; 12\end{pmatrix}\)，所以 \((\mathbf{A}\mathbf{B})^{\top}=\begin{pmatrix}4 &amp; 10\\6 &amp; 12\end{pmatrix}\)。再算右边：\(\mathbf{B}^{\top}=\begin{pmatrix}2 &amp; 1\\0 &amp; 3\end{pmatrix}\)、\(\mathbf{A}^{\top}=\begin{pmatrix}1 &amp; 3\\2 &amp; 4\end{pmatrix}\)，于是 \(\mathbf{B}^{\top}\mathbf{A}^{\top}\) 的四个元素为 \(2\times 1+1\times 2=4\)、\(2\times 3+1\times 4=10\)、\(0\times 1+3\times 2=6\)、\(0\times 3+3\times 4=12\)——一模一样。</p>
+  <aside class="mn">反序记忆法：像脱鞋袜——早上先穿袜子再穿鞋，晚上脱的时候必须先鞋后袜。乘积的转置（还有逆）都要倒过来。</aside>
+  <p>这条规则能解开工程代码里的一个常见困惑：PyTorch 的线性层把权重存成形状 \((d_{\text{out}},\,d_{\text{in}})\)，前向传播却写 <code>x @ W.T</code>。原因正是式 (1.7) 的约定——样本按行存放，\(\mathbf{X}\in\mathbb{R}^{B\times d_{\text{in}}}\)，必须用 \(\mathbf{W}^{\top}\) 把形状对齐成 \((B\times d_{\text{in}})\cdot(d_{\text{in}}\times d_{\text{out}})\to(B\times d_{\text{out}})\)。这是推出来的，不是试出来的。</p>
+  <div class="example"><span class="box-tag">例 1.4 · 动手算（转置忘记反序会怎样）</span>
+    <p><strong>题目</strong>　设 \(\mathbf{A}=\begin{pmatrix}1 &amp; 2 &amp; 0\\0 &amp; 1 &amp; 3\end{pmatrix}\in\mathbb{R}^{2\times 3}\)、\(\mathbf{B}=\begin{pmatrix}1 &amp; 0\\2 &amp; 1\\1 &amp; 2\end{pmatrix}\in\mathbb{R}^{3\times 2}\)。(a) 计算 \(\mathbf{A}\mathbf{B}\) 与 \((\mathbf{A}\mathbf{B})^{\top}\)；(b) 不反序，直接算 \(\mathbf{A}^{\top}\mathbf{B}^{\top}\)，看它等不等于 \((\mathbf{A}\mathbf{B})^{\top}\)；(c) 反序算 \(\mathbf{B}^{\top}\mathbf{A}^{\top}\)，再比一次。</p>
+    <p><strong>解</strong>　(a) 先做形状校验：\((2\times 3)\) 乘 \((3\times 2)\)，内维 3 相等，外维给出 \(2\times 2\)。按式 (1.5) 逐位置「行点列」：</p>
+    \[ C_{11}=(1,2,0)\cdot(1,2,1)=1+4+0=5,\qquad C_{12}=(1,2,0)\cdot(0,1,2)=0+2+0=2 \]
+    \[ C_{21}=(0,1,3)\cdot(1,2,1)=0+2+3=5,\qquad C_{22}=(0,1,3)\cdot(0,1,2)=0+1+6=7 \]
+    <p>所以 \(\mathbf{A}\mathbf{B}=\begin{pmatrix}5 &amp; 2\\5 &amp; 7\end{pmatrix}\)，再沿主对角线翻一下（定义 1.6）：\((\mathbf{A}\mathbf{B})^{\top}=\begin{pmatrix}5 &amp; 5\\2 &amp; 7\end{pmatrix}\)。</p>
+    <p>(b) 先看形状：\(\mathbf{A}^{\top}\) 是 \(3\times 2\)，\(\mathbf{B}^{\top}\) 是 \(2\times 3\)，内维 2 对 2 能乘，但外维给出 \(3\times 3\)——而 \((\mathbf{A}\mathbf{B})^{\top}\) 是 \(2\times 2\)。<strong>形状都对不上，相等根本无从谈起。</strong>把这个 \(3\times 3\) 算出来看看：</p>
+    \[ \mathbf{A}^{\top}\mathbf{B}^{\top}=\begin{pmatrix}1 &amp; 0\\2 &amp; 1\\0 &amp; 3\end{pmatrix}\begin{pmatrix}1 &amp; 2 &amp; 1\\0 &amp; 1 &amp; 2\end{pmatrix}=\begin{pmatrix}1 &amp; 2 &amp; 1\\2 &amp; 5 &amp; 4\\0 &amp; 3 &amp; 6\end{pmatrix}\in\mathbb{R}^{3\times 3} \]
+    <p>以 \((2,3)\) 位置的 4 为例：\(\mathbf{A}^{\top}\) 的第 2 行 \((2,1)\) 点 \(\mathbf{B}^{\top}\) 的第 3 列 \((1,2)\)，得 \(2\times 1+1\times 2=4\)；其余位置同理。可见矩阵一旦不是方阵，忘记反序连「碰巧对」的资格都没有——它交出来的是另一个形状的东西。</p>
+    <p>(c) 先做形状校验：\(\mathbf{B}^{\top}\) 是 \(2\times 3\)，\(\mathbf{A}^{\top}\) 是 \(3\times 2\)，内维 3 相等，外维给出 \(2\times 2\)——形状先对了。逐位置算：</p>
+    \[ (\mathbf{B}^{\top}\mathbf{A}^{\top})_{11}=(1,2,1)\cdot(1,2,0)=1+4+0=5,\qquad (\mathbf{B}^{\top}\mathbf{A}^{\top})_{12}=(1,2,1)\cdot(0,1,3)=0+2+3=5 \]
+    \[ (\mathbf{B}^{\top}\mathbf{A}^{\top})_{21}=(0,1,2)\cdot(1,2,0)=0+2+0=2,\qquad (\mathbf{B}^{\top}\mathbf{A}^{\top})_{22}=(0,1,2)\cdot(0,1,3)=0+1+6=7 \]
+    <p>得 \(\mathbf{B}^{\top}\mathbf{A}^{\top}=\begin{pmatrix}5 &amp; 5\\2 &amp; 7\end{pmatrix}\)，与 (a) 的 \((\mathbf{A}\mathbf{B})^{\top}\) 逐项相等，式 (1.8) 第三条再次应验。收尾一句话：<strong>反序不是多出来的规矩，是形状规则逼出来的</strong>——想让转置之后形状合法、数值相等，只能把次序倒过来。可以用 <code>python3</code> 验算：<code>(A @ B).T</code> 与 <code>B.T @ A.T</code>。</p>
+  </div>
+
+  <h3 id="tb01-s4"><span class="h3-num">1.4</span> 秩与低秩：LoRA 为什么省参数</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>秩回答的问题是：<strong>这张数表里，有几列是真信息？</strong>想象一份员工信息表，三列：「年龄」「出生年份」「工龄」。「出生年份」可以用今年减「年龄」算出来——它不是真信息，是「年龄」的复读机。把能由别的列推出来的列全部划掉，剩下的列数就是秩。秩小，说明这张表看着大，其实肚里没几样东西；秩 1 是最极端的情况：整列整列互相成倍数，全表只有一个方向的信息。</p></div>
+  <div class="def"><span class="box-tag">定义 1.7</span><p>矩阵 \(\mathbf{A}\) 的<span class="kt">秩</span>（rank），记作 \(\operatorname{rank}(\mathbf{A})\)，是它的列向量组中「极大线性无关组」的个数——说人话：最多能挑出几列，使它们谁也不能被其他列的加权组合表示出来。按行数结果一样。</p></div>
+  <div class="thm"><span class="box-tag">结论 1.3</span><p>乘积的秩不超过任一因子：</p></div>
+  \[ \operatorname{rank}(\mathbf{A}\mathbf{B})\le \min\big(\operatorname{rank}(\mathbf{A}),\,\operatorname{rank}(\mathbf{B})\big) \tag{1.10} \]
+  <p>直觉一句话：\(\mathbf{A}\mathbf{B}\) 的每一列都是 \(\mathbf{A}\) 的各列的加权组合（定义 1.4 的列视角），所以它的独立方向不可能比 \(\mathbf{A}\) 多；同理也不可能比 \(\mathbf{B}\) 多。信息经过每次矩阵乘法，只会损耗、不会凭空增多。由它立刻得到低秩分解的判别：若 \(\Delta\mathbf{W}=\mathbf{B}\mathbf{A}\)，其中 \(\mathbf{B}\in\mathbb{R}^{d\times r}\)、\(\mathbf{A}\in\mathbb{R}^{r\times d}\)，则</p>
+  \[ \operatorname{rank}(\Delta\mathbf{W})\le r,\qquad \mathbf{B}\in\mathbb{R}^{d\times r},\ \mathbf{A}\in\mathbb{R}^{r\times d} \tag{1.11} \]
+  <p>这就是 LoRA（Hu et al., LoRA, 2021, arXiv:2106.09685）的全部数学核心。微调一个大模型时，预训练权重 \(\mathbf{W}\in\mathbb{R}^{d\times d}\) 冻结不动，只学一个低秩的「增量」\(\Delta\mathbf{W}=\mathbf{B}\mathbf{A}\)，前向变成 \(\mathbf{y}=(\mathbf{W}+\mathbf{B}\mathbf{A})\mathbf{x}\)。它背后的假设是：任务需要的改变是低秩的——「大模型已经什么都懂，微调只是把它往某个方向轻轻推一把」，轻轻推，增量方向就不多。可训练参数量从 \(d^{2}\) 降到 \(2dr\)。</p>
+  <div class="example"><span class="box-tag">例 1.5 · 动手算</span>
+    <p><strong>题目</strong>　取秩 \(r=1\)，\(\mathbf{B}=(2,1,3)^{\top}\in\mathbb{R}^{3\times 1}\)，\(\mathbf{A}=(1,-1,0)\in\mathbb{R}^{1\times 3}\)。(a) 算出 \(\Delta\mathbf{W}=\mathbf{B}\mathbf{A}\) 并验证它的秩是 1；(b) 对比这个 \(3\times 3\) 矩阵上「全量微调」和 LoRA 的参数量；(c) 换成真实尺度 \(\mathbf{W}\in\mathbb{R}^{4096\times 4096}\)、\(r=16\) 再比一次。</p>
+    <p><strong>解</strong>　(a) 形状校验：\((3\times 1)\) 乘 \((1\times 3)\)，内维 1 相等，外维给出 \(3\times 3\)。这种「列乘行」的乘法有个名字叫外积，算法是：结果的每一行，等于 \(\mathbf{B}\) 的对应分量乘上整个 \(\mathbf{A}\)：</p>
+    \[ \Delta\mathbf{W}=\mathbf{B}\mathbf{A}=\begin{pmatrix}2\\1\\3\end{pmatrix}\begin{pmatrix}1 &amp; -1 &amp; 0\end{pmatrix}=\begin{pmatrix}2\times(1,-1,0)\\1\times(1,-1,0)\\3\times(1,-1,0)\end{pmatrix}=\begin{pmatrix}2 &amp; -2 &amp; 0\\1 &amp; -1 &amp; 0\\3 &amp; -3 &amp; 0\end{pmatrix}\in\mathbb{R}^{3\times 3} \]
+    <p>看每一行：第 1 行是 \((1,-1,0)\) 的 2 倍，第 2 行是 1 倍，第 3 行是 3 倍——三行全是同一行的倍数，谁也不是新信息。按定义 1.7，独立方向只有 1 个，\(\operatorname{rank}(\Delta\mathbf{W})=1\)，跟式 (1.11) 说的 \(\le r=1\) 一致。（换个视角看列也一样：三列分别是 \((2,1,3)^{\top}\) 的 \(1\) 倍、\(-1\) 倍、\(0\) 倍。）</p>
+    <p>(b) 全量微调要学满整个 \(3\times 3\) 矩阵：9 个参数。LoRA 只学 \(\mathbf{B}\) 的 3 个加 \(\mathbf{A}\) 的 3 个，共 6 个，省掉三分之一。</p>
+    <p>(c) 全量：\(4096^{2}=16\,777\,216\) 个参数。LoRA（\(r=16\)）：\(\mathbf{B}\) 占 \(4096\times 16=65\,536\) 个，\(\mathbf{A}\) 占 \(16\times 4096=65\,536\) 个，合计 \(131\,072\) 个——只有全量的约 \(0.78\%\)。秩取得越小省得越多，前提是任务的增量真的低秩；这是用「表达能力的假设」换「参数量的节约」。</p>
+  </div>
+  <aside class="mn">秩 1 长什么样？整行（整列）互相成倍数。看到矩阵「每一行都是同一行的倍数」，就是秩 1。</aside>
+
+  <h3 id="tb01-s5"><span class="h3-num">1.5</span> 特征值与特征向量</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>矩阵是一台「旋转 + 拉伸」的机器，大多数向量进去都会被转向。但几乎每台机器都有几个<strong>特权方向</strong>：这些方向上的向量进去之后，方向纹丝不动，只被拉长或压短。最好的类比是地球自转：自转把地表每个点都挪了位置，唯独<strong>自转轴</strong>上的点方向不变。这个「轴」就是特征向量，沿轴的伸缩倍数就是特征值。找到一台机器的轴，就等于抓住了它的性格。</p></div>
+  <div class="def"><span class="box-tag">定义 1.8</span><p>对方阵 \(\mathbf{A}\in\mathbb{R}^{n\times n}\)，若非零向量 \(\mathbf{v}\) 满足</p></div>
+  \[ \mathbf{A}\mathbf{v}=\lambda\mathbf{v},\qquad \mathbf{v}\neq\mathbf{0} \tag{1.12} \]
+  <p>则称 \(\mathbf{v}\) 为<span class="kt">特征向量</span>（eigenvector），\(\lambda\) 为<span class="kt">特征值</span>（eigenvalue）。式 (1.12) 左边是「被机器变换」，右边是「只乘一个数」——两者相等，正是「只缩放、不转向」的代数写法。怎么求？把式 (1.12) 移项得 \((\mathbf{A}-\lambda\mathbf{I})\mathbf{v}=\mathbf{0}\)（\(\mathbf{I}\) 是单位矩阵，对角线是 1 其余是 0）。我们要的是非零解 \(\mathbf{v}\)，而「一个矩阵乘某非零向量等于零」当且仅当这个矩阵把某个方向整个压扁——这等价于它的行列式为零：</p>
+  \[ \det(\mathbf{A}-\lambda\mathbf{I})=0 \tag{1.13} \]
+  <p>式 (1.13) 叫特征方程，左端展开是关于 \(\lambda\) 的多项式，解方程就得到特征值。听起来抽象，我们完整手算一个。</p>
+  <div class="example"><span class="box-tag">例 1.6 · 动手算</span>
+    <p><strong>题目</strong>　求对称矩阵 \(\mathbf{A}=\begin{pmatrix}3 &amp; 1\\1 &amp; 3\end{pmatrix}\) 的全部特征值与对应的单位特征向量，并逐一验证。</p>
+    <p><strong>解</strong>　第一步，写特征方程。先算 \(\mathbf{A}-\lambda\mathbf{I}=\begin{pmatrix}3-\lambda &amp; 1\\1 &amp; 3-\lambda\end{pmatrix}\)。二阶行列式的算法是「主对角线乘积减副对角线乘积」：</p>
+    \[ \det(\mathbf{A}-\lambda\mathbf{I})=(3-\lambda)(3-\lambda)-1\times 1=(3-\lambda)^{2}-1 \]
+    <p>第二步，解方程。展开括号（这是先修的高中代数）：\((3-\lambda)^{2}-1=\lambda^{2}-6\lambda+9-1=\lambda^{2}-6\lambda+8\)。因式分解：\(\lambda^{2}-6\lambda+8=(\lambda-2)(\lambda-4)\)，令它等于零，得两个根 \(\lambda_1=4\)、\(\lambda_2=2\)。这两个数就是特征值——这台机器只有两个特权方向的伸缩率。</p>
+    <p>第三步，逐个求特征向量。先 \(\lambda_1=4\)：代回 \((\mathbf{A}-4\mathbf{I})\mathbf{v}=\mathbf{0}\)，即</p>
+    \[ \begin{pmatrix}-1 &amp; 1\\1 &amp; -1\end{pmatrix}\begin{pmatrix}v_1\\v_2\end{pmatrix}=\begin{pmatrix}0\\0\end{pmatrix} \]
+    <p>第一行给出 \(-v_1+v_2=0\)，即 \(v_1=v_2\)（第二行给出同一个方程，不矛盾——这正说明行列式为零、方程有无穷多解）。所以方向是 \((1,1)^{\top}\)，把它除以自身长度 \(\sqrt{2}\) 化成单位向量：\(\mathbf{v}_1=(1,1)^{\top}/\sqrt{2}\)。再 \(\lambda_2=2\)：\((\mathbf{A}-2\mathbf{I})=\begin{pmatrix}1 &amp; 1\\1 &amp; 1\end{pmatrix}\)，方程是 \(v_1+v_2=0\)，即 \(v_1=-v_2\)，取 \(\mathbf{v}_2=(1,-1)^{\top}/\sqrt{2}\)。</p>
+    <p>第四步，验证。把式 (1.12) 两边都硬算出来：\(\mathbf{A}(1,1)^{\top}=(3\times 1+1\times 1,\ 1\times 1+3\times 1)^{\top}=(4,4)^{\top}=4\,(1,1)^{\top}\)，确实只缩放了 4 倍没转向；\(\mathbf{A}(1,-1)^{\top}=(3-1,\ 1-3)^{\top}=(2,-2)^{\top}=2\,(1,-1)^{\top}\)，同样成立。再附赠一个观察：\(\mathbf{v}_1\cdot\mathbf{v}_2=1\times 1+1\times(-1)=0\)，两个特征向量互相垂直——这不是巧合，正是下面谱定理保证的。</p>
+  </div>
+  <div class="thm"><span class="box-tag">结论 1.4</span><p>（谱定理，只给结论不证；证明见 Strang《Introduction to Linear Algebra》）实对称矩阵 \(\mathbf{A}\in\mathbb{R}^{n\times n}\) 的特征值全为实数，且能取到 \(n\) 个两两正交的单位特征向量。把它们按列排成正交矩阵 \(\mathbf{Q}\in\mathbb{R}^{n\times n}\) 后，有</p></div>
+  \[ \mathbf{A}=\mathbf{Q}\mathbf{\Lambda}\mathbf{Q}^{\top},\qquad \mathbf{\Lambda}=\operatorname{diag}(\lambda_1,\dots,\lambda_n) \tag{1.14} \]
+  <p>读法：任何对称矩阵这台机器，都可以拆成「转到特征方向（\(\mathbf{Q}^{\top}\)）→ 沿各轴各自伸缩（\(\mathbf{\Lambda}\)）→ 转回来（\(\mathbf{Q}\)）」三步。例 1.6 的矩阵就是活的演示：它的轴是 \((1,1)\) 和 \((1,-1)\)，沿两轴分别放大 4 倍和 2 倍。</p>
+  <aside class="mn">特征向量 = 变换下「不动方向」的轴，特征值 = 沿轴的伸缩率。想建立几何直觉，推荐 3Blue1Brown 视频系列《线性代数的本质》。</aside>
+  <div class="warn"><span class="box-tag">常见坑</span><p><strong>「特征向量求出来跟标准答案不一样，我是不是错了？」</strong>多半没错。式 (1.12) 两边同时乘任意非零常数依然成立，所以特征向量从来不确定长度和正负：例 1.6 里 \((1,1)^{\top}/\sqrt{2}\) 对，\((-1,-1)^{\top}/\sqrt{2}\) 也对，\((3,3)^{\top}\) 同样是这条轴。判断对错的标准是代回式 (1.12) 验证，而不是跟答案逐字比对。另外记住：只有方阵才有特征值——进出的得是同一个空间，才谈得上「方向不变」。</p></div>
+  <div class="example"><span class="box-tag">例 1.7 · 动手算（一台没有实轴的机器）</span>
+    <p><strong>题目</strong>　设 \(\mathbf{A}=\begin{pmatrix}0 &amp; -1\\1 &amp; 0\end{pmatrix}\)。先用几何直觉猜它在实数范围内有没有特征值与特征向量，再用特征方程 (1.13) 验证猜测。</p>
+    <p><strong>解</strong>　第一步，先用直觉猜。拿两个最普通的向量试它：\(\mathbf{A}(1,0)^{\top}=(0\times 1+(-1)\times 0,\ 1\times 1+0\times 0)^{\top}=(0,1)^{\top}\)；\(\mathbf{A}(0,1)^{\top}=(0\times 0+(-1)\times 1,\ 1\times 0+0\times 1)^{\top}=(-1,0)^{\top}\)。\((1,0)\) 被转成 \((0,1)\)，\((0,1)\) 被转成 \((-1,0)\)——两个向量都被逆时针转了 \(90^{\circ}\)。这台机器其实就是「平面旋转 \(90^{\circ}\)」：每个向量的方向都被挪走，直觉的猜测是——<strong>一个特权方向都没有</strong>。</p>
+    <p>第二步，用代数验证。先写 \(\mathbf{A}-\lambda\mathbf{I}=\begin{pmatrix}-\lambda &amp; -1\\1 &amp; -\lambda\end{pmatrix}\)，按「主对角线乘积减副对角线乘积」算行列式：</p>
+    \[ \det(\mathbf{A}-\lambda\mathbf{I})=(-\lambda)(-\lambda)-(-1)\times 1=\lambda^{2}+1 \]
+    <p>特征方程是 \(\lambda^{2}+1=0\)，即 \(\lambda^{2}=-1\)。没有任何实数的平方等于 \(-1\)，所以<strong>实数范围内没有特征值</strong>，自然也谈不上特征向量。（方程在复数范围内有两个解 \(\lambda=\pm i\)，超出本书范围，这里只关心实数。）</p>
+    <p>第三步，两边对照。直觉说「没有方向不动」，代数说「没有实数 \(\lambda\)」——同一句话的两种说法，互相印证。再跟前面那台对称矩阵 \(\begin{pmatrix}3 &amp; 1\\1 &amp; 3\end{pmatrix}\) 对比：它有两条互相垂直的实轴，这台旋转机器一条实轴都没有。差别在哪？结论 1.4 的谱定理只对<strong>实对称矩阵</strong>打包票；这台旋转机器不对称（它的转置恰好是自己的相反数 \(\mathbf{A}^{\top}=-\mathbf{A}\)），不在保障范围内，所以「没有实轴」并不矛盾。这个反例也是一句提醒：特征值不是每台机器都有的财产，它是实对称矩阵们专享的好性质。</p>
+  </div>
+  <p>非对称、甚至非方阵的矩阵没有这么好的性质，但有一个强大的推广：</p>
+  <div class="thm"><span class="box-tag">结论 1.5</span><p>（<span class="kt">奇异值分解</span>，SVD，只给结论不证）任意矩阵 \(\mathbf{A}\in\mathbb{R}^{m\times n}\)——方的、长的、对称的、不对称的，都行——可分解为</p></div>
+  \[ \mathbf{A}=\mathbf{U}\mathbf{\Sigma}\mathbf{V}^{\top},\qquad \mathbf{U}\in\mathbb{R}^{m\times m},\ \mathbf{\Sigma}\in\mathbb{R}^{m\times n},\ \mathbf{V}\in\mathbb{R}^{n\times n} \tag{1.15} \]
+  <p>其中 \(\mathbf{U}\)、\(\mathbf{V}\) 是正交矩阵（列两两垂直、长度都是 1），\(\mathbf{\Sigma}\) 是对角矩阵，对角元 \(\sigma_1\ge\sigma_2\ge\cdots\ge 0\) 叫奇异值。几何直觉跟谱定理一脉相承：任何线性变换都能拆成「旋转（\(\mathbf{V}^{\top}\)）→ 沿坐标轴拉伸（\(\mathbf{\Sigma}\)）→ 再旋转（\(\mathbf{U}\)）」。奇异值最大的前几个方向就是数据的主方向——把高维嵌入投影到前 2～3 个主方向再画成散点图，就是论文里常见的嵌入可视化，这也是 1.4 节「矩阵里真正有几个独立方向」的量化回答。</p>
+
+  <h3 id="tb01-s6"><span class="h3-num">1.6</span> 张量与广播：numpy 语义入门</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>这是类比。三维张量像<strong>一摞答题卡</strong>：全班 \(B\) 个学生每人一张卡，卡上 \(L\) 道题、每题写 \(d\) 个数，一摞的形状就是 \((B,\,L,\,d)\)。广播像老师一句通知：「每人每题统一加 2 分」——只说一遍，自动套用到每张卡每道题，不用逐个抄写。这个类比省掉了合法性条件：只有足够整齐的要求才能一句话说清；数学上也一样，不是随便两个形状都能广播，只能拉伸长度为 1 的维去对齐，规则马上给出。</p></div>
+  <p>工程里的数据不限于二维。<span class="kt">张量</span>（tensor）就是「任意维的数表」：标量是 0 维，向量 1 维，矩阵 2 维；把一个批次的 token 嵌入叠起来，形状是 \((B,\,L,\,d)\)（批次、位置、维数），三维张量——可以想象成一沓纸，每张纸是一个 \(L\times d\) 的矩阵，一沓共 \(B\) 张。三个天天要用的操作：</p>
+  <p><strong>reshape：只重排下标，不动数据。</strong>把 \((2,3)\) reshape 成 \((3,2)\)，6 个元素一个不多一个不少，只是换个摆法。千万注意：reshape 按行优先顺序依次填数，它<strong>不是</strong>转置——转置是沿对角线翻，reshape 是把数按顺序重新折行，两者的结果通常完全不同。</p>
+  <p><strong>广播（broadcasting）：形状不齐时的逐元素运算规则。</strong>规则三步：从最后一维向前对齐；某一维一边是 1，就把它「拉伸复制」成另一边的长度；维度缺了就在前面补 1。看一个能手算的例子：</p>
+  \[ \begin{pmatrix}1 &amp; 0 &amp; 2\\3 &amp; 1 &amp; 4\end{pmatrix}+(10,\ 20,\ 30)=\begin{pmatrix}1+10 &amp; 0+20 &amp; 2+30\\3+10 &amp; 1+20 &amp; 4+30\end{pmatrix}=\begin{pmatrix}11 &amp; 20 &amp; 32\\13 &amp; 21 &amp; 34\end{pmatrix},\qquad \mathbf{X}\in\mathbb{R}^{2\times 3},\ \mathbf{b}\in\mathbb{R}^{3} \tag{1.16} \]
+  <p>这里 \((2,3)\) 加 \((3,)\)：先给 \((3,)\) 补维成 \((1,3)\)，再把长度为 1 的那一维复制成 2——等于把 \((10,20,30)\) 分别加到两行上。这就是式 (1.7) 里「\(\mathbf{Y}=\mathbf{X}\mathbf{W}^{\top}+\mathbf{b}\)」能把一个偏置向量加到每一行上的原因。</p>
+  <p><strong>einsum：用下标字母一句话说清任意张量收缩。</strong>规则是：给每个操作数的维度各起一个字母，输出里没出现的字母就被求和消掉。两个能手算的例子。逐元素对应相乘再求和（就是点积）：</p>
+  \[ \text{einsum}(\texttt{'i,i-&gt;'},\mathbf{a},\mathbf{c})=\sum_i a_i c_i=2\times 3+0\times 1+1\times 4=10,\qquad \mathbf{a}=(2,0,1),\ \mathbf{c}=(3,1,4) \tag{1.17} \]
+  <p>矩阵乘向量（就是例 1.3 去掉偏置的那次运算）：</p>
+  \[ \text{einsum}(\texttt{'ij,j-&gt;i'},\mathbf{W},\mathbf{x})_i=\sum_j W_{ij}x_j=(1\times 2+2\times 1+0\times(-1),\ 0\times 2+1\times 1+3\times(-1))^{\top}=(4,\ -2)^{\top} \tag{1.18} \]
+  <p>两个例子里，字母 \(i\) 在输出里出现就保留，字母 \(j\) 只在输入里出现就被求和消掉——对照式 (1.5) 看，矩阵乘法不过如此。熟练之后，批量注意力打分 \(\texttt{'bqd,bkd-&gt;bqk'}\) 一条式子就能写完整个批次的 \(\mathbf{Q}\mathbf{K}^{\top}\)，一个循环都不用写。</p>
+  <div class="warn"><span class="box-tag">常见坑</span>
+    <p><strong>误用一：把 <code>*</code> 当矩阵乘。</strong>numpy 和 PyTorch 里 <code>A * B</code> 是逐元素相乘（各对各位，叫哈达玛积），矩阵乘是 <code>@</code>（或 <code>matmul</code>）。最阴险的是：两个张量形状相同时，逐元素乘<strong>不报错</strong>，数值却全错——这是深度学习里最难查的一类 bug。改法：动笔前先写维度式，确认自己要的是式 (1.5) 的「行点列再求和」，还是逐元素相乘。</p>
+    <p><strong>误用二：维度不配就随手转置。</strong>看到 shape 对不上就 <code>.T</code> 或 <code>reshape</code> 蒙一个，蒙对了形状、蒙错了数值，程序不报错、模型悄悄学歪。改法：先把约定写下来——样本按行存放（式 (1.7)），\(\mathbf{X}\in\mathbb{R}^{B\times d_{\text{in}}}\) 过 \(\mathbf{W}\in\mathbb{R}^{d_{\text{out}}\times d_{\text{in}}}\) 该算 \(\mathbf{X}\mathbf{W}^{\top}\)，这是从维度规则推出来的，不是试出来的。每一次 <code>.T</code> 都应该能说出理由。</p>
+  </div>
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：</p>
+    <ul>
+      <li>看一眼矩阵，判断它是不是秩 1（各行/各列是否互相成倍数），并说出 LoRA 参数量的算法 \(2dr\)；</li>
+      <li>对 \(2\times 2\) 矩阵完整走一遍「特征方程 → 解 \(\lambda\) → 逐个求特征向量 → 代回式 (1.12) 验证」；</li>
+      <li>复述广播三步规则，手算式 (1.16)；说出 reshape 和转置的区别；</li>
+      <li>读懂 einsum 的下标规则：输出里没出现的字母被求和；</li>
+      <li>解释 <code>*</code> 与 <code>@</code> 的区别为什么是最难查的 bug 之一。</li>
+    </ul>
+  </div>
+
+  <h3 id="tb01-ai"><span class="h3-num">1.7</span> 在 AI 中的位置</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>这是类比。一次前向传播像<strong>中央厨房的一条流水线</strong>：词是原料，嵌入查表是按单取料，线性层是切削机，注意力打分是「谁跟谁配」的配对窗，一批菜同时做就是批量矩阵化。本章八件工具就是这条流水线上的全部机床——本章叫「表示语言」，底气在此。这个类比省掉了非线性：真厨房还有腌制、发酵这类「化学反应」，对应激活函数与 softmax，不归线性代数管，第二章接手。</p></div>
+  <p>本章每件工具在 LLM 里的落点，以及缺了它会出的故障：</p>
+  <table class="tbl">
+    <thead>
+      <tr><th>本章结论</th><th>具体组件/机制</th><th>缺了会怎样</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>嵌入查表，式 (1.1)</td><td>词嵌入层：one-hot 乘 \(\mathbf{E}\) 等于取一行</td><td>离散 token 无法变成可计算的向量，一切无从谈起</td></tr>
+      <tr><td>矩阵乘法与线性层，式 (1.5)(1.6)</td><td>每个 Linear 层、FFN、注意力的四个投影矩阵</td><td>维度一错就是 shape 报错，或被静默广播算错数值</td></tr>
+      <tr><td>点积的相似度结构，式 (1.3)</td><td>注意力打分 \(\mathbf{Q}\mathbf{K}^{\top}\)：\((\mathbf{Q}\mathbf{K}^{\top})_{ij}=\mathbf{q}_i\cdot\mathbf{k}_j\) 正是 token \(i\) 对 token \(j\) 的相似度（Vaswani et al., Attention Is All You Need, 2017, arXiv:1706.03762）</td><td>看不懂注意力为什么能「找相关词」</td></tr>
+      <tr><td>低秩分解，式 (1.10)(1.11)</td><td>LoRA 微调：\(\Delta\mathbf{W}=\mathbf{B}\mathbf{A}\)，\(r=16\) 时参数只占约 \(0.78\%\)（Hu et al., 2021, arXiv:2106.09685）</td><td>不懂秩就看不懂 LoRA 为什么省、什么时候不省</td></tr>
+      <tr><td>余弦相似度，式 (1.4)</td><td>RAG 检索打分、嵌入去重与聚类</td><td>不归一化就排序，长向量天然得高分，检索质量塌陷（例 1.1）</td></tr>
+      <tr><td>批量矩阵化，式 (1.7)</td><td>把批次拼成大矩阵一次乘，喂饱 GPU 算力</td><td>用 for 循环逐样本算，GPU 大量空转，训练慢一个数量级</td></tr>
+    </tbody>
+  </table>
+  <div class="example"><span class="box-tag">例 1.8 · 动手算（一次注意力打分）</span>
+    <p><strong>题目</strong>　把手伸进注意力内部。两个 token，查询向量 \(\mathbf{q}_1=(1,0)^{\top}\)、\(\mathbf{q}_2=(0,1)^{\top}\)，键向量 \(\mathbf{k}_1=(1,1)^{\top}\)、\(\mathbf{k}_2=(0,2)^{\top}\)（嵌入维 \(d_k=2\)）。注意力打分是 \(\mathbf{Q}\mathbf{K}^{\top}/\sqrt{d_k}\)（再过 softmax、乘 \(\mathbf{V}\) 是后话）：先算打分矩阵 \(\mathbf{Q}\mathbf{K}^{\top}\)，再除以 \(\sqrt{d_k}\)，最后说出每个 token 最关注谁。</p>
+    <p><strong>解</strong>　第一步，定形状。样本按行存放（式 (1.7) 的约定）：\(\mathbf{Q}=\begin{pmatrix}1 &amp; 0\\0 &amp; 1\end{pmatrix}\)、\(\mathbf{K}=\begin{pmatrix}1 &amp; 1\\0 &amp; 2\end{pmatrix}\) 都是 \(2\times 2\)（2 个 token、嵌入维 \(d_k=2\)）。要的是「token 对 token」的相似度，点积必须沿嵌入维做，所以让 \(d_k=2\) 当内维：\(\mathbf{Q}\mathbf{K}^{\top}\) 是 \((2\times 2)\) 乘 \((2\times 2)\)，内维 2 对 2，结果取外维 \(2\times 2\)，其 \((i,j)\) 元素正是 \(\mathbf{q}_i\cdot\mathbf{k}_j\)。</p>
+    <p>第二步，四次点积（式 (1.3) 的代数面孔）：</p>
+    \[ \mathbf{q}_1\cdot\mathbf{k}_1=1\times 1+0\times 1=1,\qquad \mathbf{q}_1\cdot\mathbf{k}_2=1\times 0+0\times 2=0 \]
+    \[ \mathbf{q}_2\cdot\mathbf{k}_1=0\times 1+1\times 1=1,\qquad \mathbf{q}_2\cdot\mathbf{k}_2=0\times 0+1\times 2=2 \]
+    <p>所以 \(\mathbf{Q}\mathbf{K}^{\top}=\begin{pmatrix}1 &amp; 0\\1 &amp; 2\end{pmatrix}\)。</p>
+    <p>第三步，缩放。\(\sqrt{d_k}=\sqrt{2}\approx 1.4142\)，每个元素除以它：</p>
+    \[ \frac{1}{\sqrt{2}}\begin{pmatrix}1 &amp; 0\\1 &amp; 2\end{pmatrix}\approx\begin{pmatrix}0.71 &amp; 0.00\\0.71 &amp; 1.41\end{pmatrix}\quad\text{（保留两位小数）} \]
+    <p>第四步，读表。第 \(i\) 行是 token \(i\) 手里的一排打分：token 1 给 token 1 打 \(0.71\)、给 token 2 打 \(0\)——只关注 token 1；token 2 给 token 1 打 \(0.71\)、给 token 2 打 \(1.41\)——最关注 token 2。再往后，每行过一次 softmax 变成总和为 1 的权重，去加权混合 \(\mathbf{V}\) 的各行；softmax 是第二章的工具，本章只管到「打分」为止。回头看，注意力的核心没有任何神秘部件：就是本章的行点列、一次转置，和一个数 \(\sqrt{d_k}\)。</p>
+  </div>
+  <p>下一章解决「有了表示之后怎么改参数」：微积分与反向传播。你将亲手搭起链式法则与外积规则这两件工具——第零章例 0.1 第 8 步那个干净的结果 \(\partial\mathcal{L}/\partial\mathbf{z}=\mathbf{p}-\mathbf{y}\)，严格推导在第十章式 (10.9)，但工具全在下一章备好。</p>
+
+  <div class="quiz"><span class="box-tag">自测题</span>
+    <p><strong>第 1 题（手算）</strong>　设 \(\mathbf{A}=\begin{pmatrix}1 &amp; -1\\0 &amp; 2\end{pmatrix}\)、\(\mathbf{B}=\begin{pmatrix}3 &amp; 1\\2 &amp; 0\end{pmatrix}\)，计算 \(\mathbf{A}\mathbf{B}\)，并说出每个位置是哪行点哪列。</p>
+    <details><summary>看答案</summary><p>结果取外维 \(2\times 2\)，四个位置各做一次「行点列」：\(C_{11}=(1,-1)\cdot(3,2)=1\times 3+(-1)\times 2=1\)；\(C_{12}=(1,-1)\cdot(1,0)=1\times 1+(-1)\times 0=1\)；\(C_{21}=(0,2)\cdot(3,2)=0\times 3+2\times 2=4\)；\(C_{22}=(0,2)\cdot(1,0)=0\times 1+2\times 0=0\)。所以 \(\mathbf{A}\mathbf{B}=\begin{pmatrix}1 &amp; 1\\4 &amp; 0\end{pmatrix}\)。（python3 验算：<code>A @ B</code>。）</p></details>
+    <p><strong>第 2 题（手算）</strong>　计算 \(\mathbf{x}=(1,2,2)^{\top}\) 与 \(\mathbf{y}=(2,1,2)^{\top}\) 的余弦相似度（结果保留 4 位小数）。</p>
+    <details><summary>看答案</summary><p>三步走。第一步算点积：\(\mathbf{x}\cdot\mathbf{y}=1\times 2+2\times 1+2\times 2=2+2+4=8\)。第二步算两个长度：\(\|\mathbf{x}\|_2=\sqrt{1+4+4}=\sqrt{9}=3\)，\(\|\mathbf{y}\|_2=\sqrt{4+1+4}=\sqrt{9}=3\)。第三步套式 (1.4)：\(\operatorname{cos\_sim}=8/(3\times 3)=8/9\approx 0.8889\)。方向相当一致——这两个向量夹角约 \(27^{\circ}\)。</p></details>
+    <p><strong>第 3 题（计算）</strong>　某模型的权重矩阵 \(\mathbf{W}\in\mathbb{R}^{512\times 512}\)。用 LoRA 微调，秩取 \(r=8\)。可训练参数是多少？占全量微调的百分之几？</p>
+    <details><summary>看答案</summary><p>LoRA 把增量拆成 \(\mathbf{B}\in\mathbb{R}^{512\times 8}\) 和 \(\mathbf{A}\in\mathbb{R}^{8\times 512}\)，参数量 \(=512\times 8+8\times 512=4096+4096=8192\)。全量微调要学 \(512^{2}=262\,144\) 个参数。占比 \(8192/262144=3.125\%\)。一般规律：占比 \(=2r/d\)，秩越小、矩阵越大，省得越狠。</p></details>
+    <p><strong>第 4 题（概念 + 形状推理）</strong>　设 \(\mathbf{Q}\in\mathbb{R}^{2\times 3}\)、\(\mathbf{K}\in\mathbb{R}^{2\times 3}\)（2 个 token，嵌入维数 3）。注意力要算「每个 token 对每个 token 的相似度」，应该算 \(\mathbf{Q}\mathbf{K}\)、\(\mathbf{Q}^{\top}\mathbf{K}\)、还是 \(\mathbf{Q}\mathbf{K}^{\top}\)？结果形状是多少，每个元素是什么？</p>
+    <details><summary>看答案</summary><p>算 \(\mathbf{Q}\mathbf{K}^{\top}\)。推理过程：相似度用点积（式 (1.3)），而点积要求两个向量同维——这里同维的是「嵌入维」3，所以必须让 3 那一维当内维。\(\mathbf{Q}\mathbf{K}\) 的内维是 3 对 2，根本不存在；\(\mathbf{Q}^{\top}\mathbf{K}\) 的内维是 2 对 2，乘出来是 \(3\times 3\)，那是「嵌入维之间的相似度」，答非所问；\(\mathbf{Q}\mathbf{K}^{\top}\) 的内维是 3 对 3，结果取外维 \(2\times 2\)，其 \((i,j)\) 元素正是 \(\mathbf{q}_i\cdot\mathbf{k}_j\)——token \(i\) 对 token \(j\) 的相似度。这正是注意力式 (0.1) 里 \(\mathbf{Q}\mathbf{K}^{\top}\) 的形状逻辑（Vaswani et al., 2017）。记住方法论：形状不是试出来的，是从「谁跟谁做点积」推出来的。</p></details>
+  </div>
+</section>

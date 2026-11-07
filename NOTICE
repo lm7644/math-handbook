@@ -1,0 +1,20 @@
+Third-Party Notices
+===================
+
+This repository includes an unmodified distribution file of MathJax:
+
+  vendor/tex-svg-full.js
+  Project:   MathJax (https://github.com/mathjax/MathJax)
+  Copyright: (c) 2009-2026 The MathJax Consortium
+  License:   Apache License, Version 2.0
+             https://www.apache.org/licenses/LICENSE-2.0
+
+MathJax is used to render LaTeX formulas in the HTML editions of this
+handbook. The file is bundled locally so the handbook works fully offline.
+No modifications have been made to the file.
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the Apache License, Version 2.0 is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+or implied. See the license at the URL above for the specific language
+governing permissions and limitations.

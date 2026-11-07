@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="__THEME__">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学大模型需要的数学背景知识手册 · 16 章（按目录重写版）</title>
+<style>
+/* ================================================================
+   设计系统：瑞士网格 + 书页排版。三主题：academic / textbook / minimal
+   ================================================================ */
+:root{
+  --paper:#FAF9F5; --paper-2:#F3F1EA; --card:#FFFFFF;
+  --ink:#17171B; --ink-2:#43434A; --muted:#6E6E66;
+  --line:#E3E1D9; --line-strong:#C7C5BB;
+  --accent:#1B50C8; --accent-dark:#143D99; --accent-soft:#EDF2FC;
+  --accent2:#B98A1D; /* 琥珀：警示/重点第二层 */
+  --accent2-soft:#FBF4E4;
+  --ok:#3F7E46;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Helvetica Neue","PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif;
+  --measure:680px;
+  --radius:3px;
+}
+/* ---- 主题二：现代教科书（更暖、衬线标题、更松的呼吸） ---- */
+html[data-theme="textbook"]{
+  --paper:#FBF7F0; --paper-2:#F5EEE2; --card:#FFFFFF;
+  --ink:#221D15; --ink-2:#4A4438; --muted:#9A8F7C;
+  --line:#E7DFD0; --line-strong:#D3C8B2;
+  --accent:#0E6E5C; --accent-dark:#0A5245; --accent-soft:#E6F2EF;
+  --accent2:#C05A2E; --accent2-soft:#FCEEE6; --ok:#4C7A3F;
+  --measure:700px; --radius:8px;
+}
+/* ---- 主题三：极简工具书（冷灰、密排、细线） ---- */
+html[data-theme="minimal"]{
+  --paper:#FFFFFF; --paper-2:#F6F6F6; --card:#FFFFFF;
+  --ink:#111111; --ink-2:#3C3C3C; --muted:#6E6E6E;
+  --line:#E9E9E9; --line-strong:#CFCFCF;
+  --accent:#0A0A0A; --accent-dark:#000000; --accent-soft:#EFEFEF;
+  --accent2:#6B6B6B; --accent2-soft:#F2F2F2; --ok:#3C3C3C;
+  --measure:660px; --radius:0px;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.8;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+::selection{background:var(--accent);color:#fff}
+a{color:inherit;text-decoration:none}
+img,svg{max-width:100%}
+section{scroll-margin-top:70px}
+[id^="ch"]{scroll-margin-top:78px}
+
+/* ================= 顶部条 ================= */
+.topbar{height:8px;background:var(--ink)}
+
+/* ================= 封面 ================= */
+.cover{max-width:1184px;margin:0 auto;padding:72px 32px 56px;border-bottom:1px solid var(--ink)}
+.cover .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--accent);
+  display:flex;align-items:center;gap:12px;margin-bottom:28px;text-transform:uppercase}
+.cover .kicker::after{content:"";flex:1;height:1px;background:var(--line-strong)}
+.cover h1{font-size:clamp(34px,5vw,56px);line-height:1.15;font-weight:800;letter-spacing:.01em;max-width:15em}
+.cover .sub{margin-top:20px;font-size:18px;color:var(--ink-2);max-width:44em}
+.cover .rew-note{
+  margin-top:24px;display:inline-block;font-size:13.5px;color:var(--accent2);
+  background:var(--accent2-soft);border:1px solid var(--accent2);border-radius:var(--radius);
+  padding:10px 16px;line-height:1.7;max-width:46em}
+.spec{margin-top:40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));border-top:2px solid var(--ink)}
+.spec div{padding:14px 16px 14px 0;border-bottom:1px solid var(--line)}
+.spec dt{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--muted);margin-bottom:4px}
+.spec dd{font-size:14px;font-weight:600;line-height:1.5}
+.spec dd .plain{font-weight:400;color:var(--ink-2)}
+.spec a{color:var(--accent);border-bottom:1px solid transparent}
+.spec a:hover{border-bottom-color:var(--accent)}
+
+/* ================= 骨架网格 ================= */
+.layout{max-width:1184px;margin:0 auto;padding:0 32px;display:grid;
+  grid-template-columns:210px minmax(0,1fr);gap:0 48px;align-items:start}
+.sidenav{position:sticky;top:0;padding:36px 0;height:100vh;overflow:auto;border-right:1px solid var(--line)}
+.sidenav .nav-title{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--muted);
+  margin-bottom:12px;padding-right:12px}
+.sidenav ol{list-style:none}
+.sidenav a{display:grid;grid-template-columns:30px 1fr;gap:8px;padding:6px 12px 6px 0;
+  font-size:13px;color:var(--ink-2);border-left:2px solid transparent;transition:.15s}
+.sidenav a .n{font-family:var(--mono);font-size:11px;color:var(--muted);padding-top:2px}
+.sidenav a:hover{color:var(--ink)}
+.sidenav a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.sidenav a.active .n{color:var(--accent)}
+.sidenav .tools{margin-top:26px;display:flex;flex-direction:column;gap:10px;padding-right:12px}
+.sidenav .tools button,.sidenav .tools a{
+  font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-2);
+  background:none;border:1px solid var(--line-strong);border-radius:var(--radius);
+  padding:8px 12px;cursor:pointer;text-align:left}
+.sidenav .tools button:hover,.sidenav .tools a:hover{border-color:var(--ink);color:var(--ink)}
+.sidenav .tools svg{width:13px;height:13px;vertical-align:-2px;margin-right:5px}
+.theme-switch{margin-top:8px}
+.theme-switch label{font-family:var(--mono);font-size:10px;color:var(--muted);display:block;margin:6px 0 3px}
+
+/* ================= 内容列 ================= */
+.content{padding:8px 0 120px;min-width:0}
+
+/* ---------- 总目录 ---------- */
+.masthead-sec{padding-top:56px}
+.sec-label{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--accent);
+  display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.sec-label::after{content:"";flex:1;height:1px;background:var(--line)}
+.masthead-sec h2{font-size:28px;font-weight:800;letter-spacing:.02em}
+.masthead-sec .lede{color:var(--ink-2);font-size:15px;max-width:var(--measure);margin-top:8px}
+.toc-list{margin-top:32px;border-top:2px solid var(--ink)}
+.toc-row{display:grid;grid-template-columns:56px 1fr;gap:20px;padding:16px 4px;
+  border-bottom:1px solid var(--line);align-items:baseline;transition:background .15s}
+.toc-row:hover{background:var(--accent-soft)}
+.toc-num{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--accent);
+  border:1.5px solid var(--accent);border-radius:2px;padding:4px 0;text-align:center;
+  print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.toc-row:hover .toc-num{background:var(--accent);color:var(--paper)}
+.toc-title{font-size:17px;font-weight:700;display:block;line-height:1.4}
+.toc-sub{font-size:13.5px;color:var(--muted);display:block;margin-top:2px}
+.toc-sub-none{font-style:italic}
+
+/* ================= 章节 ================= */
+.chapter-wrap{margin-top:8px}
+.chapter{padding-top:64px}
+/* 章头 */
+.ch-open{border-top:3px solid var(--ink);padding-top:28px;margin-bottom:8px}
+.ch-kicker{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--accent);margin-bottom:10px;
+  display:inline-block;border:1px solid var(--accent);border-radius:2px;padding:3px 10px;background:var(--accent-soft);
+  print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.ch-title{font-size:clamp(26px,3.4vw,38px);font-weight:800;letter-spacing:.01em;line-height:1.2}
+.ch-sub{font-size:17px;color:var(--ink-2);margin-top:10px;font-weight:500}
+.ch-lede{margin-top:16px;font-size:15px;color:var(--ink-2);max-width:var(--measure);
+  border-left:3px solid var(--accent);padding-left:16px}
+.ch-toc{margin:26px 0 8px;display:flex;flex-wrap:wrap;gap:8px 22px;max-width:var(--measure)}
+.ch-toc a{font-family:var(--mono);font-size:12px;color:var(--ink-2);
+  border-bottom:1px solid var(--line-strong);padding-bottom:2px}
+.ch-toc a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* 小节标题 */
+.chapter h3{font-size:21px;font-weight:800;letter-spacing:.01em;margin:48px 0 18px;
+  display:flex;align-items:baseline;gap:14px;max-width:var(--measure)}
+.h3-num{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent);flex:none}
+.chapter h4{font-size:15.5px;font-weight:700;margin:28px 0 10px;max-width:var(--measure)}
+
+/* 正文段落与列表 */
+.chapter p{max-width:var(--measure);margin:14px 0;font-size:16px}
+.chapter ul,.chapter ol{max-width:var(--measure);margin:14px 0 14px 24px}
+.chapter li{margin:6px 0;line-height:1.75}
+.chapter strong{font-weight:700}
+.chapter em{font-style:italic}
+.kt{font-weight:700;color:var(--accent-dark)}
+.todo{font-weight:700;color:#B9472F;background:#FBEAE5;padding:1px 6px;border-radius:2px;font-size:14px}
+
+/* ---------- 组件框：档案卡 ---------- */
+.def,.thm,.example,.warn{
+  position:relative;max-width:var(--measure);margin:26px 0;padding:16px 20px 14px;border-radius:3px;
+  font-size:15px;line-height:1.75}
+.def{background:var(--card);border:1px solid var(--line-strong);border-left:3px solid var(--accent)}
+.thm{background:var(--accent-soft);border:1px solid #D4DFF5;border-left:3px solid var(--accent)}
+.example{background:var(--card);border:1px solid var(--line-strong);border-left:3px solid var(--ink)}
+.warn{background:var(--accent2-soft);border:1px solid #EBD9AE;border-left:3px solid var(--accent2)}
+.box-tag{display:flex;align-items:baseline;gap:9px;margin:0 0 10px}
+.ctab{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.06em;white-space:nowrap;
+  padding:2px 8px;background:var(--ink);color:var(--paper);border-radius:2px;flex:none;
+  print-color-adjust:exact;-webkit-print-color-adjust:exact}
+/* 叙述流引用：灰线地址样式（非链接） */
+.ref{font-family:var(--mono);font-size:.82em;white-space:nowrap;color:var(--ink-2);
+  border-bottom:1px solid var(--line-strong)}
+.def .ctab,.thm .ctab{background:var(--accent)}
+.warn .ctab{background:var(--accent2)}
+.box-tag.bare .ctab{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.warn .box-tag.bare .ctab{color:var(--accent2);border-color:var(--accent2)}
+.clabel{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.12em;
+  color:var(--muted);text-transform:uppercase}
+.clabel:empty{display:none}
+.def p,.thm p,.example p,.warn p{margin:8px 0;max-width:none}
+
+/* 页边批注 */
+aside.mn{
+  float:right;clear:right;width:190px;margin:6px 0 16px 28px;
+  font-size:12.5px;line-height:1.7;color:var(--muted);
+  border-left:2px solid var(--line);padding:4px 0 4px 14px}
+aside.mn::before{content:"批注";display:block;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:.16em;color:var(--accent);margin-bottom:5px}
+
+/* 表格 */
+table.tbl{width:100%;max-width:var(--measure);border-collapse:collapse;margin:22px 0;
+  font-size:14px;background:var(--card)}
+.tbl th{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-2);
+  text-align:left;padding:9px 12px;border-bottom:2px solid var(--ink);font-weight:600}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.65}
+.tbl tr:last-child td{border-bottom:2px solid var(--ink)}
+
+/* 图 */
+figure.fig{max-width:var(--measure);margin:26px 0;padding:16px;background:var(--card);
+  border:1px solid var(--line);border-radius:var(--radius)}
+figure.fig>svg{display:block;margin:0 auto}
+figcaption{margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--muted);
+  letter-spacing:.03em;line-height:1.6;text-align:center}
+
+/* 代码 */
+.chapter code{font-family:var(--mono);font-size:13.5px;background:var(--paper-2);
+  border:1px solid var(--line);padding:1px 6px;border-radius:2px}
+.chapter pre{max-width:var(--measure);background:var(--ink);color:#EDECE4;padding:16px 18px;
+  border-radius:var(--radius);overflow-x:auto;margin:20px 0;font-size:13px;line-height:1.65}
+.chapter pre code{background:none;border:none;padding:0;color:inherit;font-size:inherit}
+
+/* MathJax 公式容器节奏 */
+.chapter mjx-container[jax="SVG"][display="true"]{
+  margin:20px 0 !important;max-width:var(--measure);box-sizing:border-box;overflow-x:auto;overflow-y:hidden;padding:6px 0}
+mjx-assistive-mml{max-width:1px !important;max-height:1px !important;width:1px !important;height:1px !important;overflow:hidden !important}
+.chapter mjx-container[jax="SVG"]{font-size:105%}
+
+/* ================= 页脚 ================= */
+.footer{border-top:2px solid var(--ink)}
+.footer-inner{max-width:1184px;margin:0 auto;padding:32px;display:flex;flex-wrap:wrap;
+  gap:14px 40px;justify-content:space-between;font-family:var(--mono);font-size:11px;
+  color:var(--muted);letter-spacing:.05em;line-height:2}
+.footer a{color:var(--accent)}
+
+/* ================= 响应式 ================= */
+@media(max-width:1080px){
+  .layout{grid-template-columns:1fr;gap:0}
+  .sidenav{position:sticky;top:0;z-index:40;height:auto;padding:0;border-right:none;
+    border-bottom:1px solid var(--line);background:var(--paper);display:flex;align-items:center;overflow-x:auto;scrollbar-width:none}
+  .sidenav::-webkit-scrollbar{display:none}
+  .sidenav .nav-title,.sidenav .tools{display:none}
+  .sidenav ol{display:flex;gap:2px;padding:10px 4px}
+  .sidenav a{display:block;padding:6px 11px;border-left:none;border-bottom:2px solid transparent;white-space:nowrap;font-size:12px}
+  .sidenav a .n{display:none}
+  .sidenav a .nt{display:none}
+  .sidenav a .ns{display:inline}
+  .sidenav a.active{border-bottom-color:var(--accent)}
+  section,[id^="ch"]{scroll-margin-top:104px}
+}
+@media(max-width:760px){
+  aside.mn{float:none;width:auto;margin:14px 0;border-left:2px solid var(--accent);
+    border-top:none;padding:8px 0 8px 14px}
+  .toc-row{grid-template-columns:44px 1fr;gap:14px}
+  .chapter h3{font-size:19px}
+}
+
+/* 屏幕端（非打印）：允许 display 公式容器收缩到父宽并内部横滚 */
+@media screen{
+  .chapter mjx-container[jax="SVG"][display="true"]{min-width:0 !important}
+}
+/* 窄屏：超长行内公式变为可横滚的行内块，避免整页横向溢出 */
+@media screen and (max-width:760px){
+  .chapter mjx-container[jax="SVG"]:not([display="true"]){display:inline-block;max-width:100%;overflow-x:auto;overflow-y:hidden}
+  .chapter .tbl{display:block;overflow-x:auto}
+}
+.sidenav a .ns{display:none}
+
+/* ================= 打印：书页化 ================= */
+@media print{
+  .topbar,.sidenav,.ch-toc{display:none !important}
+  body{background:#fff;color:#000;font-size:9.5pt;line-height:1.42}
+  .layout{display:block;padding:0}
+  .content{padding:0}
+  .cover{padding:0 0 16px;border-bottom:2px solid #000}
+  .cover .rew-note{border:1px solid #999;color:#333;background:#fff}
+  .chapter-wrap{break-before:page}
+  .chapter-wrap::before{
+    content:attr(data-running);
+    display:block;font-family:var(--mono);font-size:8.5pt;color:#555;
+    border-bottom:1px solid #999;padding-bottom:4pt;margin-bottom:16pt;letter-spacing:.08em}
+  .chapter{padding-top:0}
+  .ch-open{border-top:none;padding-top:0}
+  .chapter p,.chapter li{font-size:9.5pt}
+  .chapter h3{font-size:14pt;margin:20pt 0 8pt}
+  .chapter h4{font-size:11pt;margin:14pt 0 6pt}
+  .ch-title{font-size:22pt}
+  .def,.thm,.example,.warn{break-inside:avoid;background:#fff;border:1px solid #bbb;padding:10pt 12pt;margin:12pt 0;font-size:9.5pt}
+  figure.fig,.tbl,pre{break-inside:avoid}
+  .tbl td,.tbl th{padding:5pt 8pt;font-size:9pt}
+  aside.mn{float:none;width:auto;margin:8pt 0;color:#444;border-color:#bbb;border-left:2px solid #bbb;padding:4pt 0 4pt 10pt}
+  mjx-container[jax="SVG"][display="true"]{break-inside:avoid;margin:10pt 0 !important}
+  a[href^="http"]::after{content:" (" attr(href) ")";font-size:8pt;color:#555;word-break:break-all}
+  @page{
+    size:A4;
+    margin:1.6cm 1.6cm 1.9cm;
+    @bottom-center{content:counter(page);font-family:Menlo,monospace;font-size:9pt;color:#555}
+  }
+  /* 每章命名页：页眉随章变化（Chrome/Edge 支持 named pages） */
+__PRINT_PAGES__
+}
+</style>
+</head>
+<body>
+<div class="topbar"></div>
+
+<!-- ================= 封面 ================= -->
+<header class="cover" id="top">
+  <div class="kicker">学大模型必备数学 · 按原文目录重写 · 16 章</div>
+  <h1>学大模型需要的<br>数学背景知识手册</h1>
+  <p class="sub">从线性代数一路排到 Transformer 的数学——每一块都贴着大模型的真实位置讲。</p>
+  <p class="rew-note"><strong>说明</strong>：本手册依据一篇公众号文章给出的 16 章目录<strong>重新撰写</strong>，章名与副标题照录原目录（各章标注「据原文目录」），正文为本书作者所写。它不是、也不声称是原文作者的那份 PDF。</p>
+  <dl class="spec">
+    <div><dt>对象 / OBJECT</dt><dd>重写的数学手册<br><span class="plain">16 章 · 工程读者向</span></dd></div>
+    <div><dt>目录来源 / TOC</dt><dd>公众号文章目录图<br><span class="plain">「AI智能研究站」2026.10.30</span></dd></div>
+    <div><dt>篇幅 / LENGTH</dt><dd id="spec-pages">约 100 页<br><span class="plain">打印 A4 页数见交付说明</span></dd></div>
+    <div><dt>公式 / MATH</dt><dd>MathJax 本地渲染<br><span class="plain">离线 · 关键结论带编号</span></dd></div>
+    <div><dt>性质 / NATURE</dt><dd>重写 · 非原件<br><span class="plain">通用数学知识 + 目录解读</span></dd></div>
+    <div><dt>日期 / DATE</dt><dd>2026.11.06<br><span class="plain">单文件 · 可打印成书</span></dd></div>
+  </dl>
+</header>
+
+<div class="layout">
+  <!-- ================= 侧边导航 ================= -->
+  <nav class="sidenav" aria-label="手册目录">
+    <div class="nav-title">目录 · CONTENTS</div>
+    <ol>
+      <li><a href="#top" data-nav="top"><span class="n">◦</span>封面</a></li>
+      <li><a href="#catalog" data-nav="catalog"><span class="n">=</span>总目录</a></li>
+      __NAV__
+    </ol>
+    <div class="tools">
+      <button onclick="window.print()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v7H6z"/></svg>打印成书</button>
+      <div class="theme-switch">
+        <label>版式主题</label>
+        <button onclick="setTheme('academic')">学术严谨</button>
+        <button onclick="setTheme('textbook')">现代教科书</button>
+        <button onclick="setTheme('minimal')">极简工具书</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="content">
+    <!-- ================= 总目录 ================= -->
+    <section class="masthead-sec" id="catalog">
+      <div class="sec-label">总目录 · 16 章</div>
+      <h2>目录</h2>
+      <p class="lede">章名与副标题照录原文目录图（「据原文目录」）；点击任意章进入正文。章内小节用各章开头的目录跳转。</p>
+      <div class="toc-list">__TOC_ROWS__</div>
+    </section>
+
+    <!-- ================= 正文 16 章 ================= -->
+__BODY__
+  </main>
+</div>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span>《学大模型需要的数学背景知识手册》<br>按 16 章目录重写 · 通用数学知识 + 目录解读</span>
+    <span>目录来源：公众号「AI智能研究站」2026.10.30 文章目录图<br>本手册为重写版，非原作者 PDF</span>
+    <span>版式：瑞士网格 / 书页化打印<br>MathJax 本地渲染 · 离线可用 · 2026.11.06</span>
+  </div>
+</footer>
+
+<!-- MathJax 本地化 -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\\(','\\)']],
+    displayMath: [['\\[','\\]']],
+    tags: 'none',
+    packages: {'[+]': ['ams','boldsymbol','mathtools']}
+  },
+  svg: { fontCache: 'global', scale: 1.0 },
+  options: { enableMenu: false }
+};
+</script>
+<script src="vendor/tex-svg-full.js" id="MathJax-script"></script>
+
+<script>
+/* 主题切换 */
+function setTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  try{ localStorage.setItem('handbook-theme', t); }catch(e){}
+}
+(function(){
+  try{ var t=localStorage.getItem('handbook-theme'); if(t) setTheme(t); }catch(e){}
+})();
+
+/* 滚动监听：侧边导航高亮 */
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('.sidenav a[href^="#"]'));
+  if(!('IntersectionObserver' in window)) return;
+  var map = {};
+  links.forEach(function(a){ map[a.getAttribute('href').slice(1)] = a; });
+  var targets = Object.keys(map).map(function(id){ return document.getElementById(id); }).filter(Boolean);
+  var obs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        links.forEach(function(a){ a.classList.remove('active'); });
+        var a = map[e.target.id]; if(a){ a.classList.add('active'); }
+      }
+    });
+  }, { rootMargin: '-15% 0px -75% 0px' });
+  targets.forEach(function(t){ obs.observe(t); });
+})();
+</script>
+</body>
+</html>

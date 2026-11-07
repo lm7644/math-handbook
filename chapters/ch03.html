@@ -1,0 +1,165 @@
+<section class="chapter" id="ch03" data-num="03">
+  <header class="ch-open">
+    <p class="ch-kicker">第三章 · 据原文目录</p>
+    <h2 class="ch-title">概率论与统计</h2>
+    <p class="ch-sub">分布、期望、贝叶斯，不确定性怎么算</p>
+    <p class="ch-lede">语言模型的输出是概率分布，训练是极大似然，生成是采样。本章把这条链上的数学补齐：条件概率与贝叶斯定理、AI 里天天见的三个分布、期望与方差，再落到极大似然估计和温度采样。学完你能自己推一遍「训练 = 拟合分布、推理 = 从分布抽样」这句话。</p>
+  </header>
+  <nav class="ch-toc" aria-label="章内目录">
+    <a href="#ch03-s1">3.1 概率三公理、条件概率与独立性</a>
+    <a href="#ch03-s2">3.2 随机变量：离散与连续</a>
+    <a href="#ch03-s3">3.3 三个要熟的分布</a>
+    <a href="#ch03-s4">3.4 期望、方差、协方差</a>
+    <a href="#ch03-s5">3.5 贝叶斯定理</a>
+    <a href="#ch03-s6">3.6 极大似然估计</a>
+    <a href="#ch03-s7">3.7 采样与蒙特卡洛</a>
+    <a href="#ch03-ai">3.8 在 AI 中的位置</a>
+  </nav>
+
+  <h3 id="ch03-s1"><span class="h3-num">3.1</span> 概率三公理、条件概率与独立性</h3>
+  <p>概率论的全部规则可以由三条公理推出。知道这件事的意义不在于背公理，而在于：后面每个公式（条件概率、贝叶斯、期望的线性性）都有共同的根，记混了可以重新推。</p>
+  <div class="def"><span class="box-tag">定义 3.1</span><p>设 \(\Omega\) 为样本空间（所有可能结果的集合），对其中任意事件 \(A\) 指定一个实数 \(P(A)\)。若它满足非负性、规范性、可列可加性，就称 \(P\) 为概率：</p>
+  \[ P(A)\ge 0,\qquad P(\Omega)=1,\qquad A_i\cap A_j=\varnothing\ (i\ne j)\ \Longrightarrow\ P\!\left(\bigcup_i A_i\right)=\sum_i P(A_i) \]
+  <p>第三条说：互不相交的事件，其并集的概率等于各自概率相加（可列个也成立）。</p></div>
+  <div class="def"><span class="box-tag">定义 3.2</span><p>在已知事件 \(B\) 发生的条件下，事件 \(A\) 的<span class="kt">条件概率</span>（conditional probability）定义为</p>
+  \[ P(A\mid B)=\dfrac{P(A\cap B)}{P(B)},\qquad P(B)&gt;0 \tag{3.1} \]
+  <p>把式 (3.1) 变形得到乘法法则 \(P(A\cap B)=P(A\mid B)\,P(B)\)。对一串随机变量反复用乘法法则，得到链式法则：</p>
+  \[ P(x_1,x_2,\dots,x_T)=\prod_{t=1}^{T} P\!\left(x_t \mid x_1,\dots,x_{t-1}\right) \tag{3.2} \]
+  <p>式 (3.2) 就是自回归语言模型的定义式：GPT 类模型不为整句建模，而是逐个建模条件概率 \(P(x_t\mid x_{&lt;t})\)，生成时从左到右一个个 token 往外接。</p></div>
+  <aside class="mn">读 \(P(A\mid B)\) 时，竖线右边是「已发生的事实」，方向就是全部信息。\(P(A\mid B)\) 与 \(P(B\mid A)\) 一般毫无关系。</aside>
+  <p>若 \(P(A\cap B)=P(A)\,P(B)\)，称 \(A\) 与 \(B\) <span class="kt">独立</span>（independent），等价于 \(P(A\mid B)=P(A)\)：知道 \(B\) 不改变对 \(A\) 的判断。注意自然语言里相邻 token 强烈不独立（「深圳」之后接「市」的概率飙升），所以语言模型用链式法则 (3.2) 老实分解，而不是假设各词独立。最后一个常用工具是<span class="kt">全概率公式</span>（law of total probability）：若 \(A_i\) 把样本空间切成不重不漏的若干块，则</p>
+  \[ P(B)=\sum_i P(B\mid A_i)\,P(A_i) \]
+  <p>它将在 §3.5 的例题里负责把分母算出来。</p>
+
+  <h3 id="ch03-s2"><span class="h3-num">3.2</span> 随机变量：离散与连续</h3>
+  <div class="def"><span class="box-tag">定义 3.3</span><p><span class="kt">随机变量</span>（random variable）是把试验结果映射成数的函数，记作大写字母 \(X\)。分离散与连续两种：</p>
+  <p>离散情形用<span class="kt">概率质量函数</span>（PMF）\(p(x)=P(X=x)\) 描述，满足</p>
+  \[ p(x)\ge 0,\qquad \sum_x p(x)=1 \]
+  <p>连续情形用<span class="kt">概率密度函数</span>（PDF）\(f(x)\) 描述，满足</p>
+  \[ f(x)\ge 0,\qquad \int_{-\infty}^{\infty} f(x)\,dx=1,\qquad P(a\le X\le b)=\int_a^b f(x)\,dx \]
+  <p>两者都有累积分布函数 \(F(x)=P(X\le x)\)。</p></div>
+  <aside class="mn">密度不是概率：连续变量的密度 \(f(x)\) 可以大于 1，单点概率恒为 0，只有区间积分才是概率。别把 \(f(x)\) 当 \(P(X=x)\) 用。</aside>
+  <p>AI 里两种都常见：词表上的下一个 token 是离散变量（PMF），权重初始化采的噪声、扩散模型加的噪是连续变量（PDF）。</p>
+
+  <h3 id="ch03-s3"><span class="h3-num">3.3</span> 三个要熟的分布</h3>
+  <div class="def"><span class="box-tag">定义 3.4</span><p><span class="kt">伯努利分布</span>（Bernoulli distribution）：\(X\) 只取 0 或 1，\(P(X=1)=p\)，可统一写成</p>
+  \[ P(X=x)=p^{x}(1-p)^{1-x},\qquad x\in\{0,1\} \tag{3.3} \]
+  <p>由期望与方差的定义可直接算出 \(\mathbb{E}[X]=p\)，\(\operatorname{Var}(X)=p(1-p)\)：方差在 \(p=0.5\) 处最大——越接近「五五开」的事件越难预测。</p>
+  <p><strong>在 AI 里出现在哪</strong>：RLHF 里一次偏好比较的结果（回答 A 是否优于 B）、训练时 dropout 每个神经元的开关、二值化的奖励信号，都是伯努利变量。</p></div>
+  <div class="def"><span class="box-tag">定义 3.5</span><p><span class="kt">类别分布</span>（categorical distribution）：伯努利的多取值推广。\(X\) 在 \(V\) 个类别里取一个，参数是向量 \(p=(p_1,\dots,p_V)\)：</p>
+  \[ P(X=k)=p_k,\qquad p_k\ge 0,\qquad \sum_{k=1}^{V} p_k=1 \tag{3.4} \]
+  <p><strong>在 AI 里出现在哪</strong>：语言模型每个位置的输出就是词表上的一个类别分布——logits 经 \(\operatorname{softmax}\) 归一化后得到 \(p_1,\dots,p_V\)（\(V\) 通常 3 万到 25 万），next-token 预测就是式 (3.4)。one-hot 标签可看作全部质量压在一个类别上的退化类别分布。</p></div>
+  <div class="def"><span class="box-tag">定义 3.6</span><p><span class="kt">高斯分布</span>（Gaussian distribution，正态分布）：连续分布，参数为均值 \(\mu\) 与方差 \(\sigma^{2}\)，密度为</p>
+  \[ f(x)=\dfrac{1}{\sqrt{2\pi}\,\sigma}\exp\!\left(-\dfrac{(x-\mu)^{2}}{2\sigma^{2}}\right) \tag{3.5} \]
+  <p>任意高斯都可以<span class="kt">标准化</span>（standardize）成标准正态：</p>
+  \[ Z=\dfrac{X-\mu}{\sigma}\sim\mathcal{N}(0,1) \tag{3.6} \]
+  <p>例如 \(X\) 服从 \(\mu=1,\sigma=0.5\) 的高斯，则 \(x=2.5\) 对应 \(z=(2.5-1)/0.5=3\)，已落在 99.7% 区间的边缘。\(\mu\) 定位置，\(\sigma\) 定宽窄。</p>
+  <p><strong>在 AI 里出现在哪</strong>：神经网络权重初始化从 \(\mathcal{N}(0,\sigma^{2})\) 采样（\(\sigma\) 按层宽缩放）；扩散模型每步往数据里加高斯噪声；VAE 的隐变量先验取标准正态。可以说高斯是「默认噪声」。</p></div>
+  <aside class="mn">记住 68–95–99.7：标准化后 \(|z|\) 落在 1、2、3 倍标准差内的概率分别约 68%、95%、99.7%。\(|z|&gt;3\) 已经很罕见。</aside>
+
+  <h3 id="ch03-s4"><span class="h3-num">3.4</span> 期望、方差、协方差</h3>
+  <div class="def"><span class="box-tag">定义 3.7</span><p><span class="kt">期望</span>（expectation）是随机变量的加权平均，权重为概率：</p>
+  \[ \mathbb{E}[X]=\sum_x x\,p(x)\qquad\text{（离散）};\qquad \mathbb{E}[X]=\int x\,f(x)\,dx\qquad\text{（连续）} \tag{3.7} \]
+  <p>最重要的性质是<span class="kt">线性性</span>（linearity），对任意常数 \(a,b,c\) 与任意随机变量成立，<strong>不要求独立</strong>：</p>
+  \[ \mathbb{E}[aX+bY+c]=a\,\mathbb{E}[X]+b\,\mathbb{E}[Y]+c \]
+  <p>batch 平均损失就是线性性的直接应用：平均的期望等于期望的平均。</p></div>
+  <div class="def"><span class="box-tag">定义 3.8</span><p><span class="kt">方差</span>（variance）度量围绕期望的波动，<span class="kt">协方差</span>（covariance）度量两个变量的同向变化程度：</p>
+  \[ \operatorname{Var}(X)=\mathbb{E}\!\left[(X-\mathbb{E}[X])^{2}\right]=\mathbb{E}[X^{2}]-(\mathbb{E}[X])^{2} \tag{3.8} \]
+  \[ \operatorname{Cov}(X,Y)=\mathbb{E}\!\left[(X-\mathbb{E}[X])(Y-\mathbb{E}[Y])\right]=\mathbb{E}[XY]-\mathbb{E}[X]\,\mathbb{E}[Y] \tag{3.9} \]
+  <p>式 (3.8)、式 (3.9) 的右半是计算用形式：先算一阶、二阶矩，再做减法。协方差为正表示同涨同跌，为负表示此消彼长，独立一定推出协方差为 0；反之不然——协方差为 0 推不出独立，严格反例：\(X\sim U(-1,1)\)、\(Y=X^{2}\)，则 \(\operatorname{Cov}(X,Y)=\mathbb{E}[X^{3}]-\mathbb{E}[X]\,\mathbb{E}[X^{2}]=0-0=0\)，但 \(Y\) 完全被 \(X\) 决定。例 3.2 则是协方差接近零却仍带依赖的温和情形。</p></div>
+  <p>方差的两条运算性质后面会反复用到（\(a,b\) 为常数）：</p>
+  \[ \operatorname{Var}(aX+b)=a^{2}\operatorname{Var}(X),\qquad \operatorname{Var}(X+Y)=\operatorname{Var}(X)+\operatorname{Var}(Y)+2\operatorname{Cov}(X,Y) \]
+  <p>第一条：常数倍放大方差按平方放大（所以把回报放大 10 倍，波动放大 100 倍）。第二条：只有当 \(\operatorname{Cov}(X,Y)=0\)（比如独立）时方差才可加——RL 里把多条轨迹的回报方差叠加前，要先想清楚各轨迹是否相关。</p>
+  <div class="example"><span class="box-tag">例 3.1</span><p><strong>题目</strong>　某代码生成模型的单次输出按质量给奖励 \(X\)：完全正确 \(x=2\)（概率 0.2）、部分正确 \(x=1\)（概率 0.5）、错误 \(x=0\)（概率 0.3）。求平均奖励与奖励的方差。</p>
+  <p><strong>解</strong>　（1）期望：\(\mathbb{E}[X]=2\times0.2+1\times0.5+0\times0.3=0.4+0.5=0.9\)。（2）二阶矩：\(\mathbb{E}[X^{2}]=2^{2}\times0.2+1^{2}\times0.5+0^{2}\times0.3=0.8+0.5=1.3\)。（3）由式 (3.8)：\(\operatorname{Var}(X)=\mathbb{E}[X^{2}]-(\mathbb{E}[X])^{2}=1.3-0.9^{2}=1.3-0.81=0.49\)，标准差为 \(\sqrt{0.49}=0.7\)。平均奖励 0.9 之外，单次结果的标准差高达 0.7——RL 训练里回报方差大，梯度估计就噪，这就是第十一章要处理的问题。</p></div>
+  <div class="example"><span class="box-tag">例 3.2</span><p><strong>题目</strong>　两个二值指示变量：\(X=1\) 表示「模型答对题 A」，\(Y=1\) 表示「模型答对题 B」。联合分布为 \(P(0,0)=0.1,\ P(0,1)=0.2,\ P(1,0)=0.3,\ P(1,1)=0.4\)。求 \(\operatorname{Cov}(X,Y)\)。</p>
+  <table class="tbl"><thead><tr><th></th><th>\(Y=0\)</th><th>\(Y=1\)</th><th>行和</th></tr></thead><tbody>
+  <tr><td>\(X=0\)</td><td>0.1</td><td>0.2</td><td>0.3</td></tr>
+  <tr><td>\(X=1\)</td><td>0.3</td><td>0.4</td><td>0.7</td></tr>
+  <tr><td>列和</td><td>0.4</td><td>0.6</td><td>1</td></tr></tbody></table>
+  <p><strong>解</strong>　边缘期望 \(\mathbb{E}[X]=0.7\)，\(\mathbb{E}[Y]=0.6\)。\(XY=1\) 仅当 \(X=Y=1\)，故 \(\mathbb{E}[XY]=0.4\)。由式 (3.9)：\(\operatorname{Cov}(X,Y)=0.4-0.7\times0.6=0.4-0.42=-0.02\)。协方差几乎为 0，但二者并不独立——\(P(0,0)=0.1\ne 0.3\times0.4=0.12\)。「协方差为 0」只排除线性相关，不排除其他形式的依赖。</p></div>
+
+  <h3 id="ch03-s5"><span class="h3-num">3.5</span> 贝叶斯定理</h3>
+  <p>对 \(P(A\cap B)\) 用乘法法则写两遍：\(P(A\mid B)P(B)=P(B\mid A)P(A)\)，移项即得。</p>
+  <div class="thm"><span class="box-tag">结论 3.1</span><p><span class="kt">贝叶斯定理</span>（Bayes' theorem）：</p>
+  \[ P(A\mid B)=\dfrac{P(B\mid A)\,P(A)}{P(B)} \tag{3.10} \]
+  <p>读法：\(P(A)\) 是看到证据前的<span class="kt">先验</span>（prior），\(P(B\mid A)\) 是<span class="kt">似然</span>（likelihood，假设 \(A\) 成立时证据出现的可能性），\(P(A\mid B)\) 是看到证据后的<span class="kt">后验</span>（posterior）。分母 \(P(B)\) 用全概率公式展开。贝叶斯定理就是把「原因推结果」反转为「结果推原因」。后验正比于「似然 × 先验」。</p></div>
+  <div class="example"><span class="box-tag">例 3.3</span><p><strong>题目</strong>（医学检测）某病患病率 0.1%。检测的敏感度 99%（有病者检出为阳性的概率），特异度 95%（无病者判为阴性的概率）。某人检出阳性，他真患病的概率是多少？</p>
+  <p><strong>解</strong>　设 \(D\) 为患病，\(+\) 为阳性。已知 \(P(D)=0.001\)，\(P(+\mid D)=0.99\)，假阳性率 \(P(+\mid \neg D)=1-0.95=0.05\)。（1）分子：\(P(+\mid D)P(D)=0.99\times0.001=0.00099\)。（2）分母用全概率：\(P(+)=0.99\times0.001+0.05\times0.999=0.00099+0.04995=0.05094\)。（3）由式 (3.10)：\(P(D\mid +)=0.00099/0.05094\approx0.0194\)，即约 1.9%。检测如此「准」，阳性里 98% 仍是假阳性——因为<span class="kt">基础率</span>（base rate，即先验）太低，假阳性的绝对人数压过了真患者。</p></div>
+  <aside class="mn">先验很小时，再强的证据也要先和基础率打一架。算后验先问：这件事本来有多罕见？</aside>
+  <div class="warn"><span class="box-tag">常见误用</span><p>把 \(P(A\mid B)\) 与 \(P(B\mid A)\) 搞反。例 3.3 里 \(P(+\mid D)=99\%\) 是「有病者检出阳性的概率」，而医生关心的是 \(P(D\mid +)\approx1.9\%\)，两者差 50 倍。工程里的同款错误：把「模型在作弊样本上得高分的概率」当成「得了高分所以模型在作弊的概率」。改法：每次写下条件概率时先念一遍竖线右边是什么，再用式 (3.10) 换算。</p></div>
+  <p>贝叶斯视角对 LLM 评估的意义一句话：评测结论是后验，它同时取决于证据强度（题量、区分度）与先验（该能力在同类模型中的基础率），小样本上的惊艳表现先按低基础率打折再信。</p>
+
+  <h3 id="ch03-s6"><span class="h3-num">3.6</span> 极大似然估计</h3>
+  <div class="def"><span class="box-tag">定义 3.9</span><p>设数据 \(x_1,\dots,x_N\) 独立同分布地来自含参数 \(\theta\) 的分布 \(p_\theta\)。<span class="kt">极大似然估计</span>（maximum likelihood estimation，MLE）选让已观测数据出现概率最大的参数：</p>
+  \[ \hat{\theta}_{\mathrm{MLE}}=\arg\max_{\theta}\ \prod_{i=1}^{N}p_\theta(x_i)=\arg\max_{\theta}\ \sum_{i=1}^{N}\ln p_\theta(x_i) \tag{3.11} \]
+  <p>等号右边是<span class="kt">对数似然</span>（log-likelihood）。取对数不改变 \(\arg\max\) 的位置（\(\ln\) 单调递增），却把连乘变连加：数值上避免成千上万个小数相乘下溢成 0，计算上求导方便。</p></div>
+  <div class="example"><span class="box-tag">例 3.4</span><p><strong>题目</strong>　一枚不均匀的硬币抛 10 次，7 正 3 反。用 MLE 估计正面概率 \(p\)。</p>
+  <p><strong>解</strong>　（1）似然：\(L(p)=p^{7}(1-p)^{3}\)。（2）对数似然：</p>
+  \[ \ell(p)=\ln L(p)=7\ln p+3\ln(1-p) \tag{3.12} \]
+  <p>（3）对式 (3.12) 求导并令其为 0：\(\ell'(p)=\dfrac{7}{p}-\dfrac{3}{1-p}=0\)，即 \(7(1-p)=3p\)，解得 \(\hat{p}=0.7\)。（4）验证是最大值：\(\ell''(p)=-7/p^{2}-3/(1-p)^{2}&lt;0\)，函数上凸，驻点即最大点。结论：伯努利分布的 MLE 就是样本频率 \(7/10=0.7\)——极大似然在把「数频率」这件事合法化。也要注意它的边界：若 10 次全正，MLE 会给出 \(\hat{p}=1\)，对新数据过度自信。MLE 把样本当成世界的全部，数据少时会过拟合，这是正则化与平滑技术的存在理由。</p></div>
+  <div class="thm"><span class="box-tag">结论 3.2</span><p>最小化交叉熵 = 类别分布的 MLE。语言模型对第 \(i\) 个目标 token \(y_i\) 输出词表上的分布 \(q_\theta\)，训练损失是</p>
+  \[ \mathcal{L}(\theta)=-\sum_{i=1}^{N}\ln q_\theta(y_i) \tag{3.13} \]
+  <p>与式 (3.11) 对比：这正是类别分布对数似然取负。即「预训练最小化交叉熵损失」与「对语料做极大似然估计」是同一件事的两种说法。完整推导（含 one-hot 标签与经验分布）见第四章式 (4.5)–(4.7)。</p></div>
+
+  <h3 id="ch03-s7"><span class="h3-num">3.7</span> 采样与蒙特卡洛</h3>
+  <p>训练好的语言模型给出的是分布，要得到文字必须<span class="kt">采样</span>（sampling）。<span class="kt">祖先采样</span>（ancestral sampling）按链式法则 (3.2) 逐层抽：先抽 \(x_1\sim P(x_1)\)，再抽 \(x_2\sim P(x_2\mid x_1)\)，依次下去——语言模型逐 token 生成就是在词表上做祖先采样，每一步从式 (3.4) 的类别分布里抽一个类别。</p>
+  <p><span class="kt">温度</span>（temperature）\(T&gt;0\) 在采样前改造分布的形状：</p>
+  \[ p_i^{(T)}=\dfrac{p_i^{1/T}}{\displaystyle\sum_j p_j^{1/T}} \tag{3.14} \]
+  <p>若 \(p\) 来自 logits \(z\) 的 \(\operatorname{softmax}\)，式 (3.14) 等价于直接对 \(z/T\) 做 \(\operatorname{softmax}\)。\(T&lt;1\) 时指数 \(1/T&gt;1\)，大概率项被放大、分布变尖锐；\(T&gt;1\) 时差距被压缩、分布变平坦；\(T\to0\) 退化为 argmax（总选最大者），\(T\to\infty\) 趋于均匀分布。用 logits \(z=(2.0,\,1.0,\,0.1)\) 实际算一遍：</p>
+  <table class="tbl"><thead><tr><th>温度</th><th>候选 1（logit 2.0）</th><th>候选 2（logit 1.0）</th><th>候选 3（logit 0.1）</th><th>形状</th></tr></thead><tbody>
+  <tr><td>\(T=0.5\)</td><td>0.8638</td><td>0.1169</td><td>0.0193</td><td>尖锐：86% 押在候选 1</td></tr>
+  <tr><td>\(T=1\)</td><td>0.6590</td><td>0.2424</td><td>0.0986</td><td>原始 softmax 输出</td></tr>
+  <tr><td>\(T=2\)</td><td>0.5017</td><td>0.3043</td><td>0.1940</td><td>平坦：向均匀靠拢</td></tr>
+  </tbody></table>
+  <figure class="fig"><svg viewBox="0 0 520 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="不同温度下的采样分布柱状图">
+    <line x1="45" y1="20" x2="45" y2="205" stroke="var(--line)" stroke-width="1.2"/>
+    <line x1="45" y1="205" x2="505" y2="205" stroke="var(--line)" stroke-width="1.2"/>
+    <line x1="40" y1="20" x2="45" y2="20" stroke="var(--line)" stroke-width="1.2"/>
+    <line x1="40" y1="112.5" x2="45" y2="112.5" stroke="var(--line)" stroke-width="1.2"/>
+    <text x="18" y="24" fill="var(--ink)" font-size="11">1.0</text>
+    <text x="18" y="116.5" fill="var(--ink)" font-size="11">0.5</text>
+    <text x="12" y="45" fill="var(--ink)" font-size="11">概率</text>
+    <rect x="80" y="45.2" width="30" height="159.8" fill="var(--accent)"/>
+    <rect x="118" y="183.4" width="30" height="21.6" fill="var(--accent2)"/>
+    <rect x="156" y="201.4" width="30" height="3.6" fill="var(--ink)"/>
+    <text x="106" y="222" fill="var(--ink)" font-size="12">T = 0.5</text>
+    <rect x="230" y="83.1" width="30" height="121.9" fill="var(--accent)"/>
+    <rect x="268" y="160.2" width="30" height="44.8" fill="var(--accent2)"/>
+    <rect x="306" y="186.8" width="30" height="18.2" fill="var(--ink)"/>
+    <text x="264" y="222" fill="var(--ink)" font-size="12">T = 1</text>
+    <rect x="380" y="112.2" width="30" height="92.8" fill="var(--accent)"/>
+    <rect x="418" y="148.7" width="30" height="56.3" fill="var(--accent2)"/>
+    <rect x="456" y="169.1" width="30" height="35.9" fill="var(--ink)"/>
+    <text x="414" y="222" fill="var(--ink)" font-size="12">T = 2</text>
+    <rect x="330" y="28" width="10" height="10" fill="var(--accent)"/>
+    <text x="346" y="37" fill="var(--ink)" font-size="11">候选 1（logit 2.0）</text>
+    <rect x="330" y="46" width="10" height="10" fill="var(--accent2)"/>
+    <text x="346" y="55" fill="var(--ink)" font-size="11">候选 2（logit 1.0）</text>
+    <rect x="330" y="64" width="10" height="10" fill="var(--ink)"/>
+    <text x="346" y="73" fill="var(--ink)" font-size="11">候选 3（logit 0.1）</text>
+  </svg><figcaption>图 3.1　同一组 logits (2.0, 1.0, 0.1) 在 \(T=0.5/1/2\) 下的采样分布：温度越低越尖锐，越高越接近均匀。</figcaption></figure>
+  <aside class="mn">温度 \(T\to0\) 时 softmax 变 argmax；很多框架里 \(T=0\) 就当作「贪心解码」处理。</aside>
+  <p>工程实现常在温度之上再截断：top-k 只保留概率最高的 \(k\) 个候选，top-p（核采样）保留累计概率刚超过 \(p\) 的最小候选集，截掉后重新归一化再按式 (3.14) 采样。它们不改变本节讨论的形状机制，只是把长尾候选提前清零。</p>
+  <div class="warn"><span class="box-tag">常见误用</span><p>认为「温度小于 1 更随机」。方向恰好相反：由式 (3.14)，\(T&lt;1\) 让分布更尖锐、输出更确定（更保守、更重复），\(T&gt;1\) 才更随机（更多样也更易跑题）。调不出想要的效果时，先检查调温方向是不是拧反了。</p></div>
+  <div class="def"><span class="box-tag">定义 3.10</span><p><span class="kt">蒙特卡洛估计</span>（Monte Carlo estimation）用样本平均逼近期望：从 \(p\) 独立采样 \(x_1,\dots,x_N\)，则</p>
+  \[ \mathbb{E}[f(X)]\approx\dfrac{1}{N}\sum_{i=1}^{N} f(x_i) \tag{3.15} \]
+  <p>估计误差的标准差按 \(O(1/\sqrt{N})\) 缩小：样本量翻 4 倍，误差减半。</p></div>
+  <div class="example"><span class="box-tag">例 3.5</span><p><strong>题目</strong>　设 \(X\) 服从 \([0,1]\) 上的均匀分布，用蒙特卡洛估计 \(\mathbb{E}[X^{2}]\)，并与真值比较。</p>
+  <p><strong>解</strong>　（1）真值可解析求得：\(\mathbb{E}[X^{2}]=\int_0^1 x^{2}\,dx=1/3\approx0.3333\)。（2）取 \(N=10000\) 个均匀样本代入式 (3.15)（Python 复现：<code>random.seed(0)</code> 后求 <code>random.random()**2</code> 的均值），得 \(0.3335\)。（3）误差约 \(1.4\times10^{-4}\)，远小于 \(1/\sqrt{N}=0.01\) 的典型量级。期望算不出来（积分难求、分布复杂）时，采样平均是最通用的退路。</p></div>
+  <p>强化学习里策略的期望回报 \(\mathbb{E}_{\tau\sim\pi_\theta}[R(\tau)]\) 没有解析解，全靠式 (3.15) 用多条轨迹采样估计，这是第十一章策略梯度方法的出发点。</p>
+
+  <h3 id="ch03-ai"><span class="h3-num">3.8</span> 在 AI 中的位置</h3>
+  <table class="tbl"><thead><tr><th>本章结论</th><th>用在哪个具体组件 / 机制</th><th>缺了会怎样</th></tr></thead><tbody>
+  <tr><td>链式法则 (3.2)</td><td>自回归语言模型的定义与逐 token 生成</td><td>无法把整句概率拆成可建模的条件概率，GPT 式架构失去依据</td></tr>
+  <tr><td>类别分布 (3.4)</td><td>softmax 输出头、next-token 分布</td><td>把 logits 当概率直接用，忘记归一化，采样结果全错</td></tr>
+  <tr><td>高斯与标准化 (3.5)(3.6)</td><td>权重初始化、扩散模型加噪、VAE 先验</td><td>初始化量级错误，前向激活值爆炸或消失</td></tr>
+  <tr><td>期望线性性 (3.7)</td><td>batch 平均损失、RL 期望回报的分解</td><td>把期望当非线性算子乱拆，推错梯度估计式</td></tr>
+  <tr><td>方差、协方差 (3.8)(3.9)</td><td>RL 回报波动分析、特征去相关</td><td>回报方差大导致训练抖动时，看不出病因</td></tr>
+  <tr><td>贝叶斯定理 (3.10)</td><td>评估结论解读、基础率意识</td><td>把 \(P(+\mid D)\) 当 \(P(D\mid +)\)，小样本上严重高估模型能力</td></tr>
+  <tr><td>MLE (3.11) 与结论 3.2</td><td>预训练目标 = next-token 对数似然</td><td>不知道交叉熵损失从哪来，改损失时无从下手</td></tr>
+  <tr><td>温度 (3.14) 与祖先采样</td><td>推理期解码策略（贪心 / 采样 / top-p 配合）</td><td>调参方向搞反，把模型越调越胡说或越调越复读</td></tr>
+  <tr><td>蒙特卡洛 (3.15)</td><td>RL 回报估计、评估时多次采样取平均（第十一章）</td><td>样本量不足时把噪声当结论，误判策略优劣</td></tr>
+  </tbody></table>
+  <p>一句话收束：语言模型把「说话」变成对下一个 token 的类别分布建模；训练是用式 (3.11) 做极大似然（等价于最小化交叉熵，第四章把这件事推到底）；推理是按式 (3.2) 从分布里采样，温度 (3.14) 决定采样时有多大胆。</p>
+</section>

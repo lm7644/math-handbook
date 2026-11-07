@@ -1,0 +1,173 @@
+<section class="chapter" id="tb11" data-num="11">
+  <header class="ch-open">
+    <p class="ch-kicker">第十一章 · 据原文目录 · 教科书版</p>
+    <h2 class="ch-title">强化学习与对齐的数学</h2>
+    <p class="ch-sub">PPO、DPO、GRPO 到底差在哪</p>
+    <p class="ch-lede">预训练模型是个「博览群书但没家教」的孩子：什么都会接着说，就是不懂得好好回答问题。让它变「听话」靠的不是继续喂书，而是奖励与惩罚——这就是强化学习。本章不假设你学过任何 RL，从「训狗给零食」讲起，一步步推出策略梯度定理（含著名的对数导数技巧），再把工业界三个主流对齐算法 PPO、DPO、GRPO 逐个拆开：每个先讲直觉，再给公式，再用真数字算一遍。学完你能说清楚它们仨到底差在哪、什么时候用哪个。</p>
+    <div class="ch-map"><span class="map-tag">本章路线</span>直觉（训狗） → RL 骨架 → 策略梯度推导 → PPO → RLHF 三段式 → DPO → GRPO → 对照 → 自测</div>
+  </header>
+  <nav class="ch-toc" aria-label="章内目录">
+    <a href="#tb11-s1">11.1 强化学习的最小骨架：从训狗到语言模型</a>
+    <a href="#tb11-s2">11.2 策略梯度定理：对数导数技巧与基线</a>
+    <a href="#tb11-s3">11.3 PPO：给更新拴根绳</a>
+    <a href="#tb11-s4">11.4 RLHF：三段式流水线与 KL 惩罚</a>
+    <a href="#tb11-s5">11.5 DPO：不训裁判，直接拿偏好对调教</a>
+    <a href="#tb11-s6">11.6 GRPO：同题采一组，组内互相比</a>
+    <a href="#tb11-s7">11.7 三者对照与常见坑</a>
+    <a href="#tb11-ai">11.8 在 AI 中的位置</a>
+  </nav>
+
+  <h3 id="tb11-s1"><span class="h3-num">11.1</span> 强化学习的最小骨架：从训狗到语言模型</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>强化学习就是<strong>训狗</strong>：狗做对动作，你立刻给一块零食；做错了，什么都不给（或者给个手势）。没有人一步步教它「先抬左腿再抬右腿」，它自己瞎试，试多了就发现「某些动作容易换来零食」，于是那些动作越做越多。强化学习只有三个要素：<strong>处境</strong>（狗看到主人举起手）、<strong>动作</strong>（狗坐下）、<strong>奖励</strong>（零食）。学习的全部目标就是：在各种处境下，多干容易换零食的事。跟监督学习的差别在哪？监督学习像老师逐题给标准答案，强化学习只告诉你「这次考得怎么样」，不告诉你「正确答案长什么样」——答案得自己试出来。</p></div>
+  <p>把训狗这套平移到大模型对齐上，每个词都有确切对应。模型看到 prompt（处境），一个词一个词地往外生成（动作），奖励模型给整段回答打个分（零食）：</p>
+  <table class="tbl"><thead><tr><th>RL 概念</th><th>训狗版</th><th>大模型对齐中的对应</th></tr></thead><tbody>
+  <tr><td>状态 \(s_t\)</td><td>主人举起手</td><td>prompt 加上已生成的前 \(t-1\) 个 token</td></tr>
+  <tr><td>动作 \(a_t\)</td><td>坐下 / 乱窜</td><td>从词表中选下一个 token</td></tr>
+  <tr><td>策略 \(\pi_\theta\)</td><td>狗的「习惯」</td><td>语言模型本身：softmax 给出的词表概率分布</td></tr>
+  <tr><td>轨迹 \(\tau\)</td><td>一整堂课的表现</td><td>一段完整回答 \((s_1,a_1,\dots,s_T,a_T)\)</td></tr>
+  <tr><td>奖励 \(r\)</td><td>零食</td><td>奖励模型的打分，通常只在回答结束时给一次</td></tr>
+  </tbody></table>
+  <div class="def"><span class="box-tag">定义 11.1</span><p>策略 \(\pi_\theta(a\mid s)\) 是在状态 \(s\) 下选动作 \(a\) 的概率分布，\(\theta\) 是模型的参数。一条轨迹的<span class="kt">回报</span>（return）是它收到奖励的总和 \(R(\tau)=\sum_{t=1}^{T}r_t\)。强化学习的优化目标是<span class="kt">期望回报</span>：</p>
+  \[ J(\theta)=\mathbb{E}_{\tau\sim\pi_\theta}\bigl[R(\tau)\bigr]=\mathbb{E}_{\tau\sim\pi_\theta}\Bigl[\sum_{t=1}^{T}r_t\Bigr] \tag{11.1} \]
+  <p>读法：「让按当前策略玩下去的期望总奖励最大」。请盯一眼期望的下标 \(\tau\sim\pi_\theta\)：轨迹是从<strong>当前策略自己</strong>里采出来的。这意味着 \(\theta\) 既决定目标函数的值，又决定数据从哪来——模型表现变了，接下来看到的数据也跟着变。这是 RL 和监督学习最根本的差别，也是 RL 训练容易不稳的根源。</p></div>
+  <p>式 (11.1) 没法直接算：所有可能的回答加起来是天文数字，期望只能靠「采若干条回答、求平均」来近似（蒙特卡洛，第三章）。但真正的麻烦在下一步：我们要对 \(\theta\) 求梯度才能优化，而「从分布里采样」这个动作本身不可导——就像你能称出苹果的重量，却不能对「挑苹果」这个动作求导。梯度从哪来？这正是下一节要解决的、也是全章最核心的一个问题。</p>
+
+  <h3 id="tb11-s2"><span class="h3-num">11.2</span> 策略梯度定理：对数导数技巧与基线</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>先想一个朴素方案：每生成一条回答，拿到奖励分；分高的回答，把里面每个词的出现概率调大一点；分低的，调小一点。「调大一点」的数学说法，就是对那些词的 log 概率求梯度、往增大方向走。这个朴素方案居然就是严格正确的——策略梯度定理证明，期望回报的梯度恰好等于「log 概率的梯度 × 奖励」的平均。妙处在于：梯度全部落在「已生成 token 的对数概率」上，<strong>采样动作本身被完全绕开了</strong>，根本不需要对它求导。让这件事成立的，是一个一行长的小技巧。</p></div>
+  <div class="derive"><span class="box-tag">推导 · 一步步来（对数导数技巧）</span><p>目标：从 \(J(\theta)=\mathbb{E}_{\tau\sim\pi_\theta}[R(\tau)]\) 推出一个「可以靠采样估计的梯度公式」。全程五步，每步交代理由。</p>
+  <p><strong>第 1 步，把期望写成加权和</strong>。离散情形下，期望就是「每种结果 × 它的概率」加起来：\(J(\theta)=\sum_\tau \pi_\theta(\tau)\,R(\tau)\)。这里 \(\pi_\theta(\tau)\) 是整条轨迹的概率（等于各步概率连乘）。</p>
+  <p><strong>第 2 步，直接求导，看看卡在哪</strong>。对 \(\theta\) 求导，求和号可以搬出去（导数是线性运算）：\(\nabla_\theta J=\sum_\tau \nabla_\theta\pi_\theta(\tau)\,R(\tau)\)。卡住了：右边是「梯度 × 数」的加权和，不再是「某个分布下的期望」，没法用采样近似——我们只会「按 \(\pi_\theta\) 采样求平均」，而这个式子外面没有 \(\pi_\theta\) 这个权重了。</p>
+  <p><strong>第 3 步，对数导数技巧，把 \(\pi_\theta\) 变回来</strong>。对任何含参分布 \(p_\theta\)，由链式法则 \((\ln f)'=f'/f\)，两边乘 \(f\) 得 \(f'=f\cdot(\ln f)'\)。写成向量形式：</p>
+  \[ \nabla_\theta\,p_\theta(x)=p_\theta(x)\,\nabla_\theta\log p_\theta(x),\qquad\text{即}\qquad \frac{\nabla_\theta p}{p}=\nabla_\theta\log p \tag{11.2} \]
+  <p>为什么这一步合法？只是链式法则倒着用，没有引入任何近似。为什么这一步有用？它把「裸梯度」\(\nabla_\theta p\) 表示成「概率本身 × log 概率的梯度」，恰好把丢掉的权重 \(p_\theta(x)\) 还了回来。</p>
+  <p><strong>第 4 步，代回去，期望复活</strong>。把式 (11.2) 用于 \(\pi_\theta(\tau)\)：\(\nabla_\theta J=\sum_\tau \pi_\theta(\tau)\,\nabla_\theta\log\pi_\theta(\tau)\,R(\tau)\)。现在每一项都有权重 \(\pi_\theta(\tau)\) 了，按期望的定义收回去：</p>
+  \[ \nabla_\theta J(\theta)=\mathbb{E}_{\tau\sim\pi_\theta}\bigl[\nabla_\theta\log\pi_\theta(\tau)\,R(\tau)\bigr] \tag{11.3} \]
+  <p>这就是<span class="kt">策略梯度定理</span>的核心形状。意义：只要会采样轨迹、会对 log 概率求导（普通的反向传播就会），就能估计期望回报的梯度——「采样不可导」的障碍被绕过。</p>
+  <p><strong>第 5 步，拆开轨迹的 log 概率</strong>。轨迹概率是各步连乘：\(\pi_\theta(\tau)=\prod_t \pi_\theta(a_t\mid s_t)\cdot(\text{环境转移概率})\)。取 log 变连加：\(\log\pi_\theta(\tau)=\sum_t\log\pi_\theta(a_t\mid s_t)+(\text{环境项})\)。环境转移（比如 prompt 是什么）不依赖 \(\theta\)，求导为 0，扔掉。代回式 (11.3) 得可用形式：</p>
+  \[ \nabla_\theta J(\theta)=\mathbb{E}\Bigl[\sum_{t=1}^{T}\nabla_\theta\log\pi_\theta(a_t\mid s_t)\,A_t\Bigr] \tag{11.4} \]
+  <p>其中 \(A_t\) 是该动作的<span class="kt">优势</span>（advantage）：这个动作比平均水平好多少。最简版本 <span class="kt">REINFORCE</span> 直接拿整条轨迹的回报 \(R(\tau)\) 当 \(A_t\)：采 \(N\) 条回答求平均，\(\nabla J\approx\frac{1}{N}\sum_i\sum_t\nabla_\theta\log\pi_\theta(a_t^{(i)}\mid s_t^{(i)})\,R(\tau^{(i)})\)。</p></div>
+  <p>式 (11.4) 解释了为什么 LLM 能做 RL：前向照常一个 token 一个 token 采样（不用求导），反向只对词表分布的 log 概率下手——与监督训练共用同一条反向传播管线，工程上完全可行。</p>
+  <p>但 REINFORCE 有个实际毛病：<strong>方差大</strong>。回报的绝对数值波动剧烈（第三章例 3.1 已经见过：平均奖励 0.9、标准差 0.7），导致梯度估计忽大忽小、训练抖动。修法优雅得惊人：从优势里减去<strong>任何不依赖动作的常数</strong> \(b\)（叫<span class="kt">基线</span>，baseline），期望纹丝不动：</p>
+  \[ \mathbb{E}_{a\sim\pi_\theta}\bigl[\nabla_\theta\log\pi_\theta(a\mid s)\cdot b\bigr]=b\,\nabla_\theta\sum_a\pi_\theta(a\mid s)=b\,\nabla_\theta 1=0 \tag{11.5} \]
+  <p>每一步的理由：\(b\) 不依赖动作，可以提到期望外面；期望里只剩 \(\nabla_\theta\log\pi\)，对它求期望等于 \(\nabla_\theta\sum_a\pi(a\mid s)\)（期望与求导换序）；概率加总是 1，常数的导数是 0。<strong>直觉</strong>：减去平均线，只看「比平均好多少」——好动作减完还是正，坏动作减完变成负，每个样本都给出方向一致的信号，方差实打实降下来，均值分毫不动。下面用真数字看一遍。</p>
+  <div class="example"><span class="box-tag">例 11.1 · 动手算（基线为什么降方差）</span><p><strong>题目</strong>　单个状态、两个动作：\(a_1\) 是好回答（回报 \(R=1\)），\(a_2\) 是坏回答（\(R=0\)）。当前策略 logits 为 \(\mathbf{z}=(0,0)\)，即 softmax 后 \(\pi=(0.5,0.5)\)。比较「无基线」与「基线 \(b=0.5\)」时，单次采样得到的梯度估计（看 \(z_1\) 分量）的均值与方差。</p>
+  <p><strong>解</strong>　先备料：softmax 求导（第二章），\(\partial\log\pi(a_1)/\partial z_1=1-\pi(a_1)=0.5\)，\(\partial\log\pi(a_2)/\partial z_1=-\pi(a_1)=-0.5\)。</p>
+  <p><strong>第 1 步，无基线</strong>：采到 \(a_1\) 时估计 \(\hat g=R\times0.5=1\times0.5=0.5\)；采到 \(a_2\) 时 \(\hat g=0\times(-0.5)=0\)。两种采法各半概率，均值 \(=(0.5+0)/2=0.25\)，方差 \(=(0.5^2+0^2)/2-0.25^2=0.125-0.0625=0.0625\)。注意：一半的样本（采到坏回答）贡献的是<strong>零信号</strong>——「这次什么都没学到」。</p>
+  <p><strong>第 2 步，加基线 \(b=0.5\)</strong>：采到 \(a_1\) 得 \((1-0.5)\times0.5=0.25\)；采到 \(a_2\) 得 \((0-0.5)\times(-0.5)=0.25\)。均值仍是 \((0.25+0.25)/2=0.25\)——式 (11.5) 保证无偏；但两个样本给出<strong>完全相同</strong>的估计，方差 \(=0\)。坏动作的梯度从「零信号」变成「明确压低 \(a_2\) 的 log 概率」。（以上数值均经 python3 验算。）</p>
+  <p><strong>读数</strong>：基线不改平均方向，只把「这次采样的运气成分」挤掉。后面 PPO 用一个神经网络（价值网络）去学这个基线，GRPO 用同组样本的平均值现算——两者的分歧，根源就在这条式 (11.5)。</p></div>
+  <aside class="mn">基线减的是「零期望的常数」：式 (11.5) 保证它不碰均值，省下的全是方差。记住这句，PPO 与 GRPO 的全部区别就是「基线从哪来」。</aside>
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：
+    <br>1. 说出 RL 三要素（状态、动作、奖励）在「语言模型回答 prompt」场景下的对应物；
+    <br>2. 用一句话解释对数导数技巧 \(\nabla p=p\,\nabla\log p\) 解决了什么麻烦（把加权和变回期望，绕开对采样求导）；
+    <br>3. 写出策略梯度定理 (11.4) 并指出梯度落在什么量上；
+    <br>4. 手推式 (11.5)：为什么减基线不改变期望；
+    <br>5. 用例 11.1 的数字解释基线为什么能降方差。</p></div>
+
+  <h3 id="tb11-s3"><span class="h3-num">11.3</span> PPO：给更新拴根绳</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>在线 RL 每轮的节奏是：用当前策略生成一批回答、打分、更新参数。风险在于：<strong>一步更新太猛，新策略跑得离旧策略太远，旧数据就全作废了</strong>——好比训狗时奖励标准一天三变，狗直接懵掉。PPO 的思路朴素又聪明：<strong>别让新策略一次跑偏太远，给更新拴根绳</strong>。具体拴法：盯着「新概率 ÷ 旧概率」这个比率，比率涨过 \(1+\varepsilon\) 或跌破 \(1-\varepsilon\)（\(\varepsilon\) 常取 0.1 或 0.2），就不再奖励继续前进——绳子到头了。这就是式 (11.7) 里 clip（裁剪）的全部含义。</p></div>
+  <p>先把「新概率 ÷ 旧概率」说严。在线 RL 用旧策略 \(\pi_{\mathrm{old}}\) 采样，却想改进新策略 \(\pi_\theta\)。连接两者的桥是<span class="kt">重要性采样</span>：对任意函数 \(f\)，</p>
+  \[ \mathbb{E}_{a\sim\pi_\theta}[f(a)]=\mathbb{E}_{a\sim\pi_{\mathrm{old}}}\Bigl[\frac{\pi_\theta(a)}{\pi_{\mathrm{old}}(a)}\,f(a)\Bigr] \tag{11.6} \]
+  <p>为什么成立？把右边期望按定义展开：\(\sum_a\pi_{\mathrm{old}}(a)\cdot\frac{\pi_\theta(a)}{\pi_{\mathrm{old}}(a)}f(a)\)，\(\pi_{\mathrm{old}}(a)\) 约掉，剩 \(\sum_a\pi_\theta(a)f(a)\)，正是左边。意思是：拿旧数据估计新策略的量，只要给每个样本乘一个「概率比」纠偏。定义逐 token 的概率比 \(r_t(\theta)=\pi_\theta(a_t\mid s_t)\,/\,\pi_{\mathrm{old}}(a_t\mid s_t)\)。朴素目标是最大化 \(\mathbb{E}[r_t(\theta)\hat A_t]\)：优势为正的动作，把它的概率比调大。问题：\(r_t\) 没有上界，一步激进更新就能把策略推飞，旧数据的代表性瞬间清零，训练崩掉。PPO（Schulman et al. 2017, arXiv:1707.06347）的修法是把比率裁进 \([1-\varepsilon,\,1+\varepsilon]\)，再取悲观的一支：</p>
+  \[ \mathcal{L}^{\mathrm{CLIP}}(\theta)=\mathbb{E}_t\Bigl[\min\bigl(r_t(\theta)\hat{A}_t,\;\operatorname{clip}(r_t(\theta),\,1-\varepsilon,\,1+\varepsilon)\,\hat{A}_t\bigr)\Bigr] \tag{11.7} \]
+  <p>读法：\(\min\) 永远从两个候选里挑<strong>更差</strong>的那个——\(\hat A_t&gt;0\) 时给上涨封顶（概率涨够 \(\varepsilon\) 就不再多奖），\(\hat A_t&lt;0\) 时不给下跌打折（压低够 \(\varepsilon\) 就停手）。比率一旦出界到「走过头」的那一侧（\(\hat A_t>0\) 时涨过 \(1+\varepsilon\)，或 \(\hat A_t<0\) 时跌破 \(1-\varepsilon\)），被选中的那支是不含 \(\theta\) 的常数，梯度为零——策略被「粘在」旧策略附近 \(\pm\varepsilon\) 的邻域里。这是<span class="kt">信任区</span>（trust region）思想的廉价实现：不相信大步更新，只在小圈子里稳步挪。下面把四种情形全算一遍，「悲观」就具体了。</p>
+  <div class="example"><span class="box-tag">例 11.2 · 动手算（clip 的四种情形）</span><p><strong>题目</strong>　取 \(\varepsilon=0.2\)，对 \(r_t\in\{1.3,\,1.1\}\)、\(\hat{A}_t\in\{+1,\,-1\}\) 四种组合，分别算出式 (11.7) 的取值，并说明梯度是否还在。</p>
+  <p><strong>解</strong>　逐个代入（python3 验算），裁剪区间是 \([0.8,\,1.2]\)：</p>
+  <table class="tbl"><thead><tr><th>\(r_t\)</th><th>\(\hat{A}_t\)</th><th>未裁剪支 \(r_t\hat{A}_t\)</th><th>裁剪支 \(\operatorname{clip}(r_t,0.8,1.2)\hat{A}_t\)</th><th>\(\min\) 取值</th><th>含义</th></tr></thead><tbody>
+  <tr><td>1.3</td><td>\(+1\)</td><td>1.30</td><td>\(1.2\times1=1.20\)</td><td>1.20</td><td>涨幅超 \(+20\%\) 的部分不给奖励：选中常数支，梯度为 0，封顶</td></tr>
+  <tr><td>1.1</td><td>\(+1\)</td><td>1.10</td><td>1.10</td><td>1.10</td><td>区间内，原样保留，梯度正常</td></tr>
+  <tr><td>1.3</td><td>\(-1\)</td><td>\(-1.30\)</td><td>\(1.2\times(-1)=-1.20\)</td><td>\(-1.30\)</td><td>\(\min\) 选更差者（\(-1.30&lt;-1.20\)）：坏动作该罚照罚，梯度仍在</td></tr>
+  <tr><td>1.1</td><td>\(-1\)</td><td>\(-1.10\)</td><td>\(-1.10\)</td><td>\(-1.10\)</td><td>区间内，原样保留</td></tr>
+  </tbody></table>
+  <p>再补两种出界情形体会「悲观」的对称性（python3 验算）：\(\hat A_t=+1\) 且 \(r_t=0.7\)（好动作概率跌太多）：\(\min(0.7,\,0.8)=0.7\)，选中未裁剪支——梯度继续把概率往回拉，不允许「跌穿绳子还不管」；\(\hat A_t=-1\) 且 \(r_t=0.7\)：\(\min(-0.7,\,-0.8)=-0.8\)，选中裁剪支——常数、梯度归零，压低概率压够 20% 就停手。六种行为合起来一句话：<strong>不管朝哪个方向，走满 \(\varepsilon\) 就失去动力</strong>。</p></div>
+  <p>完整的 PPO 还有一个部件：式 (11.7) 里的优势 \(\hat A_t\) 从哪来？答案是一个专门的<span class="kt">价值网络</span>（value network，又叫 critic）\(V_\phi(s)\)，它学着预测「这个状态平均能拿多少奖励」，优势 ≈ 实际奖励 − 价值预测。这正是例 11.1 那个基线的「可学习版」。于是 PPO 要同时训练策略和价值两个大网络，再加奖励模型、参考模型，一台戏四个模型——这是它贵且难调的根源，也是 §11.6 的 GRPO 要砍掉价值网络的动机。</p>
+  <aside class="mn">clip 是一种悲观主义：两个候选目标里永远信更差的那个。乐观在这里没有好下场——离采样分布太远，旧数据说的就都不是真话了。</aside>
+
+  <h3 id="tb11-s4"><span class="h3-num">11.4</span> RLHF：三段式流水线与 KL 惩罚</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>要把 PPO 用到语言模型上，还差一块：<strong>零食从哪来？</strong>总不能每生成一条回答都找真人打分——太慢太贵。工程上的解法是 RLHF（reinforcement learning from human feedback，人类反馈强化学习）：先请人少量打分、训一个「裁判模型」（奖励模型）模仿人的口味，再让裁判模型批量给模型的回答打分，用 PPO 去刷高这个分数。整个流程分三段，像办学校：先请名师示范（SFT），再培养裁判（奖励模型），最后让学生在裁判监督下苦练（PPO）。</p></div>
+  <p><strong>第一段，SFT（监督微调）</strong>：收集人工写好的「指令 + 示范回答」，做普通的极大似然训练（第三、四章），得到模型 \(\pi_{\mathrm{ref}}\)。作用：先让模型学会「回答问题」这个行为模式本身，也充当后面第三段的锚点。</p>
+  <p><strong>第二段，训奖励模型</strong>：同一个 prompt 让模型生成两条回答，人工标注哪条好，记 \(y_w\succ y_l\)（w 是 winner，l 是 loser）。怎么把「这条更好」变成可训练的分数？用 <span class="kt">Bradley–Terry 偏好模型</span>：</p>
+  <div class="def"><span class="box-tag">定义 11.2</span><p>给定奖励函数 \(r_\phi(x,y)\)（\(\phi\) 是奖励模型的参数），回答 \(y_w\) 优于 \(y_l\) 的概率建模为</p>
+  \[ P(y_w\succ y_l\mid x)=\sigma\bigl(r_\phi(x,y_w)-r_\phi(x,y_l)\bigr) \tag{11.8} \]
+  <p>\(\sigma\) 是 sigmoid。读法：奖励差越大，判 \(y_w\) 胜出的概率越接近 1；奖励相等时恰为 0.5（抛硬币）。注意偏好只由奖励<strong>差</strong>决定——给所有奖励整体加一个常数，比较结果不变。训练奖励模型就是把式 (11.8) 当二分类做的交叉熵：\(\mathcal{L}_{\mathrm{RM}}=-\mathbb{E}\bigl[\log\sigma(r_\phi(x,y_w)-r_\phi(x,y_l))\bigr]\)，即让真人认可的排序尽量大概率地复现。</p></div>
+  <p><strong>第三段，PPO</strong>：以 \(\pi_{\mathrm{ref}}\) 初始化策略 \(\pi_\theta\)，最大化</p>
+  \[ \max_\theta\ \mathbb{E}_{y\sim\pi_\theta(\cdot\mid x)}\bigl[r_\phi(x,y)\bigr]-\beta\,\operatorname{KL}\!\left(\pi_\theta\,\middle\|\,\pi_{\mathrm{ref}}\right) \tag{11.9} \]
+  <p>第一项就是刷奖励模型的分。第二项是新面孔：策略与参考模型之间的 KL 散度（第四章），乘系数 \(\beta\) 后从目标里<strong>减去</strong>——新策略离参考模型越远，惩罚越重。为什么它必须存在？因为奖励模型只是真人偏好的<strong>代理</strong>，只在人类标注过的数据分布附近可信；策略一旦跑远，刷高奖励不再需要回答真的好，只需要钻裁判的空子——这叫 <span class="kt">reward hacking</span>（奖励黑客），典型症状是奖励分猛涨、输出却退化成重复套话。KL 项就是把策略拴在 \(\pi_{\mathrm{ref}}\) 附近的绳：既是防跑偏的绳，也是保住语言能力的锚（锚太远，模型会为了奖励牺牲流畅性）。\(\beta\) 控制松紧：越大越保守、越不敢偏离 SFT 模型。</p>
+  <aside class="mn">奖励模型是代理不是真相。KL 项拴的就是「别走出代理可信的半径」——半径之外，高分低能是必然事件。</aside>
+
+  <h3 id="tb11-s5"><span class="h3-num">11.5</span> DPO：不训裁判，直接拿偏好对调教</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>RLHF 的痛点在工程：奖励模型、PPO、价值网络、参考模型，四个大模型两台戏，采样、打分、更新环环相扣，任何一环没调好全盘皆输。DPO（直接偏好优化，direct preference optimization；Rafailov et al. 2023, arXiv:2305.18290）的姿态是：<strong>不训奖励模型、不在线采样，直接拿标注好的偏好对 \((y_w,y_l)\) 当监督数据调教模型</strong>——既然我们最终要的只是「好回答概率变大、坏回答概率变小」，为什么不直接优化这件事，非要绕道训个裁判再打 RL？听起来像抄近路，但它有严格的数学依据：式 (11.9) 的最优解可以解析地写出来，奖励能在推导中被「消元」掉。下面把这个推导走完，每一步都有交代。</p></div>
+  <div class="derive"><span class="box-tag">推导 · 一步步来（从 RLHF 目标到 DPO 损失）</span><p><strong>第 1 步，写出 RLHF 目标的最优策略</strong>。固定参考模型 \(\pi_{\mathrm{ref}}\) 和奖励 \(r\)，对式 (11.9) 关于分布 \(\pi\) 求最优（要满足「概率加和为 1」的约束，用变分法；这一步只取结论，细节超出本手册范围），最优策略是参考模型的「指数倾斜」：</p>
+  \[ \pi^{*}(y\mid x)=\frac{1}{Z(x)}\,\pi_{\mathrm{ref}}(y\mid x)\exp\!\left(\frac{r(x,y)}{\beta}\right) \tag{11.10} \]
+  <p>其中 \(Z(x)=\sum_y\pi_{\mathrm{ref}}(y\mid x)\exp(r(x,y)/\beta)\) 是配分函数（归一化常数，保证概率加和为 1），只依赖 \(x\)。直觉：最优策略 = 在参考模型基础上，按奖励的指数重新加权——奖励高的回答被成比例地抬高，\(\beta\) 控制抬得多狠（\(\beta\) 小 → 抬得狠 → 离参考远）。</p>
+  <p><strong>第 2 步，反解出奖励</strong>。对式 (11.10) 两边取 log、整理（\(\log\) 把除法变减法、把 exp 消掉）：</p>
+  \[ r(x,y)=\beta\log\frac{\pi^{*}(y\mid x)}{\pi_{\mathrm{ref}}(y\mid x)}+\beta\log Z(x) \tag{11.11} \]
+  <p>意思：奖励可以表示成「最优策略相对参考模型的对数比」，外加一个只依赖 \(x\) 的项。</p>
+  <p><strong>第 3 步，代入偏好模型，消掉 \(Z(x)\)</strong>。把式 (11.11) 代入 Bradley–Terry 式 (11.8)：两条回答的奖励相减时，\(\beta\log Z(x)\) 对两条回答完全相同，相减恰好消掉！剩下</p>
+  \[ P(y_w\succ y_l\mid x)=\sigma\!\left(\beta\log\frac{\pi^{*}(y_w\mid x)}{\pi_{\mathrm{ref}}(y_w\mid x)}-\beta\log\frac{\pi^{*}(y_l\mid x)}{\pi_{\mathrm{ref}}(y_l\mid x)}\right) \]
+  <p>注意右端已经没有奖励 \(r\) 了——奖励模型在推导中被消元，<strong>从头到尾不需要实例化</strong>。</p>
+  <p><strong>第 4 步，把 \(\pi^{*}\) 换成待训的 \(\pi_\theta\)，最大化人类偏好数据的似然</strong>，即得 <span class="kt">DPO 损失</span>：</p>
+  \[ \mathcal{L}_{\mathrm{DPO}}=-\mathbb{E}_{(x,y_w,y_l)}\log\sigma\!\left(\beta\log\frac{\pi_\theta(y_w\mid x)}{\pi_{\mathrm{ref}}(y_w\mid x)}-\beta\log\frac{\pi_\theta(y_l\mid x)}{\pi_{\mathrm{ref}}(y_l\mid x)}\right) \tag{11.12} \]
+  <p>读法：这是监督式交叉熵的形状——让「好回答相对参考模型的对数比」尽量大于「坏回答的对数比」。偏好对是事先收集好的<strong>固定数据</strong>，没有采样、没有概率比、没有价值网络，用普通的 Adam（第五章）就能训。式 (11.12) 里的 \(\beta\) 还是式 (11.9) 里那个 KL 系数：由式 (11.10)，同样的奖励差距下 \(\beta\) 越小策略偏离参考越远，即 \(\beta\) 越大越保守。</p></div>
+  <div class="example"><span class="box-tag">例 11.3 · 动手算（DPO 损失一项）</span><p><strong>题目</strong>　取 \(\beta=0.1\)。对某个 prompt，当前模型与参考模型给两条回答的概率为：\(\pi_\theta(y_w\mid x)=0.25\)、\(\pi_{\mathrm{ref}}(y_w\mid x)=0.20\)；\(\pi_\theta(y_l\mid x)=0.10\)、\(\pi_{\mathrm{ref}}(y_l\mid x)=0.20\)。算这一项的 DPO 损失。</p>
+  <p><strong>解</strong>　<strong>第 1 步，算两个对数比</strong>：好回答 \(\ln(0.25/0.20)=\ln1.25\approx0.2231\)；坏回答 \(\ln(0.10/0.20)=\ln0.5\approx-0.6931\)。<strong>第 2 步，代入式 (11.12) 括号</strong>：\(0.1\times(0.2231-(-0.6931))=0.1\times0.9163\approx0.0916\)。<strong>第 3 步，过 sigmoid、取负对数</strong>：\(\sigma(0.0916)\approx0.5229\)，损失 \(-\ln0.5229\approx0.6484\)（python3 验算）。</p>
+  <p><strong>读数</strong>：当前模型把好回答相对参考模型抬高了（对数比 +0.22）、把坏回答压低了（−0.69），方向已经对，但差距换算成的胜出概率只有 52%，勉强过半，损失离 0 尚远。梯度的方向正是继续拉大两个对数比——好回答变得比参考模型更常见，坏回答更少见。</p></div>
+  <aside class="mn">DPO 里没有显式的 KL 项，但 \(\beta\) 与「对数比」共同把 KL 约束藏进了损失：策略离参考太远时对数比变大、sigmoid 饱和、梯度变小——正则化是隐式的，不是没有。</aside>
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：
+    <br>1. 写出 PPO 裁剪目标 (11.7)，并对 \(\hat A_t&gt;0\)、\(\hat A_t&lt;0\) 各说清「什么时候梯度归零」；
+    <br>2. 说出 RLHF 三段各自解决什么（SFT 教行为模式、奖励模型当裁判、PPO 在 KL 约束下刷分）；
+    <br>3. 解释式 (11.9) 中 KL 项防的是什么（reward hacking），\(\beta\) 大小意味着什么；
+    <br>4. 按「闭式解 → 反解奖励 → 消掉 \(Z(x)\)」四步复述 DPO 推导；
+    <br>5. 给定概率，像例 11.3 一样手算一项 DPO 损失。</p></div>
+
+  <h3 id="tb11-s6"><span class="h3-num">11.6</span> GRPO：同题采一组，组内互相比</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>PPO 最贵的一个零件是价值网络——为了知道「比平均好多少」，专门训一个网络估「平均是多少」。GRPO 的想法是：<strong>同一道题，让模型一口气答 G 遍，组内互相比，不用单独训裁判来估平均线</strong>。好比评估一个学生：不问他「比全校平均分高多少」（得先统计全校），而是让他同一份卷子做 8 次，8 个分数一摆，哪次好哪次差一目了然，平均线当场算出来。组均值就是基线——式 (11.5) 保证它不进期望，零参数、零训练误差。这就是 GRPO（组相对策略优化，group relative policy optimization；Shao et al. 2024, arXiv:2402.03300；后来用于 DeepSeek-R1 的推理训练）的全部核心。</p></div>
+  <p>形式化：对同一 prompt \(x\)，用旧策略一次采 \(G\) 条回答，拿到组内奖励 \(r_1,\dots,r_G\)，优势直接用组内统计标准化：</p>
+  \[ \hat{A}_i=\frac{r_i-\operatorname{mean}(\mathbf{r})}{\operatorname{std}(\mathbf{r})},\qquad \operatorname{mean}(\mathbf{r})=\frac{1}{G}\sum_{j=1}^{G}r_j,\qquad \operatorname{std}(\mathbf{r})=\sqrt{\frac{1}{G}\sum_{j=1}^{G}\bigl(r_j-\operatorname{mean}(\mathbf{r})\bigr)^{2}} \tag{11.13} \]
+  <p>（口径注记：式 (11.13) 的标准差按 DeepSeek 原文用 \(1/G\) 归一；部分工程实现改用无偏的 \(1/(G-1)\)，\(G\) 较大时差异可忽略，对接代码时先对齐口径。）</p>
+  <p>目标函数沿用 PPO 的 \(\min\)-\(\operatorname{clip}\) 形状（式 (11.7) 的骨架），另加 KL 项：</p>
+  \[ \mathcal{L}_{\mathrm{GRPO}}(\theta)=\mathbb{E}\Bigl[\frac{1}{G}\sum_{i=1}^{G}\frac{1}{|y_i|}\sum_{t=1}^{|y_i|}\min\bigl(\rho_{i,t}\hat{A}_i,\;\operatorname{clip}(\rho_{i,t},\,1-\varepsilon,\,1+\varepsilon)\hat{A}_i\bigr)\Bigr]-\beta\,\operatorname{KL}\!\left(\pi_\theta\,\middle\|\,\pi_{\mathrm{ref}}\right) \tag{11.14} \]
+  <p>其中 \(\rho_{i,t}=\pi_\theta(y_{i,t}\mid x,y_{i,&lt;t})\,/\,\pi_{\mathrm{old}}(y_{i,t}\mid x,y_{i,&lt;t})\) 是第 \(i\) 条回答第 \(t\) 个 token 的概率比（式 (11.6) 的逐 token 版）。</p>
+  <p>与 PPO 的差别就两条，都值得说透。<strong>其一，基线从哪来</strong>：式 (11.13) 的组均值正是 §11.2 的基线 \(b\)——PPO 用一个网络去学它，GRPO 用同组 \(G\) 条样本现算，省掉一整个网络的训练开销和不稳定。<strong>其二，除以标准差是难度归一</strong>：全对的简单题（奖励全 1）与全错的难题（奖励全 0），组内方差都接近零，优势信号自动消失——梯度自动集中在「有区分度」的中等难度题上，这恰好是学习效率最高的地方。代价是每个 prompt 要采 \(G\) 条回答：用推理开销换掉了价值网络。</p>
+  <div class="example"><span class="box-tag">例 11.4 · 动手算（组内优势）</span><p><strong>题目</strong>　某 prompt 采 \(G=4\) 条回答，奖励为 \((0.9,\,0.4,\,0.7,\,0.2)\)。按式 (11.13) 求各条的组内优势。</p>
+  <p><strong>解</strong>　<strong>第 1 步，组均值</strong>：\((0.9+0.4+0.7+0.2)/4=2.2/4=0.55\)。<strong>第 2 步，组标准差</strong>：各条离均值的差为 \((0.35,\,-0.15,\,0.15,\,-0.35)\)，平方和 \(=0.1225+0.0225+0.0225+0.1225=0.29\)，除以 \(4\) 得 \(0.0725\)，开方 \(\approx0.2693\)。<strong>第 3 步，逐条代入式 (11.13)</strong>：\(\hat A\approx(1.30,\,-0.56,\,0.56,\,-1.30)\)（python3 验算）。</p>
+  <p><strong>读数</strong>：四项之和恰为 0——「减去均值」的零均值性质在样本层面精确成立；最好与最差的回答得到幅度相同、方向相反的信号，全程没有任何额外网络参与。再体会难度归一：若四条全对 \((1,1,1,1)\)，标准差为 0、优势无意义——组内必须有好有坏，GRPO 才有燃料。</p></div>
+
+  <h3 id="tb11-s7"><span class="h3-num">11.7</span> 三者对照与常见坑</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>这是类比：三者像三种请家教的方案——PPO 是全职团队，裁判、估分师都请，最贵也最灵活；DPO 只刷整理好的错题本，便宜省事，但学不到本上没有的题；GRPO 让同一份卷子连做 \(G\) 遍互相对分，省掉估分师，代价是做题量翻倍。这个类比省掉了什么：只说工程取舍，没说三者共用同一条数学主干（式 (11.4)(11.5)），也没覆盖各自的稳定机制。</p></div>
+  <table class="tbl"><thead><tr><th></th><th>PPO</th><th>DPO</th><th>GRPO</th></tr></thead><tbody>
+  <tr><td>数据</td><td>在线采样</td><td>离线偏好对</td><td>在线采样（每 prompt 一组 \(G\) 条）</td></tr>
+  <tr><td>奖励模型</td><td>需要</td><td>不需要（奖励被隐式参数化）</td><td>需要（或可验证奖励，如数学答案自动判对）</td></tr>
+  <tr><td>价值网络</td><td>需要</td><td>不需要</td><td>不需要（组均值当基线）</td></tr>
+  <tr><td>稳定性来源</td><td>clip \(+\) KL 惩罚</td><td>监督式损失 \(+\) \(\beta\) 控制的隐式 KL</td><td>clip \(+\) 组内标准化 \(+\) KL</td></tr>
+  <tr><td>典型代表</td><td>InstructGPT / ChatGPT（Ouyang et al. 2022）</td><td>开源对齐工作的常用默认（Rafailov et al. 2023）</td><td>DeepSeek-R1 推理训练（Shao et al. 2024）</td></tr>
+  </tbody></table>
+  <div class="example"><span class="box-tag">例 11.5 · 动手算（同一批数据，PPO 与 GRPO 的优势差多少）</span><p><strong>题目</strong>　某 prompt 下旧策略采了 \(G=2\) 条回答，奖励 \((1,\,0)\)。（a）若 PPO 的价值网络预测 \(V(s)=0.3\)，两条回答的优势各是多少？（b）按式 (11.13)，GRPO 的组内优势各是多少？（c）设 \(\varepsilon=0.2\)，好回答上某 token 的概率比 \(r_t=1.3\)，用两种优势分别算式 (11.7) 这一项的值，并说明梯度状态。</p>
+  <p><strong>解</strong>　<strong>第 1 步，PPO 的优势</strong>：优势 = 实际奖励 − 价值预测，好回答 \(1-0.3=0.7\)，坏回答 \(0-0.3=-0.3\)。<strong>第 2 步，GRPO 的优势</strong>：组均值 \((1+0)/2=0.5\)；离差 \((0.5,\,-0.5)\)，平方和 \(0.25+0.25=0.5\)，除以 \(2\) 得 \(0.25\)，开方得组标准差 \(0.5\)；标准化后优势为 \((+1,\,-1)\)。<strong>第 3 步，过好回答的 clip</strong>（裁剪区间 \([0.8,\,1.2]\)，\(r_t=1.3\) 越界上沿）：用 PPO 优势 \(0.7\)，未裁剪支 \(1.3\times0.7=0.91\)，裁剪支 \(1.2\times0.7=0.84\)，\(\min(0.91,\,0.84)=0.84\)；用 GRPO 优势 \(1\)，未裁剪支 \(1.3\times1=1.3\)，裁剪支 \(1.2\times1=1.2\)，\(\min(1.3,\,1.2)=1.2\)（以上均经 python3 验算）。两种情况下被选中的都是裁剪支，\(1.2\) 是常数边界、不含 \(\theta\)，所以这一 token 的梯度都为 0——涨幅已用满绳长。</p>
+  <p><strong>读数</strong>：同一批数据、同一根绳、同一个封顶结局，只因基线来源不同，目标值就差了一截（0.84 对 1.2）。PPO 的优势里混着价值网络的估计误差（\(V(s)=0.3\) 是学出来的，可能估错），GRPO 的优势只由这组数据决定、零参数。对照表里「价值网络：需要 / 不需要」那一行，落到数字上就是这个差别。</p></div>
+  <div class="warn"><span class="box-tag">常见坑</span><p><strong>把 DPO 当在线算法。</strong>式 (11.12) 的推导前提是偏好对 \((y_w,y_l)\) 来自固定的人类标注分布。拿当前 \(\pi_\theta\) 自生成的回答冒充新标注、边训边标，就破坏了离线监督的前提，退化成模型自己给自己打分的循环。要用在线数据得换在线变体，不能直接套式 (11.12)。</p></div>
+  <div class="warn"><span class="box-tag">常见坑</span><p><strong>把 KL 系数 \(\beta\) 设成 0。</strong>式 (11.9) 退化为纯奖励最大化：策略几轮之内就能找到奖励模型的漏洞，奖励分猛涨而输出退化成重复、套话甚至乱码，且因离 \(\pi_{\mathrm{ref}}\) 太远很难训回。\(\beta\) 必须为正；训练中要盯 KL 数值曲线，而不是只看奖励曲线——奖励涨、KL 也暴涨，就是 reward hacking 在进行。</p></div>
+  <div class="warn"><span class="box-tag">常见坑</span><p><strong>GRPO 组大小取 \(G=1\)。</strong>式 (11.13) 中 \(r_1-\operatorname{mean}(\mathbf r)=0\)，标准差也无定义，优势恒为 0，梯度整场为零——训练空转且不报错。同理，组内 \(G\) 条全对或全错（奖励全同）时优势也全为 0：GRPO 的燃料是「有区分度」的 prompt，数据难度分布本身就是超参数。</p></div>
+
+  <h3 id="tb11-ai"><span class="h3-num">11.8</span> 在 AI 中的位置</h3>
+  <table class="tbl"><thead><tr><th>本章结论</th><th>用在哪个具体组件 / 机制</th><th>缺了会怎样</th></tr></thead><tbody>
+  <tr><td>策略梯度与对数导数技巧，式 (11.3)(11.4)</td><td>RLHF / 推理训练的梯度来源：只对已采样 token 的 log 概率求导</td><td>以为要对「采样」本身求导，训练管线根本搭不起来</td></tr>
+  <tr><td>基线的零期望性质，式 (11.5)</td><td>REINFORCE 减方差、PPO 价值网络、GRPO 组均值的共同理论依据</td><td>梯度估计方差爆炸，训练抖动不收敛还找不到病因</td></tr>
+  <tr><td>PPO 裁剪目标，式 (11.7)</td><td>在线对齐训练的信任区；InstructGPT（Ouyang 2022）的第三段</td><td>不裁剪则一步激进更新推飞策略，旧数据失效、训练崩掉</td></tr>
+  <tr><td>Bradley–Terry 模型，式 (11.8)</td><td>奖励模型训练：把成对偏好变成标量奖励</td><td>偏好标注无法变成可优化的目标，RLHF 第二段无从谈起</td></tr>
+  <tr><td>KL 惩罚项，式 (11.9)</td><td>防 reward hacking、保住语言能力</td><td>\(\beta=0\) 时策略钻奖励模型空子，分数涨、输出崩</td></tr>
+  <tr><td>DPO 闭式解与损失，式 (11.10)(11.12)</td><td>离线对齐：跳过奖励模型与在线采样，偏好数据直接监督式训练</td><td>把 DPO 当在线算法用，前提全错，训练成自评循环</td></tr>
+  <tr><td>组内标准化优势，式 (11.13)</td><td>GRPO：DeepSeek-R1 式推理训练（Shao 2024），无价值网络</td><td>\(G=1\) 或组内同分时零梯度空转；不懂难度归一则误配数据</td></tr>
+  </tbody></table>
+  <p>对齐工程的取舍一句话收束：PPO、DPO、GRPO 的分歧全在工程，不在数学主干——主干只有一条：用对数导数技巧把「采样」变成「对 log 概率求导」（式 (11.4)），再用基线压方差（式 (11.5)）。基线用网络学（PPO）、干脆不走 RL（DPO）、还是用同组样本现算（GRPO），取决于你有多少预算、有没有可自动判分的奖励（数学、代码题有标准答案，GRPO 的天然主场）、以及能不能容忍在线采样的复杂度。</p>
+
+  <div class="quiz"><span class="box-tag">自测题</span>
+    <p><strong>题 1（基线与 REINFORCE）</strong>　单状态两动作：\(\pi(a_1)=0.6\)、\(\pi(a_2)=0.4\)，回报 \(R(a_1)=1\)、\(R(a_2)=0\)，取基线 \(b=0.4\)。求两种采样结果各自对 \(z_1\) 的梯度估计，以及估计的期望。</p>
+    <details><summary>看答案</summary><p>softmax 求导：\(\partial\log\pi(a_1)/\partial z_1=1-0.6=0.4\)；\(\partial\log\pi(a_2)/\partial z_1=-0.6\)。采到 \(a_1\)：\((1-0.4)\times0.4=0.24\)；采到 \(a_2\)：\((0-0.4)\times(-0.6)=0.24\)。期望 \(=0.6\times0.24+0.4\times0.24=0.24\)（python3 验算）。两种采样给出同一估计，方差为 0——\(b=0.4\) 正是让两种估计相等的取值：\((1-b)\times0.4=b\times0.6\) 的解，即本题的方差最优基线。注意它并不等于平均回报 \(\mathbb{E}[R]=0.6\)：最优基线按各动作梯度幅度加权（加权平均给出 \(b^{*}=0.4\)），「减去平均线」只是近似直觉，严格说减的是「梯度加权的平均线」。</p></details>
+    <p><strong>题 2（PPO 裁剪）</strong>　\(\varepsilon=0.1\)，某 token 的比率 \(r_t=1.25\)，优势 \(\hat A_t=+2\)。式 (11.7) 的值是多少？这项的梯度是多少？为什么？</p>
+    <details><summary>看答案</summary><p>未裁剪支 \(=1.25\times2=2.5\)；裁剪支 \(=\operatorname{clip}(1.25,0.9,1.1)\times2=1.1\times2=2.2\)；\(\min(2.5,2.2)=2.2\)（python3 验算）。被选中的是裁剪支 \(1.1\times2\)，其中不含 \(\theta\)（1.1 是常数边界），所以这项对 \(\theta\) 的梯度为 0。含义：好动作的概率已经涨超 \(+10\%\) 的绳长，PPO 拒绝为超出部分继续给奖励——封顶保稳定。</p></details>
+    <p><strong>题 3（DPO 损失）</strong>　\(\beta=0.5\)。某 prompt 下：\(\pi_\theta(y_w\mid x)=0.30\)、\(\pi_{\mathrm{ref}}(y_w\mid x)=0.20\)；\(\pi_\theta(y_l\mid x)=0.10\)、\(\pi_{\mathrm{ref}}(y_l\mid x)=0.25\)。算这一项的 DPO 损失，并说明当前模型做得好不好。</p>
+    <details><summary>看答案</summary><p>对数比：\(\ln(0.3/0.2)=\ln1.5\approx0.4055\)；\(\ln(0.1/0.25)=\ln0.4\approx-0.9163\)。括号：\(0.5\times(0.4055+0.9163)=0.5\times1.3218\approx0.6609\)。\(\sigma(0.6609)\approx0.6595\)，损失 \(-\ln0.6595\approx0.4163\)（python3 验算）。模型当前认为好回答胜出的概率约 66%——方向正确但信心不足；继续训练就是继续拉大两个对数比。</p></details>
+    <p><strong>题 4（GRPO 优势与 \(G=1\)）</strong>　某 prompt 采 \(G=3\) 条回答，奖励 \((2,1,0)\)。求组内优势；再解释为什么 \(G=1\) 时训练必然空转。</p>
+    <details><summary>看答案</summary><p>均值 \(=(2+1+0)/3=1\)；离差 \((1,0,-1)\)，平方和 \(=2\)，除以 3 得 \(2/3\approx0.6667\)，标准差 \(\approx0.8165\)；优势 \(=(1.2247,\,0,\,-1.2247)\)（python3 验算）。\(G=1\) 时：均值就是唯一样本自己，分子 \(r_1-\operatorname{mean}=0\)，且标准差无定义，优势恒为 0——式 (11.14) 中每一项都乘 0，梯度整场为零，参数一步不动，还不报错。GRPO 至少要 \(G\ge2\)，且组内奖励要有差异。</p></details>
+  </div>
+</section>

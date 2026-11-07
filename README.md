@@ -1,0 +1,124 @@
+# math-handbook · 大模型数学背景知识手册
+
+[中文](#中文) · [English](#english)
+
+---
+
+## 中文
+
+### 这是什么
+
+一套面向「要做大模型、想补数学」读者的数学参考手册，三个版本同源自建：
+
+- 章节骨架（16 章章名与副标题）照录一篇公众号文章给出的目录图；
+- **全部正文为重新撰写**，不是原作者那份 PDF，也不声称与其有关；
+- 每个知识点都落到它在大模型里的具体位置（注意力、反向传播、KV Cache……）。
+
+### 三个版本各自适合谁
+
+| 版本 | 文件 | 适合谁 | 篇幅 |
+|---|---|---|---|
+| 学术版 | `index.html` | 有工程背景、想严谨速通的读者：定义→推导→例子，紧凑密度高 | 16 章 · 约 100 打印页（510 条公式、112 个例题） |
+| 教科书版 | `textbook.html` | 零基础自学者：更厚、更慢、更细，带术语索引与章内导引 | 16 章 · 约 200 打印页 |
+| 速查表 | `cheatsheet.html` | 临时查证：62 条高频公式按 12 组归类 | 单页工具书 |
+
+### 怎么本地打开
+
+直接双击任一 HTML 文件即可。**无外部依赖**：公式渲染用的 MathJax 已随仓内置（`vendor/tex-svg-full.js`），断网可用。
+
+### 怎么重新构建
+
+只需要 Python 3（纯标准库，无第三方依赖）：
+
+```bash
+python3 build.py             # chapters/*.html + _template.html        → index.html
+python3 build_textbook.py    # tb/*.html       + _template_textbook.html → textbook.html
+python3 build_cheatsheet.py  # 脚本内嵌数据                            → cheatsheet.html
+```
+
+三个输出与仓内成品逐字节一致（已验证）。`gen_term_index.py` 是一次性工具：它为 `tb08.html` 生成术语索引节，其结果已包含在仓内 `tb08.html` 中，**重新构建不需要再跑**（重复运行会产生略微不同的索引排序）。
+
+### 目录结构
+
+```
+index.html / textbook.html / cheatsheet.html   三份成品（单文件，离线）
+chapters/    学术版 16 章源文件（ch00–ch15）+ 写作契约
+tb/          教科书版 16 章源文件（tb00–tb15）+ 写作契约
+_template.html / _template_textbook.html       两个版本的页面模板
+build.py / build_textbook.py / build_cheatsheet.py / gen_term_index.py
+vendor/tex-svg-full.js                          MathJax（Apache-2.0，见 NOTICE）
+```
+
+### 未收录内容及原因
+
+- `assets/`：原公众号文章的封面图、目录图与**联系人二维码**，属第三方素材且含个人联系方式，不适合公开再分发；
+- `dossier.html`：对原文的逐字转录档案页，包含第三方推广文全文，公开仓不宜转载。
+
+### 已知边界
+
+- 打印请用浏览器自带打印（macOS `⌘P`），三版均已做打印样式适配；**未内置 PDF 导出**；
+- 创新性有限：章节骨架取自公开目录，正文为工程视角的重新整理与推导，目标是准确与可用，不追求学术原创；
+- 公式经多轮复核（剩余 0 处待核标记），但内容仅供学习参考，关键场景请以标准教材为准。
+
+### License
+
+- 代码（`build*.py`、`gen_term_index.py`、`_template*.html`）:**MIT**;
+- 文档与教材正文（`chapters/`、`tb/`、三份成品 HTML):**CC BY 4.0**;
+- `vendor/` 内 MathJax:**Apache-2.0**（详见 `NOTICE`)。
+
+见 `LICENSE` 全文。
+
+---
+
+## English
+
+### What this is
+
+A math reference handbook for readers who build large language models and want to fill in the math. Three editions built from one source tree:
+
+- The 16-chapter skeleton (chapter titles and subtitles) is transcribed from a table of contents published in a WeChat article;
+- **All body text is an original rewrite** — this is *not* the original author's PDF and makes no claim to be;
+- Every topic is tied to where it is actually used inside LLMs (attention, backprop, KV cache, …).
+
+### Which edition is for you
+
+| Edition | File | For whom | Size |
+|---|---|---|---|
+| Academic | `index.html` | Engineers who want a rigorous fast track: definitions → derivations → worked examples | 16 chapters · ~100 printed pages (510 formulas, 112 examples) |
+| Textbook | `textbook.html` | Self-learners starting from zero: slower, thicker, with a term index and guided reading | 16 chapters · ~200 printed pages |
+| Cheatsheet | `cheatsheet.html` | Quick lookup: 62 high-frequency formulas in 12 groups | Single-page reference |
+
+### Open locally
+
+Double-click any HTML file. **No external dependencies** — MathJax ships with the repo (`vendor/tex-svg-full.js`), so everything works offline.
+
+### Rebuild
+
+Python 3 only (standard library, nothing to install):
+
+```bash
+python3 build.py             # chapters/*.html + _template.html          → index.html
+python3 build_textbook.py    # tb/*.html       + _template_textbook.html → textbook.html
+python3 build_cheatsheet.py  # data embedded in the script               → cheatsheet.html
+```
+
+Outputs are byte-identical to the files in this repo (verified). `gen_term_index.py` is a one-off tool that generated the term-index section in `tb08.html`; its result is already committed, so **you do not need to run it** for a rebuild (re-running produces a slightly different index ordering).
+
+### Not included, and why
+
+- `assets/`: cover image, TOC image and a **personal contact QR code** from the original WeChat article — third-party material containing personal contact details, not appropriate to redistribute;
+- `dossier.html`: an archival page transcribing the full original article — not suitable for republishing.
+
+### Known limits
+
+- Print via the browser (macOS `⌘P`); print styles are built in, but **no built-in PDF export**;
+- Limited novelty: the chapter skeleton comes from a public TOC; the value is accuracy and usability, not academic originality;
+- Formulas went through multiple review rounds (zero pending-review markers remain), but this is a learning resource — consult standard textbooks for critical work.
+
+### License
+
+- Code (`build*.py`, `gen_term_index.py`, `_template*.html`): **MIT**;
+- Content (`chapters/`, `tb/`, the three built HTML files): **CC BY 4.0**;
+- MathJax under `vendor/`: **Apache-2.0** (see `NOTICE`).
+
+See `LICENSE` for the full texts.

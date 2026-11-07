@@ -1,0 +1,138 @@
+<section class="chapter" id="ch05" data-num="05">
+  <header class="ch-open">
+    <p class="ch-kicker">第五章 · 据原文目录</p>
+    <h2 class="ch-title">优化理论</h2>
+    <p class="ch-sub">梯度下降、学习率、warmup 的数学</p>
+    <p class="ch-lede">训练一个大模型，归根到底是反复执行一条更新式：沿负梯度方向走一小步。本章把这条式子拆开：为什么负梯度是局部最速下降方向，学习率为何是训练稳定性的第一旋钮，动量与 Adam 各解决了什么问题，warmup 与学习率调度为什么必不可少，以及 AdamW 和普通 Adam 差在哪一行公式。学完你能看懂训练日志里的 lr、grad norm，并能解释 loss 为什么发散。</p>
+  </header>
+  <nav class="ch-toc" aria-label="章内目录">
+    <a href="#ch05-s1">5.1 梯度下降与最速下降方向</a><a href="#ch05-s2">5.2 凸性：GD 什么时候有保证</a><a href="#ch05-s3">5.3 SGD 与噪声的双刃剑</a><a href="#ch05-s4">5.4 动量：抑制峡谷震荡</a><a href="#ch05-s5">5.5 Adam：手算一步</a><a href="#ch05-s6">5.6 学习率调度：warmup 与衰减</a><a href="#ch05-s7">5.7 正则化：L2、权重衰减与 AdamW</a><a href="#ch05-s8">5.8 常见误用</a><a href="#ch05-ai">5.9 在 AI 中的位置</a>
+  </nav>
+
+  <h3 id="ch05-s1"><span class="h3-num">5.1</span> 梯度下降与最速下降方向</h3>
+  <p>设参数为 \(\boldsymbol{\theta}\in\mathbb{R}^{d}\)，损失为 \(\mathcal{L}(\boldsymbol{\theta})\)。<span class="kt">梯度下降</span>（gradient descent，GD）的全部内容是一条更新式：</p>
+  \[ \boldsymbol{\theta}_{t+1}=\boldsymbol{\theta}_{t}-\eta\,\nabla_{\boldsymbol{\theta}}\mathcal{L}(\boldsymbol{\theta}_{t}) \tag{5.1} \]
+  <p>其中 \(\eta>0\) 是<span class="kt">学习率</span>（learning rate）。问题是：为什么沿负梯度走，而不是别的方向？</p>
+  <div class="thm"><span class="box-tag">结论 5.1</span><p>负梯度方向是局部最速下降方向。推导：在 \(\boldsymbol{\theta}\) 处做一阶泰勒展开，对任意位移 \(\Delta\boldsymbol{\theta}\)，</p>
+  \[ \mathcal{L}(\boldsymbol{\theta}+\Delta\boldsymbol{\theta})\approx \mathcal{L}(\boldsymbol{\theta})+\mathbf{g}^{\top}\Delta\boldsymbol{\theta},\qquad \mathbf{g}=\nabla_{\boldsymbol{\theta}}\mathcal{L}(\boldsymbol{\theta}) \tag{5.2} \]
+  <p>在步长约束 \(\lVert\Delta\boldsymbol{\theta}\rVert=\varepsilon\) 下，由柯西–施瓦茨不等式 \(\mathbf{g}^{\top}\Delta\boldsymbol{\theta}\ge -\lVert\mathbf{g}\rVert\,\varepsilon\)，等号当且仅当</p>
+  \[ \Delta\boldsymbol{\theta}=-\varepsilon\,\frac{\mathbf{g}}{\lVert\mathbf{g}\rVert} \tag{5.3} \]
+  <p>时取得。即单位步长内让损失下降最多的方向就是 \(-\mathbf{g}\)。</p></div>
+  <aside class="mn">注意「局部」二字：最速下降只保证在当前点的一阶邻域内最优，不保证全局路径最短——这正是后面震荡、峡谷问题的根源。</aside>
+  <p>学习率决定这「一小步」具体多大。它不能乱取，用一个可以手算的二次函数看清三种命运。</p>
+  <div class="example"><span class="box-tag">例 5.1</span><p><strong>题目</strong>　\(f(x)=x^{2}\)，从 \(x_{0}=1\) 出发做 GD。分别取 \(\eta=1.1\)、\(\eta=0.1\)、\(\eta=0.01\)，各走 5 步，看会发生什么。</p>
+  <p><strong>解</strong>　梯度 \(f'(x)=2x\)，更新式 \(x_{t+1}=x_{t}-2\eta x_{t}=(1-2\eta)x_{t}\)，即每步乘以同一个因子：</p>
+  \[ x_{t+1}=(1-2\eta)\,x_{t} \tag{5.4} \]
+  <p>逐代入数值（已用 python3 验算）：</p>
+  <table class="tbl"><thead><tr><th>步数 \(t\)</th><th>\(\eta=1.1\)（因子 \(-1.2\)）</th><th>\(\eta=0.1\)（因子 \(0.8\)）</th><th>\(\eta=0.01\)（因子 \(0.98\)）</th></tr></thead>
+  <tbody>
+  <tr><td>0</td><td>1.0</td><td>1.0</td><td>1.0</td></tr>
+  <tr><td>1</td><td>−1.2</td><td>0.8</td><td>0.98</td></tr>
+  <tr><td>2</td><td>1.44</td><td>0.64</td><td>0.9604</td></tr>
+  <tr><td>3</td><td>−1.728</td><td>0.512</td><td>0.9412</td></tr>
+  <tr><td>4</td><td>2.0736</td><td>0.4096</td><td>0.9224</td></tr>
+  <tr><td>5</td><td>−2.4883</td><td>0.3277</td><td>0.9039</td></tr>
+  </tbody></table>
+  <p>三种命运一目了然：\(\eta=1.1\) 时 \(|1-2\eta|=1.2>1\)，每步放大 20% 且符号来回跳——<strong>发散</strong>；\(\eta=0.1\) 时每步缩到 0.8 倍，稳定走向最小值；\(\eta=0.01\) 时 5 步只从 1 挪到 0.904，收敛但<strong>慢得无法接受</strong>。对 \(f(x)=x^{2}\)，收敛的充要条件是 \(|1-2\eta|<1\)，即 \(\eta<1\)；一般二次型 \(f=\tfrac12\mathbf{x}^{\top}\mathbf{A}\mathbf{x}\)（\(\mathbf{A}\in\mathbb{R}^{d\times d}\) 对称正定，\(\mathbf{x}\in\mathbb{R}^{d}\)）的对应条件是 \(\eta<2/\lambda_{\max}(\mathbf{A})\)：学习率上限由<strong>最大曲率方向</strong>卡住。</p></div>
+  <aside class="mn">记忆钩子：lr 太大不是「走得快」，是「跨过谷底撞到对面墙上，而且越撞越高」。</aside>
+
+  <h3 id="ch05-s2"><span class="h3-num">5.2</span> 凸性：GD 什么时候有保证</h3>
+  <div class="def"><span class="box-tag">定义 5.1</span><p>函数 \(f:\mathbb{R}^{d}\to\mathbb{R}\) 是<span class="kt">凸函数</span>（convex function），如果对任意 \(\mathbf{x},\mathbf{y}\) 与 \(\lambda\in[0,1]\) 都有</p>
+  \[ f\bigl(\lambda\mathbf{x}+(1-\lambda)\mathbf{y}\bigr)\le \lambda f(\mathbf{x})+(1-\lambda)f(\mathbf{y}) \tag{5.5} \]
+  <p>几何上：函数图像上任意两点的连线不低于图像本身。</p></div>
+  <p>凸性的价值在于：凸函数没有局部最小值与全局最小值之分，任何驻点就是全局最小值。因此在「凸 + 梯度足够光滑」的函数上，GD 取合适学习率可以保证收敛到全局最优（严格的收敛速率理论见 Boyd &amp; Vandenberghe《Convex Optimization》）。</p>
+  <p>但必须说清：<strong>LLM 的损失面对参数而言高度非凸</strong>。一个简单论证：把同一层两个神经元的权重连同其输入输出连接一起对调，网络函数完全不变、损失相同——每个最优点都有大量对称副本，损失面不存在唯一的「谷底」。尽管如此，工程上的经验事实是：Adam/SGD 类优化器在超大规模过参数化网络上，总能稳定地找到泛化不错的解。为什么非凸上也能工作，理论上只有部分解释（过参数化让坏局部极小变得稀少、鞍点比坏极小更多等），这是深度学习理论未完全闭合的部分——手册不假装它有干净答案，你只需记住：<em>凸性是理解优化器的脚手架，不是使用优化器的前提</em>。</p>
+
+  <h3 id="ch05-s3"><span class="h3-num">5.3</span> SGD 与噪声的双刃剑</h3>
+  <p>LLM 预训练语料以万亿 token 计，不可能每步算全量梯度。<span class="kt">随机梯度下降</span>（stochastic gradient descent，SGD）每次随机抽一个含 \(B\) 条样本的 mini-batch，用平均梯度代替全梯度：</p>
+  \[ \hat{\mathbf{g}}_{t}=\frac{1}{B}\sum_{i=1}^{B}\nabla_{\boldsymbol{\theta}}\ell(\boldsymbol{\theta}_{t};\mathbf{x}_{i}),\qquad \mathbb{E}[\hat{\mathbf{g}}_{t}]=\nabla_{\boldsymbol{\theta}}\mathcal{L}(\boldsymbol{\theta}_{t}) \tag{5.6} \]
+  <p>式 (5.6) 右边是数学期望：因为样本均匀随机抽取，mini-batch 梯度是全梯度的<strong>无偏估计</strong>。由样本均值的方差公式，估计误差的方差随 \(1/B\) 缩小——batch 开 4 倍，噪声标准差减半。</p>
+  <p>这个噪声是双刃剑：</p>
+  <p>（一）<strong>坏处</strong>：在最优点附近梯度真值趋零，但噪声不趋零，于是参数在最优点附近永远「抖动」，无法精确落位——这就是训练后期要衰减学习率的原因之一，把步长压小来压低抖动的幅度。</p>
+  <p>（二）<strong>好处</strong>：非凸损失面上有大量<span class="kt">鞍点</span>（saddle point）——某些方向是极小、另一些方向是极大的点，梯度在鞍点严格为零，纯 GD 会被卡住不动；而 mini-batch 噪声提供一个随机踢动，把参数踢离鞍点的水平方向，让优化继续。高维损失面上鞍点远多于坏局部极小，这一「噪声帮忙逃离鞍点」的直觉是 SGD 在非凸问题上好用的常见解释之一。</p>
+  <aside class="mn">调 batch size 本质上是在调噪声：大 batch 梯度准但每步贵、逃离鞍点能力弱；小 batch 便宜、噪声大。LLM 预训练普遍用数百万 token 的大 batch，靠的就是数据足够便宜。</aside>
+
+  <h3 id="ch05-s4"><span class="h3-num">5.4</span> 动量：抑制峡谷震荡</h3>
+  <p><span class="kt">动量</span>（momentum）把历史梯度做指数加权平均，用「速度」而不是瞬时梯度更新参数：</p>
+  \[ \mathbf{v}_{t}=\beta\,\mathbf{v}_{t-1}+\mathbf{g}_{t},\qquad \boldsymbol{\theta}_{t+1}=\boldsymbol{\theta}_{t}-\eta\,\mathbf{v}_{t} \tag{5.7} \]
+  <p>\(\beta\) 常取 \(0.9\)。\(\mathbf{v}_{t}\) 近似是最近 \(1/(1-\beta)\) 步梯度的平均（乘以常数倍），所以方向一致的分量被累加放大，方向来回翻转的分量被抵消。</p>
+  <div class="example"><span class="box-tag">例 5.2</span><p><strong>题目</strong>　仍用 \(f(x)=x^{2}\)，\(x_{0}=1\)，\(\eta=0.1\)，\(\beta=0.9\)，按式 (5.7) 手算 4 步，与例 5.1 的纯 GD（\(\eta=0.1\)）对比。</p>
+  <p><strong>解</strong>　逐步算（python3 验算）：</p>
+  <table class="tbl"><thead><tr><th>步 \(t\)</th><th>梯度 \(g_t=2x_{t-1}\)</th><th>速度 \(v_t=0.9v_{t-1}+g_t\)</th><th>参数 \(x_t=x_{t-1}-0.1v_t\)</th></tr></thead>
+  <tbody>
+  <tr><td>1</td><td>2.0</td><td>2.0</td><td>0.8</td></tr>
+  <tr><td>2</td><td>1.6</td><td>3.4</td><td>0.46</td></tr>
+  <tr><td>3</td><td>0.92</td><td>3.98</td><td>0.062</td></tr>
+  <tr><td>4</td><td>0.124</td><td>3.706</td><td>−0.3086</td></tr>
+  </tbody></table>
+  <p>纯 GD 四步走到 \(0.4096\)，动量四步已冲到 \(-0.3086\)——越过了最小值。这不是错误而是动量的本性：速度累积让它冲过谷底，之后反向梯度把速度刹住再拉回来，围绕谷底做衰减振荡。同样的 \(\eta\)，动量沿一致方向快得多，代价是会在谷底附近「荡秋千」，所以实际训练中常配合学习率衰减收敛。</p></div>
+  <p>动量真正的价值体现在<strong>峡谷地形</strong>：损失面像一条狭长的山谷，横截面方向曲率大、梯度分量来回翻转，沿谷底方向曲率小、梯度分量方向稳定。纯 GD 在峡谷两侧之字形弹跳、沿谷底爬行极慢；动量把横向震荡分量相互抵消、把纵向分量持续累加，沿谷底快速前进（图 5.1）。</p>
+  <figure class="fig">
+    <svg viewBox="0 0 320 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="峡谷地形中 GD 与动量轨迹对比">
+      <ellipse cx="230" cy="100" rx="190" ry="78" fill="none" stroke="var(--line)" stroke-width="1.2"/>
+      <ellipse cx="230" cy="100" rx="140" ry="52" fill="none" stroke="var(--line)" stroke-width="1.2"/>
+      <ellipse cx="230" cy="100" rx="90" ry="28" fill="none" stroke="var(--line)" stroke-width="1.2"/>
+      <path d="M30,42 L150,80 L52,96 L170,110 L96,126 L190,124 L150,132 L215,118" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+      <path d="M30,42 C90,58 150,84 196,96 C210,100 222,101 230,100" fill="none" stroke="var(--accent2)" stroke-width="1.8"/>
+      <circle cx="230" cy="100" r="3.2" fill="var(--ink)"/>
+      <text x="24" y="30" font-size="11" fill="var(--ink)">GD 之字形</text>
+      <text x="60" y="72" font-size="11" fill="var(--ink)">动量</text>
+      <text x="238" y="96" font-size="11" fill="var(--ink)">最优点</text>
+    </svg>
+    <figcaption>图 5.1　峡谷等高线（椭圆族）：横向曲率大、纵向曲率小。GD（折线）在两侧壁间弹跳；动量（曲线）抵消横向分量、累加纵向分量，沿谷底直达。</figcaption>
+  </figure>
+
+  <h3 id="ch05-s5"><span class="h3-num">5.5</span> Adam：手算一步</h3>
+  <p><span class="kt">Adam</span>（Adaptive Moment Estimation）对每个参数分别维护梯度的一阶矩（动量）与二阶矩（未中心化方差），用后者把每个坐标的学习率各自归一：</p>
+  \[ \mathbf{m}_{t}=\beta_{1}\mathbf{m}_{t-1}+(1-\beta_{1})\,\mathbf{g}_{t} \tag{5.8} \]
+  \[ \mathbf{v}_{t}=\beta_{2}\mathbf{v}_{t-1}+(1-\beta_{2})\,\mathbf{g}_{t}^{2} \tag{5.9} \]
+  \[ \hat{\mathbf{m}}_{t}=\frac{\mathbf{m}_{t}}{1-\beta_{1}^{t}},\qquad \hat{\mathbf{v}}_{t}=\frac{\mathbf{v}_{t}}{1-\beta_{2}^{t}} \tag{5.10} \]
+  \[ \boldsymbol{\theta}_{t+1}=\boldsymbol{\theta}_{t}-\eta\,\frac{\hat{\mathbf{m}}_{t}}{\sqrt{\hat{\mathbf{v}}_{t}}+\varepsilon} \tag{5.11} \]
+  <p>所有乘除、开方均按坐标逐个进行。式 (5.10) 是<span class="kt">偏差修正</span>（bias correction）：\(\mathbf{m},\mathbf{v}\) 从零初始化，前期估计系统性偏小（例如第一步后 \(\mathbf{m}_{1}=(1-\beta_{1})\mathbf{g}_{1}\)，只是真值的 \(1-\beta_1\) 倍），除以 \(1-\beta^{t}\) 恰好把这个因子补回来。\(\varepsilon\)（常取 \(10^{-8}\)）有两个作用：防止 \(\hat{\mathbf{v}}_{t}\) 为零时除零；在 \(\hat{\mathbf{v}}_{t}\) 极小时限制单步更新的最大幅度，起数值保险丝的作用——「除零」正是第七章数值稳定性的主题，那里会看到同类手法（log-sum-exp）如何救回 softmax。</p>
+  <div class="example"><span class="box-tag">例 5.3</span><p><strong>题目</strong>　某参数当前梯度 \(g=0.3\)，取 \(\beta_{1}=0.9\)、\(\beta_{2}=0.999\)、\(\varepsilon=10^{-8}\)、\(\eta=10^{-3}\)，从 \(m_{0}=v_{0}=0\) 出发，手算 Adam 第 1 步的更新量。</p>
+  <p><strong>解</strong>　逐步代入式 (5.8)–(5.11)：</p>
+  <p>① 一阶矩：\(m_{1}=0.9\times0+0.1\times0.3=0.03\)。</p>
+  <p>② 二阶矩：\(v_{1}=0.999\times0+0.001\times0.3^{2}=0.001\times0.09=9\times10^{-5}\)。</p>
+  <p>③ 偏差修正：\(\hat{m}_{1}=0.03/(1-0.9)=0.3\)；\(\hat{v}_{1}=9\times10^{-5}/(1-0.999)=0.09\)。注意修正后一阶矩恰好回到真值 \(0.3\)——这正是偏差修正要做的。</p>
+  <p>④ 更新量：\(\sqrt{\hat{v}_{1}}=0.3\)，</p>
+  \[ \Delta\theta=\eta\,\frac{\hat{m}_{1}}{\sqrt{\hat{v}_{1}}+\varepsilon}=10^{-3}\times\frac{0.3}{0.3+10^{-8}}\approx 9.9999997\times10^{-4}\approx 10^{-3} \]
+  <p>（python3 验算：\(9.99999967\times10^{-4}\)）。第 1 步更新幅度恰好约等于 \(\eta\)：因为 \(\hat m_1/\sqrt{\hat v_1}=g/|g|=\pm1\)，Adam 起步时每步大约就是走一个学习率的距离，方向由梯度符号给出。也请注意 \(\varepsilon=10^{-8}\) 相对于 \(0.3\) 几乎没有影响——它只在 \(\hat v\) 趋零时才登场。</p></div>
+  <aside class="mn">直觉：\(\hat m/\sqrt{\hat v}\) 是「信噪比」——某坐标梯度方向稳定则该比值接近 ±1，走满步长；方向反复横跳则 \(\hat m\approx0\) 而 \(\sqrt{\hat v}\) 大，几乎不动。Adam 等于给每个参数各装了一只动量 + 一只自动步长。</aside>
+
+  <h3 id="ch05-s6"><span class="h3-num">5.6</span> 学习率调度：warmup 与衰减</h3>
+  <p>LLM 训练不用恒定学习率，而是分三段：线性升温（warmup）、平台或缓慢过渡、衰减到底。线性 warmup 与两种常用衰减的公式：</p>
+  \[ \eta_{t}=\eta_{\max}\cdot\frac{t}{T_{\mathrm{w}}},\qquad 1\le t\le T_{\mathrm{w}} \tag{5.12} \]
+  \[ \eta_{t}=\eta_{\min}+\tfrac{1}{2}\left(\eta_{\max}-\eta_{\min}\right)\left(1+\cos\frac{(t-T_{\mathrm{w}})\,\pi}{T-T_{\mathrm{w}}}\right) \tag{5.13} \]
+  \[ \eta_{t}=\eta_{\max}-\left(\eta_{\max}-\eta_{\min}\right)\frac{t-T_{\mathrm{w}}}{T-T_{\mathrm{w}}} \tag{5.14} \]
+  <p>式 (5.12) 是线性 warmup：前 \(T_{\mathrm{w}}\) 步从 0 线性升到峰值 \(\eta_{\max}\)。式 (5.13) 是<span class="kt">余弦衰减</span>（cosine decay）：从 \(\eta_{\max}\) 沿余弦曲线降到 \(\eta_{\min}\)，前期慢、中期快、后期慢，\(T\) 为总步数。式 (5.14) 是线性衰减，斜率恒定，近年不少开源模型改用它，便于中途延长训练。</p>
+  <p>为什么开头必须 warmup？两个叠加原因：</p>
+  <p>（一）<strong>Adam 的二阶矩还没站稳</strong>。最初几十步里 \(\mathbf{v}_{t}\) 只见过极少的梯度样本，虽然偏差修正把期望补回，但逐坐标的 \(\sqrt{\hat{\mathbf{v}}}\) 仍剧烈波动，更新幅度 \(\eta\hat m/\sqrt{\hat v}\) 忽大忽小；此时若给满 \(\eta_{\max}\)，几步坏更新就足以把权重推飞、触发 loss 尖峰甚至 NaN。warmup 把早期步长压小，等二阶矩统计稳定后再放开。</p>
+  <p>（二）<strong>早期梯度本身方差大</strong>。随机初始化的模型对数据的「方向感」还没建立，不同 batch 给出的梯度差异远大于训练后期； warmup 用小步长熬过这段高方差期。工程惯例 warmup 取总步数的 1%–3%（数千步量级），衰减段末端 \(\eta_{\min}\) 常取峰值的 10% 左右或近零。</p>
+  <p>衰减段的形状不是细节而是结果变量：同样的数据和模型，衰减更充分的曲线最终 loss 更低。比较不同模型的「最终 loss」时必须确认调度一致——这一点第九章讲 scaling law 时会成为硬性前提。</p>
+
+  <h3 id="ch05-s7"><span class="h3-num">5.7</span> 正则化：L2、权重衰减与 AdamW</h3>
+  <p>最常见的正则化是 L2：在损失上添加参数平方和的惩罚，</p>
+  \[ \mathcal{L}'(\boldsymbol{\theta})=\mathcal{L}(\boldsymbol{\theta})+\frac{\lambda}{2}\lVert\boldsymbol{\theta}\rVert^{2} \tag{5.15} \]
+  <p>对式 (5.15) 求梯度，比普通梯度多出一项 \(\lambda\boldsymbol{\theta}\)，于是普通 SGD 的更新变成</p>
+  \[ \boldsymbol{\theta}_{t+1}=\boldsymbol{\theta}_{t}-\eta(\mathbf{g}_{t}+\lambda\boldsymbol{\theta}_{t})=(1-\eta\lambda)\boldsymbol{\theta}_{t}-\eta\mathbf{g}_{t} \tag{5.16} \]
+  <p>即每步先把参数乘以一个小于 1 的因子再减梯度——所以 L2 在 SGD 下与<span class="kt">权重衰减</span>（weight decay）完全等价，是同一枚硬币的两面。</p>
+  <p>但对 Adam，等价性断裂：若把 \(\lambda\boldsymbol{\theta}\) 加进梯度，它会进入式 (5.9) 的二阶矩、再被 \(1/\sqrt{\hat{\mathbf{v}}}\) 逐坐标缩放——梯度历史越大的参数，实际受到的衰减越弱，正则强度被扭曲成逐参数不同。<span class="kt">AdamW</span> 的做法是把衰减项从梯度里拿出来，直接乘在参数上（<span class="kt">解耦权重衰减</span>，decoupled weight decay）：</p>
+  \[ \boldsymbol{\theta}_{t+1}=\boldsymbol{\theta}_{t}-\eta\left(\frac{\hat{\mathbf{m}}_{t}}{\sqrt{\hat{\mathbf{v}}_{t}}+\varepsilon}+\lambda\boldsymbol{\theta}_{t}\right) \tag{5.17} \]
+  <p>这样每个参数每步都精确收缩 \((1-\eta\lambda)\) 倍，与梯度统计无关，正则强度恢复为超参数 \(\lambda\) 的本义。AdamW 是当前 LLM 预训练的默认优化器（如 GPT-3、LLaMA 系列；不少模型取 \(\beta_2=0.95\) 而非默认的 \(0.999\)）。</p>
+  <p>顺带一提 dropout：训练时随机把一部分激活置零来防过拟合，<strong>推理时必须关闭</strong>（现代 LLM 预训练数据量巨大，多数已不用 dropout，此处只作一句提醒）。</p>
+
+  <h3 id="ch05-s8"><span class="h3-num">5.8</span> 常见误用</h3>
+  <div class="warn"><span class="box-tag">常见误用</span><p><strong>把 L2 加进 loss 再用 Adam，就当成了 AdamW。</strong>错因：式 (5.16) 的等价只对 SGD 成立；L2 项进了 Adam 的梯度后会被 \(1/\sqrt{\hat{\mathbf{v}}}\) 逐坐标扭曲，梯度大的参数几乎不衰减、梯度小的参数衰减过量，\(\lambda\) 失去统一含义，调参时表现为「weight decay 怎么调都不对」。改法：框架里显式用 AdamW / decoupled weight decay，或在 Adam 里设 weight decay 参数（主流框架该参数默认即解耦实现），不要自己往 loss 上加平方项。</p></div>
+  <div class="warn"><span class="box-tag">常见误用</span><p><strong>warmup 步数拍脑袋，与总步数脱钩。</strong>两种翻车：训练总长 20 万步却只 warmup 500 步——Adam 二阶矩未稳就放开满学习率，早期 loss 尖峰甚至直接 NaN；或者小跑 2000 步的实验却 warmup 1000 步——一半预算耗在低学习率上，得到的「最终 loss」严重高估，据此比较超参数会得出错误结论。改法：warmup 按总步数的 1%–3% 设定，且每次改动训练规模时同步重算；小规模探针实验也要保持比例一致。</p></div>
+
+  <h3 id="ch05-ai"><span class="h3-num">5.9</span> 在 AI 中的位置</h3>
+  <table class="tbl"><thead><tr><th>本章结论</th><th>具体 AI 组件 / 机制</th><th>缺了会怎样</th></tr></thead><tbody>
+  <tr><td>负梯度 = 局部最速下降（式 5.3）</td><td>每一次反向传播后的参数更新，所有优化器的共同内核</td><td>不理解「方向」与「步长」分离，调 lr 全靠碰运气</td></tr>
+  <tr><td>lr 上限受最大曲率约束（式 5.4）</td><td>lr 是 LLM 训练稳定性第一旋钮；loss 尖峰时第一动作是降 lr</td><td>lr 略超阈值即发散：loss 曲线先震荡后 NaN（接第七章）</td></tr>
+  <tr><td>mini-batch 梯度是无偏估计、方差 \(\propto 1/B\)（式 5.6）</td><td>batch size 与梯度累积步数的换算；数据并行下有效 batch 的计算</td><td>改 batch 不改 lr，等效于偷偷改了优化器行为</td></tr>
+  <tr><td>动量抵消横向震荡（式 5.7）</td><td>SGD-momentum 与 Adam 的一阶矩项；理解「相同 lr 下动量更冲」</td><td>把动量造成的过冲误判为发散，错误降 lr 拖慢训练</td></tr>
+  <tr><td>Adam 公式组与偏差修正（式 5.8–5.11）</td><td>AdamW 是 GPT-3、LLaMA 等 LLM 预训练的默认优化器</td><td>看不懂 \(\beta_2\)、\(\varepsilon\) 的作用，loss 异常时无从下手</td></tr>
+  <tr><td>warmup + 衰减调度（式 5.12–5.14）</td><td>所有主流 LLM 的训练调度器；衰减形状直接影响最终 loss</td><td>比较模型/超参时调度不一致，结论无效（接第九章 scaling law）</td></tr>
+  <tr><td>L2 ≠ Adam 的权重衰减，AdamW 解耦（式 5.17）</td><td>训练框架中 weight decay 参数的正确使用</td><td>正则强度被逐参数扭曲，模型欠拟合或过拟合却找不到原因</td></tr>
+  </tbody></table>
+</section>

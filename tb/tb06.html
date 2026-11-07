@@ -1,0 +1,318 @@
+<section class="chapter" id="tb06" data-num="06">
+  <header class="ch-open">
+    <p class="ch-kicker">第六章 · 据原文目录 · 教科书版</p>
+    <h2 class="ch-title">综合案例：Transformer 的数学</h2>
+    <p class="ch-sub">把一块 Transformer 从头到尾串一遍</p>
+    <p class="ch-lede">前五章各自为战：矩阵、链式法则、期望方差、交叉熵、优化器。这一章把它们全部装上同一台机器——一个完整的 Transformer 块。我们沿数据通路慢慢走：嵌入怎么查表、位置怎么编码、注意力怎么一个数一个数算出来、为什么要除以根号 d、残差凭什么救梯度、LayerNorm 怎么手算、FFN 为什么最吃参数。每个数字都用 python3 复核，每个零件都标明它来自前面哪一章。</p>
+    <div class="ch-map"><span class="map-tag">本章路线</span>流水线总览 → 嵌入与位置 → 注意力全程手算 → 缩放推导 → 多头 → 残差与归一化 → FFN → 参数总账 → 自测</div>
+  </header>
+  <nav class="ch-toc" aria-label="章内目录">
+    <a href="#tb06-s1">6.1 总览：一条装配流水线</a>
+    <a href="#tb06-s2">6.2 嵌入与位置编码</a>
+    <a href="#tb06-s3">6.3 缩放点积注意力：一次完整演算</a>
+    <a href="#tb06-s4">6.4 为什么除以 √d_k</a>
+    <a href="#tb06-s5">6.5 多头注意力</a>
+    <a href="#tb06-s6">6.6 残差连接与 LayerNorm</a>
+    <a href="#tb06-s7">6.7 前馈网络 FFN</a>
+    <a href="#tb06-s8">6.8 参数量总账</a>
+    <a href="#tb06-ai">6.9 在 AI 中的位置</a>
+  </nav>
+
+  <h3 id="tb06-s1"><span class="h3-num">6.1</span> 总览：一条装配流水线</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>一个 Transformer 块就是一条装配流水线。</strong>想象一条汽车装配线：底盘（输入的 token 序列）从一头进来，经过一个个工位，每个工位只做一件小事——有的工位给零件贴标签（位置编码），有的工位让零件们互相交换信息（注意力），有的工位做精细加工（FFN），还有的工位是质检员，把尺寸超差的产品拉回标准范围（LayerNorm）。流水线两侧各有一条「直通车」传送带（残差连接），加工前的原件永远有一份跟着走，防止加工把原件改得面目全非。关键在于：<strong>每个工位都是前五章学过的数学零件</strong>——矩阵乘法、softmax、均值方差、链式法则——本章一个都不新发明，只负责把它们拧到正确的位置上。</p></div>
+  <p>先把整条流水线写成一行数学。一个 Transformer 块（出自 Vaswani et al. 2017《Attention Is All You Need》）只做一件事：把 \(n\) 个 token 的表示 \(\mathbf{X}\in\mathbb{R}^{n\times d_{\text{model}}}\)（\(n\) 行，每行一个 token、长度为 \(d_{\text{model}}\) 的向量）变成同形状的输出 \(\mathbf{Y}\)。分三步看：</p>
+  \[\tilde{\mathbf{X}}=\mathbf{E}+\mathbf{P},\qquad \mathbf{Z}=\operatorname{LN}\bigl(\tilde{\mathbf{X}}+\operatorname{MHA}(\tilde{\mathbf{X}})\bigr),\qquad \mathbf{Y}=\operatorname{LN}\bigl(\mathbf{Z}+\operatorname{FFN}(\mathbf{Z})\bigr) \tag{6.1}\]
+  <p>逐个符号读：\(\mathbf{E}\in\mathbb{R}^{n\times d_{\text{model}}}\) 是词嵌入（每个 token 查表得到一个向量），\(\mathbf{P}\) 是位置编码（告诉模型谁在第几个位置），两者相加得 \(\tilde{\mathbf{X}}\)；MHA 是多头注意力（token 之间互相看），LN 是层归一化（拉回标准尺度），FFN 是前馈网络（每个 token 各自深加工）。请特别注意两件事：其一，两个加号 \(\tilde{\mathbf{X}}+\operatorname{MHA}(\cdot)\)、\(\mathbf{Z}+\operatorname{FFN}(\cdot)\) 就是残差连接——原件加加工量；其二，每个工位的输入输出形状完全相同：</p>
+  \[\mathbb{R}^{n\times d_{\text{model}}}\ \xrightarrow{\ \operatorname{MHA}\ }\ \mathbb{R}^{n\times d_{\text{model}}}\ \xrightarrow{\ \operatorname{FFN}\ }\ \mathbb{R}^{n\times d_{\text{model}}}\]
+  <p>为什么强调「形状不变」？因为形状不变，这块积木才能原样堆叠 \(L\) 层——GPT 就是几十上百块同样的积木摞起来的。这是第一章「先标维度再动手」的第一次全章实战：本章每写一个矩阵乘法，都先把维度链摆在旁边。</p>
+  <figure class="fig">
+    <svg viewBox="0 0 780 580" role="img" aria-label="Transformer 块流水线结构图">
+      <defs>
+        <marker id="arr-tb6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--ink)"></path>
+        </marker>
+      </defs>
+      <!-- 主通路工位 -->
+      <rect x="230" y="14" width="240" height="42" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.5"></rect>
+      <text x="350" y="40" text-anchor="middle" font-size="14" fill="var(--ink)">输入 token（n 个）</text>
+      <rect x="230" y="90" width="240" height="42" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.5"></rect>
+      <text x="350" y="116" text-anchor="middle" font-size="14" fill="var(--ink)">词嵌入查表 + 位置编码</text>
+      <rect x="230" y="166" width="240" height="42" rx="8" fill="none" stroke="var(--accent)" stroke-width="2"></rect>
+      <text x="350" y="192" text-anchor="middle" font-size="14" fill="var(--ink)">多头注意力 MHA</text>
+      <rect x="230" y="242" width="240" height="42" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.5"></rect>
+      <text x="350" y="268" text-anchor="middle" font-size="14" fill="var(--ink)">残差相加 + LayerNorm</text>
+      <rect x="230" y="318" width="240" height="42" rx="8" fill="none" stroke="var(--accent)" stroke-width="2"></rect>
+      <text x="350" y="344" text-anchor="middle" font-size="14" fill="var(--ink)">前馈网络 FFN</text>
+      <rect x="230" y="394" width="240" height="42" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.5"></rect>
+      <text x="350" y="420" text-anchor="middle" font-size="14" fill="var(--ink)">残差相加 + LayerNorm</text>
+      <rect x="230" y="470" width="240" height="42" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.5"></rect>
+      <text x="350" y="496" text-anchor="middle" font-size="14" fill="var(--ink)">输出表示（n × d_model）</text>
+      <!-- 主箭头 -->
+      <line x1="350" y1="56" x2="350" y2="88" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#arr-tb6)"></line>
+      <line x1="350" y1="132" x2="350" y2="164" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#arr-tb6)"></line>
+      <line x1="350" y1="208" x2="350" y2="218" stroke="var(--ink)" stroke-width="1.5"></line>
+      <line x1="350" y1="232" x2="350" y2="240" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#arr-tb6)"></line>
+      <line x1="350" y1="284" x2="350" y2="316" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#arr-tb6)"></line>
+      <line x1="350" y1="360" x2="350" y2="370" stroke="var(--ink)" stroke-width="1.5"></line>
+      <line x1="350" y1="384" x2="350" y2="392" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#arr-tb6)"></line>
+      <line x1="350" y1="436" x2="350" y2="468" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#arr-tb6)"></line>
+      <!-- 残差直通传送带 1 -->
+      <circle cx="350" cy="225" r="8" fill="none" stroke="var(--accent2)" stroke-width="1.5"></circle>
+      <text x="350" y="230" text-anchor="middle" font-size="13" fill="var(--accent2)">+</text>
+      <path d="M 350 148 L 196 148 L 196 225 L 341 225" fill="none" stroke="var(--accent2)" stroke-width="1.2"></path>
+      <circle cx="350" cy="148" r="2.6" fill="var(--accent2)"></circle>
+      <!-- 残差直通传送带 2 -->
+      <circle cx="350" cy="377" r="8" fill="none" stroke="var(--accent2)" stroke-width="1.5"></circle>
+      <text x="350" y="382" text-anchor="middle" font-size="13" fill="var(--accent2)">+</text>
+      <path d="M 350 300 L 196 300 L 196 377 L 341 377" fill="none" stroke="var(--accent2)" stroke-width="1.2"></path>
+      <circle cx="350" cy="300" r="2.6" fill="var(--accent2)"></circle>
+      <!-- 层堆叠括号 -->
+      <path d="M 138 166 L 124 166 L 124 436 L 138 436" fill="none" stroke="var(--ink)" stroke-width="1.2"></path>
+      <text x="114" y="305" text-anchor="end" font-size="12" fill="var(--ink)">× L 层</text>
+      <!-- 右侧：每个工位用的数学来自第几章 -->
+      <line x1="470" y1="111" x2="496" y2="111" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 3"></line>
+      <text x="500" y="107" font-size="12" fill="var(--accent)">查表 = 矩阵取行（第一章）</text>
+      <text x="500" y="123" font-size="12" fill="var(--accent)">正弦 / 余弦（本章 6.2）</text>
+      <line x1="470" y1="187" x2="496" y2="187" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 3"></line>
+      <text x="500" y="175" font-size="12" fill="var(--accent)">矩阵乘法 QKᵀ、加权平均（第一章）</text>
+      <text x="500" y="191" font-size="12" fill="var(--accent)">方差与归一化常数（第三章，本章 6.4）</text>
+      <text x="500" y="207" font-size="12" fill="var(--accent)">softmax 数值稳定（第七章）</text>
+      <line x1="470" y1="263" x2="496" y2="263" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 3"></line>
+      <text x="500" y="259" font-size="12" fill="var(--accent)">链式法则：梯度直通车（第二章）</text>
+      <text x="500" y="275" font-size="12" fill="var(--accent)">均值 / 方差 / 标准化（第三章）</text>
+      <line x1="470" y1="339" x2="496" y2="339" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 3"></line>
+      <text x="500" y="343" font-size="12" fill="var(--accent)">矩阵乘法 + 非线性激活（第一章）</text>
+      <line x1="470" y1="415" x2="496" y2="415" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 3"></line>
+      <text x="500" y="419" font-size="12" fill="var(--accent)">同上一组（本章 6.6）</text>
+      <line x1="470" y1="491" x2="496" y2="491" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 3"></line>
+      <text x="500" y="495" font-size="12" fill="var(--accent)">送入下一层或输出头</text>
+      <!-- 底部总结 -->
+      <text x="350" y="540" text-anchor="middle" font-size="12" fill="var(--ink)">整条流水线 = 查表 + 三角函数 + 三个矩阵乘 + 两次标准化 + 两个矩阵乘，用两条直通带缝起来</text>
+    </svg>
+    <figcaption>图 6.1　一个 Transformer 块的数据通路：每个工位标注了它用到的数学出自本书哪一章</figcaption>
+  </figure>
+  <p>读这张图的方式：中间一列是流水线主路，左边的弯线是两条「直通车」传送带（残差），右边虚线引出的是每个工位背后的数学零件及其出处。接下来我们逐工位走过去，每到一个工位就把对应的数学零件拆开算一遍。</p>
+  <div class="example"><span class="box-tag">例 6.1 · 动手算（走一遍流水线入口，核对形状）</span><p><strong>题目</strong>　取 \(n=3\) 个 token、\(d_{\text{model}}=2\)。嵌入查表得到 \(\mathbf{E}\)；位置编码按式 (6.2) 计算（此时只有 \(i=0\) 一对，\(\omega_0=10000^{0}=1\)，于是 \(\operatorname{PE}(pos,0)=\sin pos\)、\(\operatorname{PE}(pos,1)=\cos pos\)）：
+  \[\mathbf{E}=\begin{pmatrix}1&0\\0&1\\1&1\end{pmatrix},\qquad \mathbf{P}=\begin{pmatrix}\sin0&\cos0\\\sin1&\cos1\\\sin2&\cos2\end{pmatrix}\]
+  （1）算出式 (6.1) 的入口 \(\tilde{\mathbf{X}}=\mathbf{E}+\mathbf{P}\)；（2）不展开 MHA 和 FFN 的内部，只用形状纪律回答：它们的输出必须是几行几列，式 (6.1) 里的两个残差加号才合法？</p>
+  <p><strong>解</strong>　<strong>第 1 步：算 \(\mathbf{P}\)。</strong>逐位置代入：\(\sin0=0,\ \cos0=1\)；\(\sin1\approx0.8415,\ \cos1\approx0.5403\)；\(\sin2\approx0.9093,\ \cos2\approx-0.4161\)。</p>
+  <p><strong>第 2 步：逐元素相加。</strong>矩阵加法的定义是对应位置相加；两矩阵同为 \(3\times2\)，合法：
+  \[\tilde{\mathbf{X}}=\begin{pmatrix}1+0&0+1\\0+0.8415&1+0.5403\\1+0.9093&1-0.4161\end{pmatrix}=\begin{pmatrix}1.0000&1.0000\\0.8415&1.5403\\1.9093&0.5839\end{pmatrix}\]
+  （python3 验算：\(\sin1=0.8414709848\)、\(\cos1=0.5403023059\)、\(\sin2=0.9092974268\)、\(\cos2=-0.4161468365\)，相加结果与上表一致。）</p>
+  <p><strong>第 3 步：形状核对。</strong>残差相加 \(\tilde{\mathbf{X}}+\operatorname{MHA}(\tilde{\mathbf{X}})\) 是矩阵加法，要求两边同形；\(\tilde{\mathbf{X}}\) 是 \(3\times2\)，所以 MHA 的输出必须是 \(3\times2\)——6.5 节的维度链将证明它确实如此。同理 FFN 的输出也必须是 \(3\times2\)，于是最终 \(\mathbf{Y}\in\mathbb{R}^{3\times2}\)，与输入同形，可以原样送进下一块积木。<strong>反例</strong>：若某次实现把 MHA 输出写成了 \(2\times3\)（比如多转置了一次），残差加法当场对不齐——形状纪律能在手算阶段就拦下这类错误，不必等跑起来再debug。</p></div>
+  <aside class="mn">记忆钩子：注意力管「token 之间互相看」，FFN 管「每个 token 自己关起门想」，残差和 LN 管「信息不丢、尺度不炸」。</aside>
+
+  <h3 id="tb06-s2"><span class="h3-num">6.2</span> 嵌入与位置编码</h3>
+  <p><strong>词嵌入：其实是查表。</strong>模型眼里没有「猫」这个字，只有编号。设词表大小为 \(V\)（比如 5 万个不同的 token），嵌入矩阵 \(\mathbf{W}_E\in\mathbb{R}^{V\times d_{\text{model}}}\)——一张 \(V\) 行的大表，每行是一个 \(d_{\text{model}}\) 维向量。第 \(t\) 个 token 的编号是 \(i_t\)，它的嵌入向量就是</p>
+  \[\mathbf{e}_t=\mathbf{W}_E[\,i_t\,]\in\mathbb{R}^{d_{\text{model}}}\]
+  <p>用第一章的语言说，这等价于「one-hot 向量乘矩阵」：one-hot 向量 \(\mathbf{x}_t\in\mathbb{R}^{V}\) 只在第 \(i_t\) 位是 1，乘任何矩阵的结果就是挑出第 \(i_t\) 行。所以工程实现里根本没有矩阵乘法，只有一次行索引（查表）。把 \(n\) 个 token 查到的行堆起来，就是 \(\mathbf{E}\in\mathbb{R}^{n\times d_{\text{model}}}\)。</p>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>位置编码 = 给每个词盖一个「第几个」的时间戳。</strong>邮局分拣信件，只看信封内容分不清「狗咬人」和「人咬狗」——词完全一样，顺序完全不同。注意力机制本身对顺序是「脸盲」的：把输入打乱，输出只是跟着打乱，数值一个不变（你可以用 6.3 节的例子亲自验证：交换 \(\mathbf{X}\) 的两行，输出的对应两行也跟着交换）。所以必须额外注入「你是第几个」这个信息。正弦位置编码的做法是：给位置 \(pos\) 发一个专属的向量印章 \(\mathbf{p}_{pos}\)，直接盖（加）在嵌入向量上。印章的图案由一排转速不同的钟组成：快钟一格一跳，负责分清相邻位置；慢钟转得极慢，负责标记「大致在文章前段还是后段」。</p></div>
+  <div class="def"><span class="box-tag">定义 6.1</span><p><span class="kt">正弦位置编码</span>（sinusoidal positional encoding）。设模型维度为 \(d_{\text{model}}\)，位置 \(pos=0,1,2,\dots\)，维度下标 \(i=0,1,\dots,d_{\text{model}}/2-1\)，位置向量 \(\mathbf{p}_{pos}\in\mathbb{R}^{d_{\text{model}}}\) 的第 \(2i\) 与第 \(2i+1\) 个分量为
+  \[\operatorname{PE}(pos,2i)=\sin\!\left(\frac{pos}{10000^{\,2i/d_{\text{model}}}}\right),\qquad \operatorname{PE}(pos,2i+1)=\cos\!\left(\frac{pos}{10000^{\,2i/d_{\text{model}}}}\right) \tag{6.2}\]
+  也就是：维度两两成对，每对 \((\sin,\cos)\) 用同一个频率 \(\omega_i=10000^{-2i/d_{\text{model}}}\)，\(i\) 越小频率越高（钟越快），\(i\) 越大频率越低，最慢的一对频率是 \(1/10000\)。</p></div>
+  <p>为什么 \(\mathbf{P}\) 和 \(\mathbf{E}\) 是<strong>相加</strong>而不是拼接？因为相加不增加维度：嵌入是 \(d_{\text{model}}\) 维，印章也是 \(d_{\text{model}}\) 维，加起来还是 \(d_{\text{model}}\) 维，流水线的「宽度预算」不变。这就是式 (6.1) 第一步 \(\tilde{\mathbf{X}}=\mathbf{E}+\mathbf{P}\)。</p>
+  <div class="example"><span class="box-tag">例 6.2 · 动手算</span><p><strong>题目</strong>　取 \(d_{\text{model}}=4\)，手算位置 \(pos=1\) 的编码向量 \(\mathbf{p}_1\)，四个分量一个都不许跳。</p>
+  <p><strong>解</strong>　<strong>第 1 步，确定有几对、频率各是多少。</strong>\(d_{\text{model}}=4\)，所以分量成两对，\(i=0\) 和 \(i=1\)。频率公式是 \(\omega_i=10000^{-2i/d_{\text{model}}}\)。代入 \(i=0\)：指数 \(-2\times0/4=0\)，任何数的 0 次方都是 1，所以 \(\omega_0=10000^{0}=1\)。代入 \(i=1\)：指数 \(-2\times1/4=-1/2\)，而 \(10000^{1/2}=\sqrt{10000}=100\)，所以 \(\omega_1=10000^{-1/2}=1/100=0.01\)。</p>
+  <p><strong>第 2 步，把角度算出来。</strong>式 (6.2) 括号里的量是 \(pos\cdot\omega_i\)（分母写法 \(\frac{pos}{10000^{2i/d}}\) 就是 \(pos\times 10000^{-2i/d}\)）。\(pos=1\)：第一对角度 \(1\times1=1\)（弧度），第二对角度 \(1\times0.01=0.01\)。</p>
+  <p><strong>第 3 步，按「第 \(2i\) 位放 sin、第 \(2i+1\) 位放 cos」的规则填四个分量：</strong></p>
+  \[\mathbf{p}_1=\bigl(\sin 1,\ \cos 1,\ \sin 0.01,\ \cos 0.01\bigr)\approx\bigl(0.8415,\ 0.5403,\ 0.0100,\ 1.0000\bigr)\]
+  <p>（python3 验算：<code>math.sin(1)=0.8414709848</code>，<code>math.cos(1)=0.5403023059</code>，<code>math.sin(0.01)=0.0099998333</code>，<code>math.cos(0.01)=0.9999500004</code>。）</p>
+  <p><strong>第 4 步，读结果。</strong>前两个分量（快钟）随 \(pos\) 明显变化——\(pos=1\) 时已经到了 \(0.84\) 和 \(0.54\)；后两个分量（慢钟）几乎还钉在 \((0,1)\) 附近没动。四个分量合起来就是「第 1 个位置」这个身份的独特指纹：快钟负责把相邻位置区分开，慢钟负责在大尺度上给位置定位。</p></div>
+  <p>顺带解释为什么正弦编码对「相对位置」友好。对固定频率 \(\omega\)，用三角函数的和角公式（这是唯一的工具），「向前平移 \(k\) 位」恰好等于在每个 \((\sin,\cos)\) 平面上做一次只依赖 \(k\) 的旋转：</p>
+  \[\begin{pmatrix}\sin((pos+k)\omega)\\ \cos((pos+k)\omega)\end{pmatrix}=\begin{pmatrix}\cos k\omega & \sin k\omega\\ -\sin k\omega & \cos k\omega\end{pmatrix}\begin{pmatrix}\sin(pos\omega)\\ \cos(pos\omega)\end{pmatrix}\]
+  <p>注意右边的变换矩阵里没有 \(pos\)——也就是说「相对距离 \(k\)」对应一个与绝对位置无关的<strong>线性</strong>变换。注意力学到的正是 token 之间的相对关系，而相对关系在这里是线性的，所以模型更容易抓住「相隔 \(k\) 位」这个规律。这也是后来 RoPE（旋转位置编码）的思想源头。</p>
+  <aside class="mn">易混点：位置编码是<strong>加</strong>到嵌入上，不是 concat 拼接。相加不改维度；拼接会把 \(d_{\text{model}}\) 撑大，后面所有矩阵的宽度都得跟着改。</aside>
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：（1）说出词嵌入是「查表」而非「矩阵乘法」，并用 one-hot 解释两者为何等价；（2）默写式 (6.2)，说清「第 \(2i\) 位 sin、第 \(2i+1\) 位 cos、共用频率 \(\omega_i\)」；（3）徒手算出 \(d_{\text{model}}=4\)、任意 \(pos\) 的编码向量；（4）解释「快钟 / 慢钟」各自的分工；（5）说清为什么 \(\mathbf{E}\) 和 \(\mathbf{P}\) 是相加。</p></div>
+
+  <h3 id="tb06-s3"><span class="h3-num">6.3</span> 缩放点积注意力：一次完整演算</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>注意力 = 开会时每个人抬头看看别人，按「和我多相关」分配注意力权重。</strong>想象一个圆桌会议，每个 token 都是与会者。轮到整理会议纪要时，每个人都要写一段「综合大家意见后的新理解」。怎么综合？每人先发一张「我在找什么」的寻物启事（这是查询向量 \(\mathbf{q}\)），其他人桌上各摆着一张「我这里有啥」的标签（这是键向量 \(\mathbf{k}\)）。把寻物启事和每张标签比对一下相似度（点积），相似度高的多分配注意力，低的少分配；然后按这个权重把每个人的实际发言内容（值向量 \(\mathbf{v}\)）加权平均，就得到自己的新表示。三个角色——「我找什么」「我有什么」「我的实际内容」——就是 Q、K、V 的全部含义。</p></div>
+  <p>先把数学骨架立起来。输入 \(\mathbf{X}\in\mathbb{R}^{n\times d_{\text{model}}}\) 通过三套可学习的投影矩阵变成三份材料：</p>
+  \[\mathbf{Q}=\mathbf{X}\mathbf{W}_Q\in\mathbb{R}^{n\times d_k},\qquad \mathbf{K}=\mathbf{X}\mathbf{W}_K\in\mathbb{R}^{n\times d_k},\qquad \mathbf{V}=\mathbf{X}\mathbf{W}_V\in\mathbb{R}^{n\times d_v}\]
+  <p>其中 \(\mathbf{W}_Q,\mathbf{W}_K\in\mathbb{R}^{d_{\text{model}}\times d_k}\)，\(\mathbf{W}_V\in\mathbb{R}^{d_{\text{model}}\times d_v}\)。然后本书统一写法（后面各章都一样）：</p>
+  \[\operatorname{Attention}(\mathbf{Q},\mathbf{K},\mathbf{V})=\operatorname{softmax}\!\left(\frac{\mathbf{Q}\mathbf{K}^{\top}}{\sqrt{d_k}}\right)\mathbf{V} \tag{6.3}\]
+  <p>先做维度体检，这是第一章的纪律：\(\mathbf{Q}\) 是 \(n\times d_k\)，\(\mathbf{K}^{\top}\) 是 \(d_k\times n\)，乘积 \(\mathbf{Q}\mathbf{K}^{\top}\) 是 \(n\times n\)——第 \(i\) 行第 \(j\) 列正是「token \(i\) 对 token \(j\) 的匹配分数」。除以一个标量 \(\sqrt{d_k}\) 不改形状。softmax 逐行作用，把每行变成一个和为 1 的权重分布，形状仍是 \(n\times n\)。最后乘 \(\mathbf{V}\)（\(n\times d_v\)）：\((n\times n)(n\times d_v)=n\times d_v\)。输出与输入行数一致，每行是对所有 token 的 \(\mathbf{v}\) 向量按注意力权重的加权平均。✓</p>
+  <div class="example"><span class="box-tag">例 6.3 · 动手算</span><p><strong>题目</strong>　取 \(n=3\) 个 token、\(d_k=d_v=2\)（即 \(d_{\text{model}}=2\)，小到能全部手算）。输入与三个投影矩阵故意取成简单整数：</p>
+  \[\mathbf{X}=\begin{pmatrix}1&0\\0&1\\1&1\end{pmatrix},\quad \mathbf{W}_Q=\begin{pmatrix}1&1\\0&1\end{pmatrix},\quad \mathbf{W}_K=\begin{pmatrix}1&0\\1&1\end{pmatrix},\quad \mathbf{W}_V=\begin{pmatrix}1&0\\2&1\end{pmatrix}\]
+  <p>按式 (6.3) 手算完整前向，每个中间矩阵都写出来。</p>
+  <p><strong>第 1 步：算 \(\mathbf{Q}=\mathbf{X}\mathbf{W}_Q\)。</strong>维度链 \((3\times2)(2\times2)\to3\times2\)。回忆第一章：乘积的第 \(i\) 行 = \(\mathbf{X}\) 的第 \(i\) 行依次与 \(\mathbf{W}_Q\) 的每一列做点积。逐个算 \(\mathbf{Q}\) 的第 1 行 \((1,0)\mathbf{W}_Q\)：第 1 列是 \((1,0)^{\top}\)，点积 \(1\times1+0\times0=1\)；第 2 列是 \((1,1)^{\top}\)，点积 \(1\times1+0\times1=1\)。所以第 1 行是 \((1,1)\)。同理算完三行：</p>
+  \[\mathbf{Q}=\begin{pmatrix}1&1\\0&1\\1&2\end{pmatrix},\qquad \mathbf{K}=\begin{pmatrix}1&0\\1&1\\2&1\end{pmatrix},\qquad \mathbf{V}=\begin{pmatrix}1&0\\2&1\\3&1\end{pmatrix}\]
+  <p>（\(\mathbf{K}\)、\(\mathbf{V}\) 的算法完全相同，留给你用 python3 对一遍——本章所有矩阵都已用 python3 验算，下面给最终结果。）</p>
+  <p><strong>第 2 步：算分数矩阵 \(\mathbf{S}=\mathbf{Q}\mathbf{K}^{\top}\)。</strong>先想形状：\((3\times2)(2\times3)\to3\times3\)。第 \(i\) 行第 \(j\) 列 = \(\mathbf{q}_i\cdot\mathbf{k}_j\)，即「token \(i\) 的查询」对「token \(j\) 的标签」的匹配度。示范两格：\(S_{11}=(1,1)\cdot(1,0)=1\times1+1\times0=1\)；\(S_{13}=(1,1)\cdot(2,1)=1\times2+1\times1=3\)。全部 9 格算完：</p>
+  \[\mathbf{S}=\mathbf{Q}\mathbf{K}^{\top}=\begin{pmatrix}1&2&3\\0&1&1\\1&3&4\end{pmatrix}\]
+  <p>读法：token 1 对自己、对 token 2、对 token 3 的分数分别是 1、2、3——它和 token 3 最「对得上」。</p>
+  <p><strong>第 3 步：除以 \(\sqrt{d_k}=\sqrt{2}\approx1.4142\)。</strong>为什么要除？这是 6.4 节的全部内容，这里先机械执行——逐元素除：</p>
+  \[\frac{\mathbf{S}}{\sqrt{2}}=\begin{pmatrix}0.7071&1.4142&2.1213\\0.0000&0.7071&0.7071\\0.7071&2.1213&2.8284\end{pmatrix}\]
+  <p><strong>第 4 步：逐行 softmax，把每行变成和为 1 的权重。</strong>softmax 的定义是 \(\operatorname{softmax}(\mathbf{s})_j=e^{s_j}/\sum_l e^{s_l}\)。工程上用数值稳定的等价形式——先减本行最大值再取指数（第七章会证明它数学上恒等、又能防溢出）：</p>
+  \[\operatorname{softmax}(\mathbf{s})_j=\frac{e^{s_j-m}}{\sum_l e^{s_l-m}},\qquad m=\max_l s_l \tag{6.4}\]
+  <p>以第 1 行为例，一步不跳：行向量是 \((0.7071,\,1.4142,\,2.1213)\)，最大值 \(m=2.1213\)。每个元素减 \(m\) 得 \((-1.4142,\,-0.7071,\,0)\)。取指数：\(e^{-1.4142}\approx0.2431\)，\(e^{-0.7071}\approx0.4931\)，\(e^{0}=1\)。求和：\(0.2431+0.4931+1=1.7362\)。逐个除以总和：</p>
+  \[\frac{(0.2431,\ 0.4931,\ 1)}{1.7362}=(0.1400,\ 0.2840,\ 0.5760)\]
+  <p>第 2 行同样处理：最大值 \(m=0.7071\)，减完是 \((-0.7071,0,0)\)，取指数 \((0.4931,1,1)\)，和 \(2.4931\)，除得 \((0.1978,\,0.4011,\,0.4011)\)。第 3 行：最大值 \(m=2.8284\)，减完 \((-2.1213,-0.7071,0)\)，取指数 \((0.1199,0.4931,1)\)，和 \(1.6130\)，除得 \((0.0743,\,0.3057,\,0.6200)\)。三行拼成权重矩阵 \(\mathbf{P}\)：</p>
+  \[\mathbf{P}=\operatorname{softmax}\!\left(\frac{\mathbf{Q}\mathbf{K}^{\top}}{\sqrt{2}}\right)=\begin{pmatrix}0.1400&0.2840&0.5760\\0.1978&0.4011&0.4011\\0.0743&0.3057&0.6200\end{pmatrix}\]
+  <p>自查：每行之和应为 1。\(0.1400+0.2840+0.5760=1.0000\) ✓，其余两行同理（python3 验算通过）。这是 softmax 白送你的 sanity check，手算时务必用。</p>
+  <p><strong>第 5 步：加权求和 \(\mathbf{O}=\mathbf{P}\mathbf{V}\)。</strong>形状 \((3\times3)(3\times2)\to3\times2\)。第 \(i\) 行 = 用 \(\mathbf{P}\) 的第 \(i\) 行做权重，对 \(\mathbf{V}\) 的三个行向量做加权平均。示范第 1 行第 1 列：</p>
+  \[O_{11}=0.1400\times1+0.2840\times2+0.5760\times3=0.1400+0.5680+1.7280=2.4360\]
+  <p>（末位差异是四舍五入的中间值造成的，python3 精确值 \(2.4359\)。）全部算完：</p>
+  \[\mathbf{O}=\mathbf{P}\mathbf{V}=\begin{pmatrix}2.4359&0.8600\\2.2033&0.8022\\2.5457&0.9257\end{pmatrix}\]
+  <p><strong>读结果。</strong>token 1 把 \(57.6\%\) 的注意力分给了 token 3，所以它的新表示 \((2.4359,\,0.8600)\) 最靠近 \(\mathbf{V}\) 的第 3 行 \((3,1)\)——但又不是完全等于，因为还有 \(42.4\%\) 的注意力分给了别人。这就是「软」查表：不是非此即彼地选一行，而是按比例掺和。至此你亲手执行了一次完整的缩放点积注意力。python3 验算代码：</p>
+  <pre><code>import math
+X=[[1,0],[0,1],[1,1]]
+WQ=[[1,1],[0,1]]; WK=[[1,0],[1,1]]; WV=[[1,0],[2,1]]
+mm=lambda A,B:[[sum(A[i][k]*B[k][j] for k in range(len(B))) for j in range(len(B[0]))] for i in range(len(A))]
+mt=lambda A:[[A[j][i] for j in range(len(A))] for i in range(len(A[0]))]
+Q,K,V=mm(X,WQ),mm(X,WK),mm(X,WV)
+S=mm(Q,mt(K)); Ss=[[x/math.sqrt(2) for x in r] for r in S]
+P=[[(e:=math.exp(x-max(r)))/sum(math.exp(y-max(r)) for y in r) for x in r] for r in Ss]
+O=mm(P,V)
+print(Q,K,V,S,sep='\n'); print([[round(x,4) for x in r] for r in P]); print([[round(x,4) for x in r] for r in O])</code></pre>
+  <pre><code>P = [[0.14, 0.284, 0.576], [0.1978, 0.4011, 0.4011], [0.0743, 0.3057, 0.62]]
+O = [[2.4359, 0.86], [2.2033, 0.8022], [2.5457, 0.9257]]</code></pre>
+  </div>
+  <aside class="mn">记忆钩子：Q 是「我要找什么」，K 是「我这里有什么」，V 是「我的实际内容」。\(\mathbf{Q}\mathbf{K}^{\top}\) 是配对打分，softmax 是把分数变成配额，乘 \(\mathbf{V}\) 是按配额取货。</aside>
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：（1）默写式 (6.3) 并说出每个矩阵的形状；（2）徒手完成例 6.2 的五步演算，不跳步；（3）用「每行和为 1」自查 softmax 结果；（4）解释为什么输出是 \(\mathbf{V}\) 各行的加权平均、为什么叫「软」查表；（5）用不到 10 行 python3 复核自己的手算。</p></div>
+
+  <h3 id="tb06-s4"><span class="h3-num">6.4</span> 为什么除以 √d_k</h3>
+  <p>式 (6.3) 里那个 \(\sqrt{d_k}\) 不是调参调出来的玄学常数，它是一条方差守恒律的推论。这一节把它从头推出来，工具全部来自第三章（期望、方差、独立性）。</p>
+  <div class="derive"><span class="box-tag">推导 · 一步步来</span><p><strong>第 1 步（把点积写成求和）。</strong>设查询向量 \(\mathbf{q}=(q_1,\dots,q_{d_k})\) 与键向量 \(\mathbf{k}=(k_1,\dots,k_{d_k})\) 都是随机向量，则
+  \[\mathbf{q}\cdot\mathbf{k}=\sum_{i=1}^{d_k}q_i k_i.\]
+  这是点积的定义，没有新东西。
+  <strong>第 2 步（提出假设，并说明为什么要假设）。</strong>假设各分量 \(q_i,k_i\) 相互独立、均值为 0、方差为 1。为什么可以这样假设？网络初始化时权重就是按「零均值、固定方差」的分布随机采的（Xavier、He 初始化就是按层宽选这个方差，见 2.6 节），所以前向刚开始时，\(q_i,k_i\) 大致就长这样。我们先看清楚初始时刻的行为，就已经能解释缩放因子的来历。</p>
+  <p><strong>第 3 步（单个乘积项的均值）。</strong>由独立性，「乘积的期望 = 期望的乘积」（第三章：独立随机变量 \(\mathbb{E}[XY]=\mathbb{E}[X]\,\mathbb{E}[Y]\)）：
+  \[\mathbb{E}[q_i k_i]=\mathbb{E}[q_i]\,\mathbb{E}[k_i]=0\times0=0.\]
+  <strong>第 4 步（单个乘积项的方差）。</strong>方差定义 \(\operatorname{Var}(Z)=\mathbb{E}[Z^2]-(\mathbb{E}[Z])^2\)。第 3 步已得 \(\mathbb{E}[q_i k_i]=0\)，第二项消失，只剩 \(\mathbb{E}[q_i^2 k_i^2]\)。再用一次独立性（\(q_i^2\) 与 \(k_i^2\) 也独立）：
+  \[\operatorname{Var}(q_i k_i)=\mathbb{E}[q_i^2 k_i^2]=\mathbb{E}[q_i^2]\,\mathbb{E}[k_i^2].\]
+  而方差为 1 的含义正是 \(\mathbb{E}[q_i^2]-(\mathbb{E}[q_i])^2=1\)，又 \(\mathbb{E}[q_i]=0\)，所以 \(\mathbb{E}[q_i^2]=1\)，同理 \(\mathbb{E}[k_i^2]=1\)。于是
+  \[\operatorname{Var}(q_i k_i)=1\times1=1.\]
+  <strong>第 5 步（\(d_k\) 个独立项求和）。</strong>第三章的另一条规则：独立随机变量相加，方差相加。这里是 \(d_k\) 个方差各为 1 的独立项相加，所以
+  \[\operatorname{Var}(\mathbf{q}\cdot\mathbf{k})=\underbrace{1+1+\cdots+1}_{d_k\ \text{个}}=d_k,\qquad \operatorname{std}(\mathbf{q}\cdot\mathbf{k})=\sqrt{d_k}. \tag{6.5}\]
+  <strong>第 6 步（除掉标准差）。</strong>方差的尺度性质 \(\operatorname{Var}(cZ)=c^2\operatorname{Var}(Z)\)（常数提出来要平方）。取 \(c=1/\sqrt{d_k}\)：
+  \[\operatorname{Var}\!\left(\frac{\mathbf{q}\cdot\mathbf{k}}{\sqrt{d_k}}\right)=\frac{1}{d_k}\operatorname{Var}(\mathbf{q}\cdot\mathbf{k})=\frac{d_k}{d_k}=1.\]
+  结论：除以 \(\sqrt{d_k}\) 之后，无论维度 \(d_k\) 是 64 还是 512，点积分数的方差都恰好回到 1——分数的「典型大小」被钉死在 \(\pm1\) 附近。证毕。</p></div>
+  <p>「钉死在 \(\pm1\) 附近」为什么生死攸关？因为 softmax 对分数的<strong>差距</strong>极其敏感：两个 logit 相差 \(\Delta\)，权重就相差 \(e^{\Delta}\) 倍。不缩放时，分数的典型大小是 \(\sqrt{d_k}\)（式 (6.5)），把两种维度摆在一起看：</p>
+  \[d_k=8:\ \operatorname{std}\approx 2.83\ \Rightarrow\ e^{2.83}\approx 17;\qquad d_k=512:\ \operatorname{std}\approx 22.63\ \Rightarrow\ e^{22.63}\approx 6.7\times 10^{9}\]
+  <p>（python3 验算：\(\sqrt{8}=2.8284\)、\(e^{2.8284}\approx16.92\)；\(\sqrt{512}=22.6274\)、\(e^{22.6274}\approx6.71\times10^{9}\)。）\(d_k=512\) 时，一个 token 仅仅落后别人一个标准差，拿到的权重就只有领先者的约 \(1/(6.7\times10^9)\)——softmax 输出变成事实上的 one-hot，「赢者通吃」。第二章说过 \(\sigma\) 型函数在饱和区梯度趋零：one-hot 化的 softmax 每个分量都落在 \(p(1-p)\approx0\) 的死角，梯度流不动，注意力还没开始学就已经「冻僵」了。除以 \(\sqrt{d_k}\) 后，典型差距回到 \(\mathcal{O}(1)\)，权重比约 \(e^1\approx2.7\) 倍——有偏好但不独裁，注意力保持「软」，梯度保持活着。</p>
+  <aside class="mn">一句话：\(\sqrt{d_k}\) 不是超参数，是让分数方差恒等于 1 的归一化常数。维度多少，它就自动是多少。</aside>
+
+  <h3 id="tb06-s5"><span class="h3-num">6.5</span> 多头注意力</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>多头 = 请好几个人同时看，各看各的角度。</strong>一个读者看一篇文章，只能带一副眼镜：要么盯着语法搭配，要么盯着情节主线。多头注意力相当于请了 \(h\) 位读者同时读：1 号读者专看「就近的词怎么搭配」，2 号读者专找「主语在哪、谁修饰谁」，3 号读者专盯「指代关系」……每位读者用的是同一篇文章，但投影矩阵是自己的（各自一套 Q、K、V 的标准），互不干扰；读完把 \(h\) 份笔记拼接起来，再综合成一份纪要（输出投影 \(\mathbf{W}_O\)）。这就是为什么「多头」比「一个大脑袋」强：不是参数更多，而是视角更多。</p></div>
+  <p>形式化只需一行：<span class="kt">多头注意力</span>（multi-head attention, MHA）</p>
+  \[\operatorname{MHA}(\mathbf{X})=\operatorname{Concat}\bigl(\mathbf{head}_1,\dots,\mathbf{head}_h\bigr)\,\mathbf{W}_O,\qquad \mathbf{head}_i=\operatorname{Attention}\bigl(\mathbf{X}\mathbf{W}_Q^{(i)},\,\mathbf{X}\mathbf{W}_K^{(i)},\,\mathbf{X}\mathbf{W}_V^{(i)}\bigr) \tag{6.6}\]
+  <p><strong>维度推演（不跳步，全部用第一章的规则）。</strong>约定 \(d_k=d_v\)，并约定每个头的宽度是总宽度的 \(h\) 分之一：</p>
+  \[d_k=d_v=\frac{d_{\text{model}}}{h} \tag{6.7}\]
+  <p>第 \(i\) 个头的三个投影矩阵：\(\mathbf{W}_Q^{(i)},\mathbf{W}_K^{(i)}\in\mathbb{R}^{d_{\text{model}}\times d_k}\)，\(\mathbf{W}_V^{(i)}\in\mathbb{R}^{d_{\text{model}}\times d_v}\)。于是每个头内部的维度链与 6.3 节完全相同，输出是 \(\mathbb{R}^{n\times d_v}=\mathbb{R}^{n\times d_{\text{model}}/h}\)。\(h\) 个头沿特征维拼接：\(h\times\frac{d_{\text{model}}}{h}=d_{\text{model}}\)，拼回来正好是 \(\mathbb{R}^{n\times d_{\text{model}}}\)。最后过输出投影 \(\mathbf{W}_O\in\mathbb{R}^{d_{\text{model}}\times d_{\text{model}}}\)：</p>
+  \[\underbrace{\begin{pmatrix}\mathbf{head}_1\ \big|\ \cdots\ \big|\ \mathbf{head}_h\end{pmatrix}}_{n\times d_{\text{model}}}\ \mathbf{W}_O\ \in\ \mathbb{R}^{n\times d_{\text{model}}}\]
+  <p>输出形状回到 \(n\times d_{\text{model}}\)，正好接上流水线的下一个工位（残差 + LN）✓。</p>
+  <p><strong>参数量会不会爆炸？</strong>不会，反而和「单头、满宽 \(d_k=d_{\text{model}}\)」一模一样。每个头的三个投影矩阵各含 \(d_{\text{model}}\times\frac{d_{\text{model}}}{h}\) 个数，\(h\) 个头就是 \(h\times3\times\frac{d_{\text{model}}^2}{h}=3d_{\text{model}}^2\)（\(h\) 约掉了），再加 \(\mathbf{W}_O\) 的 \(d_{\text{model}}^2\)：</p>
+  \[\#\operatorname{MHA}=h\cdot 3\,\frac{d_{\text{model}}^2}{h}+d_{\text{model}}^2=4\,d_{\text{model}}^2\]
+  <p>（含偏置再加 \(4d_{\text{model}}\)，6.8 节总账里会算。）同样的预算，为什么多头更强？因为不同头工作在不同的<strong>子空间</strong>：\(d_{\text{model}}\) 维空间被切成 \(h\) 个 \(\frac{d_{\text{model}}}{h}\) 维的小房间，头 1 的房间里可以学「就近看」的模式，头 2 的房间里学「找主语」的模式，各自的小 \(\mathbf{Q}\mathbf{K}^{\top}\) 互不干扰；若只给一个头一套满宽投影，这些模式就得挤在同一组权重里互相妥协。等价的参数量，换来 \(h\) 套并行的注意模式——这是「结构先验」白送的便宜。</p>
+  <div class="example"><span class="box-tag">例 6.4 · 动手算（核对一个头的维度链）</span><p><strong>题目</strong>　取 \(d_{\text{model}}=8\)、\(h=4\)、序列长 \(n=3\)。盯住第 2 个头回答四件事：（1）\(\mathbf{W}_Q^{(2)},\mathbf{W}_K^{(2)},\mathbf{W}_V^{(2)}\) 各是什么形状？（2）该头内部从输入到输出，每一步的形状是什么？（3）4 个头拼接再过 \(\mathbf{W}_O\)，形状回到 \(n\times d_{\text{model}}\) 吗？（4）数一遍这套 MHA 的参数量（含偏置），与例 6.4 的 \(h=2\) 版本对比。</p>
+  <p><strong>解</strong>　<strong>第 1 步：定头宽。</strong>由式 (6.7)，\(d_k=d_v=d_{\text{model}}/h=8/4=2\)。
+  <strong>第 2 步：投影矩阵形状。</strong>三个矩阵都是 \(d_{\text{model}}\times d_k\)（\(\mathbf{W}_V\) 用 \(d_v\)，同值），即 \(8\times2\)。
+  <strong>第 3 步：头内维度链。</strong>输入 \(\mathbf{X}\in\mathbb{R}^{3\times8}\)。\(\mathbf{Q}_2=\mathbf{X}\mathbf{W}_Q^{(2)}\)：\((3\times8)(8\times2)\to3\times2\)；\(\mathbf{K}_2,\mathbf{V}_2\) 同理，均为 \(3\times2\)。分数矩阵 \(\mathbf{Q}_2\mathbf{K}_2^{\top}\)：\((3\times2)(2\times3)\to3\times3\)——注意此处的缩放常数是 \(\sqrt{d_k}=\sqrt{2}\)，不是 \(\sqrt{8}\)。softmax 逐行作用，不改形状。乘 \(\mathbf{V}_2\)：\((3\times3)(3\times2)\to3\times2\)。故 \(\mathbf{head}_2\in\mathbb{R}^{3\times2}\)。
+  <strong>第 4 步：拼接与输出投影。</strong>4 个头沿特征维拼接：\(4\times2=8\)，得 \(3\times8\)；\(\mathbf{W}_O\in\mathbb{R}^{8\times8}\)，输出 \((3\times8)(8\times8)\to3\times8\)。回到 \(n\times d_{\text{model}}\) ✓。
+  <strong>第 5 步：数参数。</strong>每头三个 \(8\times2\) 矩阵，各 16 个数，共 \(3\times16=48\)；4 头共 \(192\)；加 \(\mathbf{W}_O\) 的 \(8\times8=64\)：\(192+64=256=4\times8^{2}\)——\(h\) 被约掉，与头数无关。再数偏置：每头三条长度为 2 的偏置，\(4\times3\times2=24\)；输出投影偏置长 8。合计 \(256+24+8=288\)。（python3 验算：<code>4*3*8*2+8*8=256</code>，<code>4*3*2+8=32</code>，<code>256+32=288</code>。）与例 6.7（\(h=2\)、\(d_k=4\)）的 288 完全一致：头数从 2 变 4，总账分文不动——变的只是视角的个数。</p></div>
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：（1）默写式 (6.6)、(6.7)，并独立推完「每个头 → 拼接 → \(\mathbf{W}_O\)」的整条维度链；（2）证明多头与满宽单头参数量相同（\(4d_{\text{model}}^2\)）；（3）用「多位读者各看各的角度」解释多头为什么更强；（4）给定 \(d_{\text{model}}\) 与 \(h\)，立刻说出每个头的 \(d_k\)、每个投影矩阵的形状。</p></div>
+
+  <h3 id="tb06-s6"><span class="h3-num">6.6</span> 残差连接与 LayerNorm</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>残差 = 高速公路 / 直通车。</strong>想象 96 层楼的写字楼，每层都要把文件加工一遍再传给上一层。如果每层的规矩都是「只收上一层的产出」，那么一楼原始文件的内容想影响顶层，必须穿过 95 道转手——每道转手都可能损耗一点（梯度连乘），传到顶层早已面目全非。残差连接的做法是：每层楼除了收上一层的产出，还<strong>永远保留一份原件的副本</strong>，加工只是在原件上做「增量修改」：新文件 = 原件 + 本次修改。反向传话（反向传播）时，梯度也能顺着这条直通车原路流回底层，一路上至少有一条「不缩水」的通道。Transformer 能堆几十上百层，靠的就是这条直通带。</p></div>
+  <p>数学上只有一句话。设 \(F\) 是任意子层（MHA 或 FFN），残差连接是</p>
+  \[\mathbf{y}=\mathbf{x}+F(\mathbf{x})\]
+  <p>对 \(\mathbf{x}\) 求导。用第二章的规则：和的导数 = 导数的和；\(\mathbf{x}\) 对自身的导数是单位矩阵 \(\mathbf{I}\)（因为 \(y_i=x_i+\cdots\)，\(\partial y_i/\partial x_i\) 里总含一个 1）；第二项照链式法则写。于是</p>
+  \[\frac{\partial \mathbf{y}}{\partial \mathbf{x}}=\mathbf{I}+\frac{\partial F}{\partial \mathbf{x}} \tag{6.8}\]
+  <p>式 (6.8) 的全部威力都在那个 \(\mathbf{I}\) 上。堆 \(L\) 层时，由链式法则（第二章式 (2.16)），梯度是各层雅可比的连乘：</p>
+  \[\frac{\partial \mathbf{x}_L}{\partial \mathbf{x}_1}=\prod_{l=1}^{L-1}\Bigl(\mathbf{I}+\frac{\partial F_l}{\partial \mathbf{x}_l}\Bigr)\]
+  <p>每个因子都是「\(\mathbf{I}\) 加一个小量」。对比没有残差的世界：那里每个因子是单纯的小量矩阵，一批「模小于 1」的矩阵连乘，梯度随层数指数缩水消失（第二章 2.6 节算过 \(0.5^{30}\approx10^{-9}\)）。有了 \(\mathbf{I}\)，乘积里始终存在一条「全程只乘单位矩阵」的路径，梯度至少有一份原封不动地到达浅层——这就是「梯度高速路」，是深层 Transformer 训得动的结构性前提。</p>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>LayerNorm = 把每组数据拉回标准身材：减均值，除标准差。</strong>一条流水线上，如果每个工位送来的零件尺寸忽大忽小，下一工位就没法用固定的夹具加工。LayerNorm 这个质检员的做法是：对单个 token 的 \(d_{\text{model}}\) 个特征值，先量出这组的「平均水平」（均值 \(\mu\)），每个值都减去它——数据中心化到 0 附近；再量出这组的「胖瘦程度」（方差 \(\sigma^2\)），每个值除以标准差——数据宽度压到 1 附近。最后发两个可学习的「调节旋钮」\(\boldsymbol{\gamma}\) 和 \(\boldsymbol{\beta}\)：如果模型发现标准身材不利于表达，可以学着自己把尺度和偏移调回去。先强制归一、再允许学回——既稳又不死板。</p></div>
+  <div class="def"><span class="box-tag">定义 6.2</span><p><span class="kt">LayerNorm</span>（层归一化）。对单个 token 的特征向量 \(\mathbf{x}\in\mathbb{R}^{d_{\text{model}}}\)：</p>
+  \[\operatorname{LN}(\mathbf{x})=\boldsymbol{\gamma}\odot\frac{\mathbf{x}-\mu}{\sqrt{\sigma^2+\epsilon}}+\boldsymbol{\beta},\qquad \mu=\frac{1}{d_{\text{model}}}\sum_{j=1}^{d_{\text{model}}}x_j,\qquad \sigma^2=\frac{1}{d_{\text{model}}}\sum_{j=1}^{d_{\text{model}}}(x_j-\mu)^2 \tag{6.9}\]
+  <p>其中 \(\odot\) 是逐元素乘；\(\boldsymbol{\gamma},\boldsymbol{\beta}\in\mathbb{R}^{d_{\text{model}}}\) 是可学习参数；\(\epsilon\) 是约 \(10^{-5}\) 的小常数，防止方差为 0 时除零。注意方差的分母是 \(d_{\text{model}}\)（总体方差），不是 \(d_{\text{model}}-1\)（样本方差）——这里不做统计推断，只做确定性变换。</p></div>
+  <div class="example"><span class="box-tag">例 6.5 · 动手算</span><p><strong>题目</strong>　对 \(\mathbf{x}=(1,2,3,4)\) 手算 LayerNorm，取 \(\boldsymbol{\gamma}=\mathbf{1}\)、\(\boldsymbol{\beta}=\mathbf{0}\)、\(\epsilon=10^{-5}\)。每步给出理由。</p>
+  <p><strong>第 1 步：算均值。</strong>为什么要先算均值？因为要中心化，得先知道「中心」在哪。四个数求和除以个数：
+  \[\mu=\frac{1+2+3+4}{4}=\frac{10}{4}=2.5\]
+  <strong>第 2 步：算偏差。</strong>每个分量减均值：\((1-2.5,\ 2-2.5,\ 3-2.5,\ 4-2.5)=(-1.5,\ -0.5,\ 0.5,\ 1.5)\)。自查：偏差之和应为 0——\(-1.5-0.5+0.5+1.5=0\) ✓（这不是巧合：减去均值后总和必为 0）。</p>
+  <p><strong>第 3 步：算方差。</strong>方差 = 偏差平方的平均（定义 6.2，分母是 4）：各偏差平方为 \(2.25,\ 0.25,\ 0.25,\ 2.25\)，求和得 \(5\)，
+  \[\sigma^2=\frac{2.25+0.25+0.25+2.25}{4}=\frac{5}{4}=1.25\]
+  <strong>第 4 步：开根号（加上 \(\epsilon\)）。</strong>\(\sqrt{\sigma^2+\epsilon}=\sqrt{1.25001}\approx1.1180\)。\(\epsilon\) 太小，这里几乎不影响数值，它的作用只在 \(\sigma^2=0\) 的极端情形兜底。</p>
+  <p><strong>第 5 步：逐分量除标准差。</strong></p>
+  \[\operatorname{LN}(\mathbf{x})=\frac{(-1.5,\ -0.5,\ 0.5,\ 1.5)}{1.1180}\approx(-1.3416,\ -0.4472,\ 0.4472,\ 1.3416)\]
+  <p>（python3 验算：\(\sqrt{1.25001}=1.1180385\)，归一化向量为 \((-1.341635,\ -0.447212,\ 0.447212,\ 1.341635)\)。）由于 \(\boldsymbol{\gamma}=\mathbf{1},\boldsymbol{\beta}=\mathbf{0}\)，到此结束。<strong>第 6 步：验收。</strong>结果的均值约为 0（四个数两两相反 ✓），方差约为 1——原本「身材随意」的输入被拉回了标准身材，交给下一个工位加工就稳了。</p></div>
+  <p>顺便一句话对比 BatchNorm（为什么 Transformer 不用它）：BN 按<strong>特征维</strong>跨 batch 统计均值方差，而 NLP 里序列变长、同 batch 样本语义差异巨大，统计量不稳，推理时还得维护全局滑动平均；LN 按<strong>样本</strong>（每个 token 自己）统计，与 batch 里有什么完全无关，训练和推理行为一致。所以 Transformer 全线用 LN。</p>
+  <div class="warn"><span class="box-tag">常见坑</span><p><strong>pre-norm 与 post-norm 张冠李戴。</strong>式 (6.1) 与图 6.1 画的是原始论文的 post-norm：\(\operatorname{LN}(\mathbf{x}+F(\mathbf{x}))\)——LN 在残差加和之<strong>后</strong>；而 GPT 系等现代实现多用 pre-norm：\(\mathbf{x}+F(\operatorname{LN}(\mathbf{x}))\)——LN 在残差加和之<strong>前</strong>、残差干线全程裸露。两者不是同一个网络：post-norm 在深网下梯度范数逐层失衡，不配学习率 warmup 就训不动；pre-norm 训练稳，但深层的有效深度略打折扣。抄代码、读论文时先看清楚 LN 在残差的里侧还是外侧——把 post-norm 写成 pre-norm（或反过来）不会报错，但训练曲线会和你引用的论文怎么也对不上。</p></div>
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：（1）从 \(\mathbf{y}=\mathbf{x}+F(\mathbf{x})\) 推出式 (6.8)，并用「梯度高速路」解释 \(\mathbf{I}\) 的作用；（2）解释残差为什么能让几十层网络训得动（对比无残差的连乘消失）；（3）默写式 (6.9)，说清 \(\mu\)、\(\sigma^2\)、\(\epsilon\)、\(\boldsymbol{\gamma}\)、\(\boldsymbol{\beta}\) 各自的角色；（4）徒手对任意 4 维向量完成 LayerNorm 并自查「均值 0、方差 1」；（5）说清 LN 与 BN 的统计方向差别及 Transformer 选 LN 的原因。</p></div>
+
+  <h3 id="tb06-s7"><span class="h3-num">6.7</span> 前馈网络 FFN</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>FFN = 散会后回工位独自复盘。</strong>这是类比：注意力像开会互通有无，FFN 像散会后每人回工位，把要点摊到大四倍的台面上（升维），逐条打勾划叉——不相关的划掉（激活压零），再浓缩成结论（降维）。这个类比省掉了什么：真实的「打勾划叉」是矩阵乘法加逐元素非线性，没有人判断；什么算「有用」是训练学出来的。</p></div>
+  <p>注意力解决的是「token 之间互通有无」，但互通完之后，每个 token 还需要一段「自己关起门来深加工」的时间——这就是<span class="kt">前馈网络</span>（feed-forward network, FFN）。它对<strong>每个位置独立</strong>地做同一个变换（\(n\) 个 token 用同一组权重，谁也不看谁）：</p>
+  \[\operatorname{FFN}(\mathbf{x})=\varphi\!\left(\mathbf{x}\mathbf{W}_1+\mathbf{b}_1\right)\mathbf{W}_2+\mathbf{b}_2 \tag{6.10}\]
+  <p>其中 \(\mathbf{x}\) 取某个 token 的行向量（与 6.3 节 \(\mathbf{X}\mathbf{W}\) 同一约定）。维度走一个「先升后降」的梭形：\(\mathbf{W}_1\in\mathbb{R}^{d_{\text{model}}\times d_{\text{ff}}}\) 把向量撑宽，\(\varphi\) 是逐元素的非线性激活，\(\mathbf{W}_2\in\mathbb{R}^{d_{\text{ff}}\times d_{\text{model}}}\) 再压回原宽，并约定 \(d_{\text{ff}}=4\,d_{\text{model}}\)：</p>
+  \[\mathbb{R}^{d_{\text{model}}}\ \xrightarrow{\ \mathbf{W}_1\ }\ \mathbb{R}^{4d_{\text{model}}}\ \xrightarrow{\ \varphi\ }\ \mathbb{R}^{4d_{\text{model}}}\ \xrightarrow{\ \mathbf{W}_2\ }\ \mathbb{R}^{d_{\text{model}}}\]
+  <p>为什么要先升维？可以这样想：\(d_{\text{model}}\) 维空间太挤，很多「特征组合」展不开；升到 4 倍宽后，每个中间维度可以专门探测一种模式（「这个词像不像数字」「像不像地名」……），激活 \(\varphi\) 负责把不命中的模式清零或压小，最后 \(\mathbf{W}_2\) 把命中的结论压缩回原维度。激活函数：原始论文用 \(\operatorname{ReLU}(x)=\max(0,x)\)，现代 LLM 多用 GELU 或其变体（如 SwiGLU）：</p>
+  \[\operatorname{GELU}(x)=x\,\Phi(x)\approx 0.5x\Bigl(1+\tanh\bigl(\sqrt{2/\pi}\,(x+0.044715\,x^3)\bigr)\Bigr)\]
+  <p>与 ReLU 的差别只在 \(0\) 附近光滑、允许小负值通过——记住这一句就够，不必展开。</p>
+  <div class="example"><span class="box-tag">例 6.6 · 动手算（手算一行 FFN）</span><p><strong>题目</strong>　为能手算，把放大倍数从 4 降到 2：取 \(d_{\text{model}}=2\)、\(d_{\text{ff}}=4\)，激活用 ReLU（原始论文的选法，\(\max(0,x)\)，最好算），对单个 token 的行向量 \(\mathbf{x}=(1,-1)\) 按式 (6.10) 算完整前向。矩阵故意取成简单整数：
+  \[\mathbf{W}_1=\begin{pmatrix}1&0&1&-1\\0&1&1&1\end{pmatrix},\quad \mathbf{b}_1=(1,\ 0,\ -1,\ 0),\quad \mathbf{W}_2=\begin{pmatrix}1&2\\1&0\\0&1\\2&1\end{pmatrix},\quad \mathbf{b}_2=(0,\ 1)\]</p>
+  <p><strong>解</strong>　<strong>第 1 步：先摆维度链。</strong>\(\mathbb{R}^{2}\xrightarrow{\ \mathbf{W}_1\ }\mathbb{R}^{4}\xrightarrow{\ \varphi\ }\mathbb{R}^{4}\xrightarrow{\ \mathbf{W}_2\ }\mathbb{R}^{2}\)——先升后降的梭形，只是放大倍数是 2 而非标准约定的 4。</p>
+  <p><strong>第 2 步：算 \(\mathbf{x}\mathbf{W}_1\)。</strong>\(\mathbf{x}\) 与 \(\mathbf{W}_1\) 的第 \(j\) 列做点积：第 1 列 \(1\times1+(-1)\times0=1\)；第 2 列 \(1\times0+(-1)\times1=-1\)；第 3 列 \(1\times1+(-1)\times1=0\)；第 4 列 \(1\times(-1)+(-1)\times1=-2\)。得 \((1,\ -1,\ 0,\ -2)\)。</p>
+  <p><strong>第 3 步：加偏置 \(\mathbf{b}_1\)。</strong>\((1,-1,0,-2)+(1,0,-1,0)=(2,\ -1,\ -1,\ -2)\)。</p>
+  <p><strong>第 4 步：ReLU 逐元素 \(\max(0,\cdot)\)。</strong>正值保留、负值清零：\((2,\ 0,\ 0,\ 0)\)。四个「探测器」只有一个命中——这就是激活在干的事：把不命中的模式压成 0，不让它们进入下一步。</p>
+  <p><strong>第 5 步：算 \(\mathbf{h}\mathbf{W}_2\) 并加 \(\mathbf{b}_2\)。</strong>\(\mathbf{h}=(2,0,0,0)\) 只挑出 \(\mathbf{W}_2\) 的第 1 行并乘 2：\(2\times(1,2)=(2,4)\)；加 \(\mathbf{b}_2=(0,1)\) 得
+  \[\operatorname{FFN}(\mathbf{x})=(2,\ 5)\]
+  （python3 验算：中间量依次为 \((1,-1,0,-2)\)、\((2,-1,-1,-2)\)、\((2,0,0,0)\)，输出 \((2,5)\) ✓。）</p>
+  <p><strong>读结果。</strong>四个中间维度里三个被清零，输出完全由第 1 个「探测器」携带：升维提供候选模式、激活负责筛选、降维把命中的结论压回原宽度——一趟走完，输出仍是 \(d_{\text{model}}=2\) 维，正好接上残差加号。</p></div>
+  <p><strong>参数量（数清楚，后面总账要用）。</strong>权重两块：\(\mathbf{W}_1\) 有 \(d_{\text{model}}\,d_{\text{ff}}\) 个，\(\mathbf{W}_2\) 有 \(d_{\text{ff}}\,d_{\text{model}}\) 个，合计 \(2\,d_{\text{model}}\,d_{\text{ff}}=8\,d_{\text{model}}^2\)；偏置两条：\(\mathbf{b}_1\in\mathbb{R}^{d_{\text{ff}}}\)（\(4d_{\text{model}}\) 个），\(\mathbf{b}_2\in\mathbb{R}^{d_{\text{model}}}\)（\(d_{\text{model}}\) 个）。合计</p>
+  \[\#\operatorname{FFN}=2\,d_{\text{model}}\,d_{\text{ff}}+d_{\text{ff}}+d_{\text{model}}=8\,d_{\text{model}}^2+5\,d_{\text{model}}\]
+  <p>对比 6.5 节 MHA 的 \(4d_{\text{model}}^2+4d_{\text{model}}\)：FFN 的权重是 MHA 的两倍。记住这个 \(2:1\)，下一节算总账时它会变成一个醒目的结论。</p>
+  <aside class="mn">一种流行读法：MHA 是「查」（路由信息），FFN 是「存」（知识仓库）——模型的大部分事实性记忆被认为装在 FFN 的大矩阵里，这也是 MoE（混合专家）先对 FFN 动刀的原因。</aside>
+
+  <h3 id="tb06-s8"><span class="h3-num">6.8</span> 参数量总账</h3>
+  <p>零件全部摆上桌，现在算总账：一个完整的微型 Transformer 有多少个参数？规则：线性层含偏置；LN 有两组参数；输出层与嵌入矩阵<span class="kt">权重共享</span>（weight tying，输出头直接用 \(\mathbf{W}_E^{\top}\)，不另计参数）。</p>
+  <div class="example"><span class="box-tag">例 6.7 · 动手算</span><p><strong>题目</strong>　小配置：\(L=2\) 层、\(d_{\text{model}}=8\)、\(d_{\text{ff}}=32\)、\(h=2\)（由式 (6.7)，\(d_k=d_v=4\)）、词表 \(V=100\)。逐项算并求和。</p>
+  <p><strong>第 1 项：嵌入表。</strong>\(\mathbf{W}_E\in\mathbb{R}^{100\times8}\)，共
+  \[\#\text{embed}=V\cdot d_{\text{model}}=100\times8=800\]
+  <strong>第 2 项：每层 MHA。</strong>6.5 节已证总量与头数无关（式 (6.7) 保证 \(h=2\) 不改总数）：四个 \(8\times8\) 矩阵加四条长度为 8 的偏置，
+  \[\#\text{MHA}=4\cdot 8^2+4\cdot 8=256+32=288\]
+  <strong>第 3 项：每层 FFN。</strong>由式 (6.10) 的参数量公式（\(d_{\text{model}}=8,\ d_{\text{ff}}=32\)）：
+  \[\#\text{FFN}=8\cdot32+32+32\cdot8+8=256+32+256+8=552\]
+  <strong>第 4 项：每层两处 LN。</strong>每处含 \(\boldsymbol{\gamma},\boldsymbol{\beta}\in\mathbb{R}^{8}\)，共 16 个参数；两处：
+  \[\#\text{LN}=2\times(8+8)=32\]
+  <strong>第 5 步：每层小计与总计。</strong>
+  \[\#_{\text{layer}}=288+552+32=872,\qquad \#\text{total}=\underbrace{800}_{\text{嵌入}}+2\times872+\underbrace{16}_{\text{末尾 LN}}=2560\]
+  <p>（末尾还有一处最终 LayerNorm，参数 \(8+8=16\)；输出头与嵌入共享，不另计。python3 验算：<code>800 + 2*872 + 16 = 2560</code>；若输出头不共享，要再加 \(100\times8=800\)，共 \(3360\)。）</p>
+  <p><strong>读账。</strong>块内（去掉嵌入）FFN 占 \(2\times552/1744\approx63\%\)——还没到三分之二，但已经很接近了。</p></div>
+  <p>这个 \(63\%\) 不是巧合，而是结构性结论。只看大矩阵、忽略偏置，按 \(d_{\text{ff}}=4d_{\text{model}}\) 的标准约定：</p>
+  \[\frac{\#\text{FFN}}{\#\text{FFN}+\#\text{MHA}}=\frac{8\,d_{\text{model}}^2}{8\,d_{\text{model}}^2+4\,d_{\text{model}}^2}=\frac{8}{12}=\frac{2}{3}\]
+  <p>所以「大模型里约 2/3 的参数在 FFN」是个恒等式层面的结论，与规模无关。它的实用推论：想砍参数、估显存、做 MoE 改造，先动 FFN——它占大头。</p>
+  <div class="warn"><span class="box-tag">常见坑</span><p><strong>拿 \(d_{\text{model}}\) 当 \(\sqrt{d_k}\) 来缩放。</strong>多头时式 (6.7) 给出 \(d_k=d_{\text{model}}/h\)。例 6.4 里 \(d_{\text{model}}=8\) 但 \(d_k=4\)。若在代码里写 <code>scores / sqrt(d_model)</code>，分数被多压了 \(\sqrt{8/4}=\sqrt{2}\) 倍：由 6.4 节的推导，这相当于把 softmax 的输入方差从 1 压到 \(1/2\)，分数差距系统性偏小，注意力长期「和稀泥」——每个 token 拿到的权重都差不多，学不会清晰的指向。最要命的是它<strong>不报错</strong>：loss 照样下降，只是慢、天花板低，你很难察觉。记住 6.4 节的推导依据：缩放常数来自点积的维度 \(d_k\)，不是模型宽度 \(d_{\text{model}}\)。</p></div>
+  <div class="warn"><span class="box-tag">常见坑</span><p><strong>手写 softmax 直接取指数。</strong>例 6.2 第 4 步特意先减行最大值（式 (6.4)），这不是洁癖。手写注意力时若跳过这一步，fp16 下 logit 超过约 11 就有 \(e^{s}>65504\) 溢出成 inf（fp16 最大可表示数 65504），inf 除 inf 得 NaN，loss 直接崩——而且只在长序列、大 logits 时偶发，极难复现。正确做法一句话：先减行最大值，数学不变（分子分母同乘 \(e^{-m}\)）、数值安全（详见第七章）。</p></div>
+
+  <h3 id="tb06-ai"><span class="h3-num">6.9</span> 在 AI 中的位置</h3>
+  <p>本章没有发明任何新数学，只做总装——每一颗螺丝都来自前面某一章。逐组件对照如下。</p>
+  <table class="tbl">
+    <thead><tr><th>本章结论 / 机制</th><th>来自哪章的数学</th><th>装在哪个组件</th><th>缺了会在哪一步翻车</th></tr></thead>
+    <tbody>
+      <tr><td>嵌入即查表（6.2 节）</td><td>one-hot × 矩阵 = 取行（第一章）</td><td>词嵌入层</td><td>以为嵌入层在做稠密矩阵乘，显存与 FLOPs 全部估错</td></tr>
+      <tr><td>式 (6.2) 正弦编码的相对位置线性性</td><td>三角和角公式</td><td>位置编码；RoPE 的思想源头</td><td>理解不了「相对位置」为何能被注意力利用、长度外推为何难</td></tr>
+      <tr><td>式 (6.3) 注意力 = 矩阵乘 + softmax</td><td>矩阵乘法与维度推演（第一章）</td><td>MHA 的 \(\mathbf{Q}\mathbf{K}^{\top}\) 与 \(\mathbf{P}\mathbf{V}\)</td><td>看不懂 \(n\times n\) 分数矩阵，更看不懂 FlashAttention 在分块算什么</td></tr>
+      <tr><td>式 (6.5) \(\operatorname{Var}(\mathbf{q}\cdot\mathbf{k})=d_k\)</td><td>独立性、方差运算（第三章）</td><td>缩放因子 \(1/\sqrt{d_k}\)</td><td>把 \(\sqrt{d_k}\) 当玄学超参数乱调；\(d_k\) 大时 softmax 饱和、梯度消失</td></tr>
+      <tr><td>式 (6.4) 减最大值 softmax</td><td>数值稳定性（第七章）</td><td>softmax 的工程实现</td><td>fp16 下 logits 稍大就溢出，训练偶发 NaN 且难以复现</td></tr>
+      <tr><td>式 (6.8) 残差梯度高速路</td><td>链式法则（第二章）</td><td>每个子层的旁路</td><td>删了残差，几十层连乘梯度消失，深层 LLM 直接训不动</td></tr>
+      <tr><td>式 (6.9) LayerNorm</td><td>均值、方差、标准化（第三章）</td><td>每个子层前后的归一化</td><td>误用 BatchNorm：变长序列 + 小 batch 下统计量不稳、训推不一致</td></tr>
+      <tr><td>6.8 节参数量总账、FFN 占 2/3</td><td>计数与比例</td><td>显存估算、模型配置、MoE 改造</td><td>不会算账：给定显存反推不出能开多大的 \(d_{\text{model}}\) 与 \(L\)</td></tr>
+    </tbody>
+  </table>
+  <p>一句话收束：Transformer 块 = 查表（嵌入）+ 三角恒等式（位置）+ 三个矩阵乘（注意力）+ 两次标准化（LN）+ 两个矩阵乘（FFN），全部用残差缝起来。前五章的每一条数学，都能在这台机器上找到它拧的那颗螺丝；后面章节的每一个改进（RoPE、FlashAttention、MoE、量化），也都是对着这台机器的某个工位动刀。</p>
+  <div class="example"><span class="box-tag">例 6.8 · 动手算（反例：NaN 是怎么来的）</span><p><strong>题目</strong>　fp16 能表示的最大浮点数是 \(65504\)。某次手写注意力忘了「先减行最大值」（式 (6.4)），直接对 logit 取指数。设某行 logit 的最大值是整数 \(s\)。问：\(s\) 最小取到几时，\(e^{s}\) 在 fp16 下溢出？溢出之后 softmax 输出什么、loss 变成什么？</p>
+  <p><strong>解</strong>　<strong>第 1 步：解不等式。</strong>溢出即 \(e^{s}>65504\)。两边取自然对数：\(s>\ln65504\approx11.0899\)。所以最小的整数是 \(s=12\)。</p>
+  <p><strong>第 2 步：验边界两侧。</strong>python3 验算：\(e^{11}\approx59874.14<65504\)（安全），\(e^{12}\approx162754.79>65504\)（溢出）。logit 只差 1，结果天差地别——这正是「偶发 NaN」极难复现的原因：数值在 11 以下风平浪静，一过 12 立刻崩。</p>
+  <p><strong>第 3 步：追踪崩坏链路。</strong>fp16 存不下 \(e^{12}\)，它变成 inf；softmax 的分母是整行指数之和，含 inf 仍为 inf；分子分母相除 \(\inf/\inf\) 得 NaN；NaN 乘进 \(\mathbf{P}\mathbf{V}\)、流过后续每一层，loss 变成 NaN，训练报废。<strong>对照</strong>：按式 (6.4) 先减行最大值，最大 logit 被压到 0，最大指数是 \(e^{0}=1\)，永远碰不到 65504——数学上与原式恒等（分子分母同乘 \(e^{-m}\)），数值上彻底免疫。这就是上表「softmax 数值稳定」那一行说的翻车点，一行代码的差别。</p></div>
+
+  <div class="quiz"><span class="box-tag">自测题</span>
+  <p><strong>题 1（位置编码手算）</strong>　仍取 \(d_{\text{model}}=4\)，求 \(pos=2\) 的编码向量 \(\mathbf{p}_2\)（保留 4 位小数），并指出哪对分量是「快钟」、哪对是「慢钟」。</p>
+  <details><summary>看答案</summary><p>频率同例 6.2：\(\omega_0=1\)、\(\omega_1=0.01\)。角度变为 \(2\times1=2\) 与 \(2\times0.01=0.02\)。按「sin 放偶数位、cos 放奇数位」：\(\mathbf{p}_2=(\sin2,\ \cos2,\ \sin0.02,\ \cos0.02)\approx(0.9093,\ -0.4161,\ 0.0200,\ 0.9998)\)。python3 验算：<code>sin(2)=0.9092974</code>，<code>cos(2)=-0.4161468</code>，<code>sin(0.02)=0.0199987</code>，<code>cos(0.02)=0.9998000</code> ✓。前两个分量是快钟（\(pos\) 从 1 到 2，它们从 \((0.84,0.54)\) 明显走到 \((0.91,-0.42)\)），后两个是慢钟（几乎没动）。</p></details>
+  <p><strong>题 2（缩放因子的作用）</strong>　某注意力头一行只有两个 logit：\((2,4)\)。（a）直接 softmax；（b）按 \(d_k=4\) 缩放后 softmax；（c）若错误地按 \(d_{\text{model}}=16\) 缩放，softmax 又如何？三组权重对比说明什么？</p>
+  <details><summary>看答案</summary><p>（a）不缩放：softmax\((2,4)\)。减最大值 4 得 \((-2,0)\)，指数 \((e^{-2},1)=(0.1353,1)\)，和 \(1.1353\)，权重 \((0.1192,\ 0.8808)\)。（b）除 \(\sqrt{4}=2\)：logits 变 \((1,2)\)，减最大值得 \((-1,0)\)，指数 \((0.3679,1)\)，和 \(1.3679\)，权重 \((0.2689,\ 0.7311)\)。（c）错误地除 \(\sqrt{16}=4\)：logits 变 \((0.5,1)\)，权重 \((0.3775,\ 0.6225)\)。python3 验算三组数值全部一致 ✓。对比：缩放过度（c）时权重比从 7.4:1 被压成 1.6:1，注意力变得「好坏不分」——这正是「拿 \(d_{\text{model}}\) 当 \(d_k\)」的系统性后果：不报错，但权重长期和稀泥。</p></details>
+  <p><strong>题 3（LayerNorm 手算）</strong>　对 \(\mathbf{x}=(2,4,4,4)\) 手算 LayerNorm（\(\boldsymbol{\gamma}=\mathbf{1},\boldsymbol{\beta}=\mathbf{0},\epsilon=10^{-5}\)），并验收均值与方差。</p>
+  <details><summary>看答案</summary><p>均值 \(\mu=(2+4+4+4)/4=14/4=3.5\)。偏差 \((-1.5,\ 0.5,\ 0.5,\ 0.5)\)，和为 0 ✓。偏差平方 \(2.25,0.25,0.25,0.25\)，和为 3，方差 \(\sigma^2=3/4=0.75\)。标准差 \(\sqrt{0.75001}\approx0.8660\)。归一化：\((-1.5/0.8660,\ 0.5/0.8660,\dots)=(-1.7320,\ 0.5774,\ 0.5774,\ 0.5774)\)。python3 验算：\(\sqrt{0.75001}=0.866031\)，结果 \((-1.732039,\ 0.577346,\ 0.577346,\ 0.577346)\) ✓。验收：均值 \((-1.7320+3\times0.5774)/4\approx0\) ✓；方差 \(\approx(3+3\times0.3333)/4\approx1\) ✓。</p></details>
+  <p><strong>题 4（参数量算账）</strong>　单层 Transformer：\(d_{\text{model}}=16\)、\(d_{\text{ff}}=64\)、\(h=4\)、词表 \(V=1000\)，线性层含偏置，两处 LN，输出头与嵌入共享。求嵌入、MHA、FFN、LN 各多少参数，总计多少（含嵌入）。</p>
+  <details><summary>看答案</summary><p>嵌入：\(1000\times16=16000\)。MHA：\(4\times16^2+4\times16=1024+64=1088\)（头数 \(h=4\) 不改总量，式 (6.7)：\(d_k=16/4=4\)）。FFN：\(16\times64+64+64\times16+16=1024+64+1024+16=2128\)。LN：\(2\times(16+16)=64\)。单层小计 \(1088+2128+64=3280\)。总计（含嵌入，共享输出头）\(16000+3280=19280\)。python3 验算：<code>4*16**2+4*16=1088</code>，<code>16*64+64+64*16+16=2128</code>，<code>16000+1088+2128+64=19280</code> ✓。块内 FFN 占比 \(2128/3280\approx64.9\%\)，再次逼近 \(2/3\)。</p></details>
+  </div>
+</section>

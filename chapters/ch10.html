@@ -1,0 +1,118 @@
+<section class="chapter" id="ch10" data-num="10">
+  <header class="ch-open">
+    <p class="ch-kicker">第十章 · 据原文目录</p>
+    <h2 class="ch-title">矩阵微积分速查与实战求导</h2>
+    <p class="ch-sub">LayerNorm、注意力徒手求导</p>
+    <p class="ch-lede">大模型的反向传播，每一笔都是矩阵求导：LayerNorm、softmax、注意力各占一块。本章先立规矩（全章统一分母布局），再给五条恒等式速查，然后三个实战推导全部手算到底、全部用 python3 复核：LayerNorm 对输入的 Jacobian、单头注意力对 \(\mathbf{W}_Q\) 的完整梯度链、交叉熵的 \(\mathbf{p}-\mathbf{y}\)。学完你应能在白板上推出注意力梯度，也敢给自定义算子手写 backward。</p>
+  </header>
+  <nav class="ch-toc" aria-label="章内目录">
+    <a href="#ch10-s1">10.1 记法约定：分母布局</a>
+    <a href="#ch10-s2">10.2 常用恒等式速查</a>
+    <a href="#ch10-s3">10.3 实战推导 1：LayerNorm 的 Jacobian</a>
+    <a href="#ch10-s4">10.4 实战推导 2：注意力对 W_Q 徒手求导</a>
+    <a href="#ch10-s5">10.5 实战推导 3：交叉熵对 logits 的梯度</a>
+    <a href="#ch10-s6">10.6 常见误用</a>
+    <a href="#ch10-ai">10.7 在 AI 中的位置</a>
+  </nav>
+
+  <h3 id="ch10-s1"><span class="h3-num">10.1</span> 记法约定：分母布局</h3>
+  <p>矩阵求导出错，九成不是算错，是<strong>布局</strong>错。本章（与第二章定义 2.3 一致）固定用<span class="kt">分母布局</span>（denominator layout）：导数结果的形状跟着<strong>分母</strong>（被求导的变量）走。维度规则一张表说清：</p>
+  <table class="tbl"><thead><tr><th>输出 \ 输入</th><th>标量 \(x\)</th><th>向量 \(\mathbf{x}\in\mathbb{R}^{n}\)</th><th>矩阵 \(\mathbf{X}\in\mathbb{R}^{m\times n}\)</th></tr></thead><tbody>
+  <tr><td>标量 \(f\)</td><td>标量</td><td>\(\partial f/\partial\mathbf{x}\in\mathbb{R}^{n}\)（与 \(\mathbf{x}\) 同形）</td><td>\(\partial f/\partial\mathbf{X}\in\mathbb{R}^{m\times n}\)（与 \(\mathbf{X}\) 同形）</td></tr>
+  <tr><td>向量 \(\mathbf{y}\in\mathbb{R}^{m}\)</td><td>\(\partial\mathbf{y}/\partial x\in\mathbb{R}^{m}\)</td><td>Jacobian \(\mathbf{J}\in\mathbb{R}^{m\times n}\)，\(J_{ij}=\partial y_i/\partial x_j\)</td><td>是张量，工程上避开</td></tr>
+  </tbody></table>
+  <p>实操规则只有一条：<strong>矩阵推导一律走「微分 + 迹」</strong>。对标量损失 \(\mathcal{L}\) 与矩阵 \(\mathbf{Y}\in\mathbb{R}^{m\times n}\)，若能把微分写成</p>
+  \[d\mathcal{L}=\operatorname{tr}\!\bigl(\mathbf{G}^{\top}d\mathbf{Y}\bigr)\quad\Longrightarrow\quad\frac{\partial \mathcal{L}}{\partial \mathbf{Y}}=\mathbf{G}\in\mathbb{R}^{m\times n} \tag{10.1}\]
+  <p>则 \(\mathbf{G}\) 就是所求梯度。反向传播的每一环，就是把 \(d\mathcal{L}\) 一路改写、直到凑出 \(\operatorname{tr}(\mathbf{G}^{\top}d\mathbf{Y})\) 的形状。形状自检：梯度必须与被求导变量同形——形状对不上，先查布局（§10.6）。</p>
+  <p>表里「向量对矩阵求导」标了「工程上避开」，值得说透：\(\mathbf{W}\in\mathbb{R}^{m\times n}\) 时输出对它是三阶张量，连存储都不现实（7B 模型光一层的 Jacobian 就是天文数字）。autograd 从不物化 Jacobian，只算 Jacobian–向量积（VJP）：拿到上游梯度 \(\mathbf{G}\)、左乘或右乘一下，直接吐出与参数同形的梯度。本章三个实战推导全是 VJP 视角——只推「损失对参数的梯度」，从不推「输出对参数的完整导数」。</p>
+  <aside class="mn">记忆钩子：「分母什么样，导数什么样」。\(\mathbf{W}\) 是 \(m\times n\)，\(\partial\mathcal{L}/\partial\mathbf{W}\) 也是 \(m\times n\)，更新时直接相减，不用转置。</aside>
+
+  <h3 id="ch10-s2"><span class="h3-num">10.2</span> 常用恒等式速查</h3>
+  <p>以下五条覆盖本章全部推导，每条附一句话证明。设 \(\mathbf{x},\mathbf{a}\in\mathbb{R}^{n}\)，\(\mathbf{A}\in\mathbb{R}^{n\times n}\)，\(\mathbf{X}\in\mathbb{R}^{n\times n}\) 可逆。</p>
+  <div class="thm"><span class="box-tag">结论 10.1</span><p>（一）线性型：</p>
+  \[\frac{\partial(\mathbf{x}^{\top}\mathbf{a})}{\partial\mathbf{x}}=\mathbf{a} \tag{10.2}\]
+  <p><strong>推导</strong>　\(f=\sum_i x_i a_i\)，故 \(\partial f/\partial x_i=a_i\)，按分量排回列向量即 \(\mathbf{a}\)。</p>
+  <p>（二）二次型：</p>
+  \[\frac{\partial(\mathbf{x}^{\top}\mathbf{A}\mathbf{x})}{\partial\mathbf{x}}=(\mathbf{A}+\mathbf{A}^{\top})\mathbf{x} \tag{10.3}\]
+  <p><strong>推导</strong>　\(f=\sum_{ij}x_i A_{ij} x_j\)，对 \(x_k\) 求导时它出现在行位与列位各一次：\(\partial f/\partial x_k=\sum_j A_{kj}x_j+\sum_i x_i A_{ik}\)，即 \((\mathbf{A}\mathbf{x})_k+(\mathbf{A}^{\top}\mathbf{x})_k\)。\(\mathbf{A}\) 对称时退化为 \(2\mathbf{A}\mathbf{x}\)——这正是「\(Ax^2\) 导数是 \(2Ax\)」的矩阵版。</p>
+  <p>（三）逆矩阵的微分：</p>
+  \[d(\mathbf{X}^{-1})=-\mathbf{X}^{-1}(d\mathbf{X})\mathbf{X}^{-1} \tag{10.4}\]
+  <p><strong>推导</strong>　对恒等式 \(\mathbf{X}\mathbf{X}^{-1}=\mathbf{I}\) 两边取微分：\((d\mathbf{X})\mathbf{X}^{-1}+\mathbf{X}\,d(\mathbf{X}^{-1})=\mathbf{0}\)，移项左乘 \(\mathbf{X}^{-1}\) 即得。</p>
+  <p>（四）对数行列式（要求 \(\det\mathbf{X}>0\)，使对数有定义且微扰不改变符号）：</p>
+  \[d\log\det\mathbf{X}=\operatorname{tr}\!\bigl(\mathbf{X}^{-1}d\mathbf{X}\bigr)\quad\Longrightarrow\quad\frac{\partial\log\det\mathbf{X}}{\partial\mathbf{X}}=\mathbf{X}^{-\top} \tag{10.5}\]
+  <p><strong>推导</strong>　\(\det(\mathbf{X}+d\mathbf{X})=\det\mathbf{X}\cdot\det(\mathbf{I}+\mathbf{X}^{-1}d\mathbf{X})\)，而小扰动下 \(\det(\mathbf{I}+\mathbf{E})\approx 1+\operatorname{tr}\mathbf{E}\)（特征值之积 \(\approx 1+\) 特征值之和），取对数即得微分式，再对照式 (10.1) 读出梯度。</p>
+  <p>（五）迹的循环性：</p>
+  \[\operatorname{tr}(\mathbf{A}\mathbf{B}\mathbf{C})=\operatorname{tr}(\mathbf{B}\mathbf{C}\mathbf{A})=\operatorname{tr}(\mathbf{C}\mathbf{A}\mathbf{B}) \tag{10.6}\]
+  <p><strong>推导</strong>　先证 \(\operatorname{tr}(\mathbf{A}\mathbf{B})=\sum_{ij}A_{ij}B_{ji}=\operatorname{tr}(\mathbf{B}\mathbf{A})\)，再把 \(\mathbf{A}\mathbf{B}\) 当一个整体套用。注意只能「循环移位」，不能任意交换（一般 \(\operatorname{tr}(\mathbf{A}\mathbf{B}\mathbf{C})\ne\operatorname{tr}(\mathbf{A}\mathbf{C}\mathbf{B})\)）。</p></div>
+  <p>用在哪：式 (10.2)、(10.3) 是注意力分数与二次损失求导的基本件；式 (10.4) 出现在高斯似然与二阶优化推导里；式 (10.5) 管归一化流的行列式项；式 (10.6) 是把任何标量损失摆成式 (10.1) 形状的扳手——本章后面全程用它。</p>
+
+  <h3 id="ch10-s3"><span class="h3-num">10.3</span> 实战推导 1：LayerNorm 的 Jacobian</h3>
+  <p>沿用第六章式 (6.9)：输入 \(\mathbf{x}\in\mathbb{R}^{d}\)，记均值 \(\mu\)、方差 \(v=\sigma^2\)、\(s=\sqrt{v+\epsilon}\)、\(\hat{\mathbf{x}}=(\mathbf{x}-\mu)/s\)，输出 \(\mathbf{y}=\boldsymbol{\gamma}\odot\hat{\mathbf{x}}+\boldsymbol{\beta}\in\mathbb{R}^{d}\)。求 \(\partial\mathbf{y}/\partial\mathbf{x}\in\mathbb{R}^{d\times d}\)。</p>
+  <div class="thm"><span class="box-tag">结论 10.2</span><p>LayerNorm 对输入的 Jacobian：</p>
+  \[\frac{\partial\operatorname{LN}}{\partial\mathbf{x}}=\frac{1}{s}\,\operatorname{diag}(\boldsymbol{\gamma})\left(\mathbf{I}-\frac{1}{d}\mathbf{1}\mathbf{1}^{\top}-\frac{1}{d}\hat{\mathbf{x}}\hat{\mathbf{x}}^{\top}\right)\in\mathbb{R}^{d\times d} \tag{10.7}\]
+  <p><strong>推导</strong>　分三步，全部在分母布局下。① 均值：\(\partial\mu/\partial\mathbf{x}=\tfrac{1}{d}\mathbf{1}\)。② 标准差：由 \(v=\tfrac{1}{d}\sum_j(x_j-\mu)^2\) 得 \(\partial v/\partial\mathbf{x}=\tfrac{2}{d}(\mathbf{x}-\mu)\)（\(\mu\) 的连锁项相互抵消），于是 \(\partial s/\partial\mathbf{x}=\tfrac{1}{2s}\cdot\tfrac{2}{d}(\mathbf{x}-\mu)=\hat{\mathbf{x}}/d\)。</p>
+  <p>③ 对 \(\hat{\mathbf{x}}=(\mathbf{x}-\mu)/s\) 用商法则，分子分母各自贡献一项：</p>
+  \[\frac{\partial\hat{\mathbf{x}}}{\partial\mathbf{x}}=\frac{1}{s}\Bigl(\mathbf{I}-\frac{1}{d}\mathbf{1}\mathbf{1}^{\top}\Bigr)-\frac{\mathbf{x}-\mu}{s^{2}}\Bigl(\frac{\partial s}{\partial\mathbf{x}}\Bigr)^{\top}=\frac{1}{s}\Bigl(\mathbf{I}-\frac{1}{d}\mathbf{1}\mathbf{1}^{\top}-\frac{1}{d}\hat{\mathbf{x}}\hat{\mathbf{x}}^{\top}\Bigr)\]
+  <p>最后左乘 \(\operatorname{diag}(\boldsymbol{\gamma})\)（\(\boldsymbol{\beta}\) 是加性常数，导数为零）即得式 (10.7)。</p></div>
+  <p>三个因子各管一件事：\(\mathbf{I}\) 是直通；\(-\tfrac{1}{d}\mathbf{1}\mathbf{1}^{\top}\) 是「减均值」的耦合（动一个分量，均值跟着动）；\(-\tfrac{1}{d}\hat{\mathbf{x}}\hat{\mathbf{x}}^{\top}\) 是「除以标准差」的耦合（动一个分量，方差跟着动）。顺带补全 LN 的另一半：记上游梯度 \(\mathbf{G}_y=\partial\mathcal{L}/\partial\mathbf{y}\in\mathbb{R}^{d}\)，由 \(\mathbf{y}=\boldsymbol{\gamma}\odot\hat{\mathbf{x}}+\boldsymbol{\beta}\) 直接读出参数梯度 \(\partial\mathcal{L}/\partial\boldsymbol{\gamma}=\mathbf{G}_y\odot\hat{\mathbf{x}}\)、\(\partial\mathcal{L}/\partial\boldsymbol{\beta}=\mathbf{G}_y\)（batch 与序列维上再求和）——LN 的 backward 一共就这三行。</p>
+  <div class="example"><span class="box-tag">例 10.1</span><p><strong>题目</strong>　\(d=3\)，\(\mathbf{x}=(1,2,3)\)，\(\boldsymbol{\gamma}=\mathbf{1}\)，\(\boldsymbol{\beta}=\mathbf{0}\)，\(\epsilon=0\)。算出式 (10.7) 的全部 9 个元素，并做 sanity check。</p>
+  <p><strong>解</strong>　先算前向：\(\mu=2\)，\(v=\frac{1+0+1}{3}=\frac{2}{3}\)，\(s=\sqrt{2/3}\approx0.8165\)，</p>
+  \[\hat{\mathbf{x}}=\frac{(1,2,3)-2}{0.8165}\approx(-1.2247,\ 0,\ 1.2247),\qquad \hat{\mathbf{x}}\hat{\mathbf{x}}^{\top}=\begin{pmatrix}1.5&0&-1.5\\0&0&0\\-1.5&0&1.5\end{pmatrix}\]
+  <p>代入式 (10.7)，\(\tfrac{1}{3}\mathbf{1}\mathbf{1}^{\top}\) 是全 \(1/3\) 矩阵，\(\tfrac{1}{3}\hat{\mathbf{x}}\hat{\mathbf{x}}^{\top}\) 的四个角是 \(\pm0.5\)：</p>
+  \[\mathbf{J}=\frac{1}{0.8165}\begin{pmatrix}1-\tfrac13-0.5&-\tfrac13&-\tfrac13+0.5\\-\tfrac13&1-\tfrac13&-\tfrac13\\-\tfrac13+0.5&-\tfrac13&1-\tfrac13-0.5\end{pmatrix}\approx\begin{pmatrix}0.2041&-0.4082&0.2041\\-0.4082&0.8165&-0.4082\\0.2041&-0.4082&0.2041\end{pmatrix}\]
+  <p>python3 复核：与中心有限差分（步长 \(10^{-7}\)）逐元素吻合，最大误差 \(3\times10^{-9}\)。两条 sanity check：每行和为 \(0\)（\(0.2041-0.4082+0.2041=0\)）——这正是 \(\mathbf{J}\mathbf{1}=\mathbf{0}\)，对应 LN 的平移不变性 \(\operatorname{LN}(\mathbf{x}+c\mathbf{1})=\operatorname{LN}(\mathbf{x})\)；第 1、3 行相同，对应 \(\hat x_1=-\hat x_3\) 的对称。</p></div>
+  <aside class="mn">直觉：LN 的 Jacobian 把 incoming 梯度「投影」——减去均值方向的分量、再减去 \(\hat{\mathbf{x}}\) 方向的分量。所以 LN 不会让梯度原样穿过，它总在归一化的几何里拐个弯。</aside>
+
+  <h3 id="ch10-s4"><span class="h3-num">10.4</span> 实战推导 2：注意力对 W_Q 徒手求导</h3>
+  <p>取能徒手算到底的最小配置：单头、2 个 token、\(d_k=d_v=d_{\text{model}}=2\)，</p>
+  \[\mathbf{X}=\begin{pmatrix}1&0\\0&1\end{pmatrix},\quad \mathbf{W}_K=\begin{pmatrix}1&0\\0&1\end{pmatrix},\quad \mathbf{W}_V=\begin{pmatrix}2&0\\0&1\end{pmatrix},\quad \mathbf{W}_Q=\begin{pmatrix}w&0\\0&1\end{pmatrix},\ w=1\]
+  <p>损失取 \(L=\sum_{ij}O_{ij}\)（输出的全部元素求和，\(\mathbf{O}\in\mathbb{R}^{2\times2}\)）。求 \(\partial L/\partial w\)，即 \(\partial L/\partial(\mathbf{W}_Q)_{11}\)。先跑前向（维度链：\(\mathbb{R}^{2\times2}\times\mathbb{R}^{2\times2}\to\mathbb{R}^{2\times2}\) 贯穿全程）：</p>
+  \[\mathbf{Q}=\mathbf{X}\mathbf{W}_Q=\begin{pmatrix}1&0\\0&1\end{pmatrix},\quad \mathbf{K}=\mathbf{X}\mathbf{W}_K=\mathbf{I},\quad \mathbf{S}=\frac{\mathbf{Q}\mathbf{K}^{\top}}{\sqrt{2}}=\begin{pmatrix}0.7071&0\\0&0.7071\end{pmatrix}\]
+  <p>逐行 softmax（\(e^{0.7071}\approx2.0281\)，分母 \(3.0281\)），再乘 \(\mathbf{V}=\mathbf{X}\mathbf{W}_V\)：</p>
+  \[\mathbf{P}=\begin{pmatrix}0.6698&0.3302\\0.3302&0.6698\end{pmatrix},\qquad \mathbf{O}=\mathbf{P}\mathbf{V}=\begin{pmatrix}1.3395&0.3302\\0.6605&0.6698\end{pmatrix},\qquad L=3.0000\]
+  <div class="example"><span class="box-tag">例 10.2</span><p><strong>题目</strong>　沿 \(L\to\mathbf{O}\to\mathbf{P}\to\mathbf{S}\to\mathbf{Q}\to\mathbf{W}_Q\) 完整求导，每步标维度。</p>
+  <p><strong>解</strong>　<strong>第 1 步</strong>，\(\partial L/\partial\mathbf{O}\)：\(L=\sum_{ij}O_{ij}\)，故</p>
+  \[\mathbf{G}_O=\frac{\partial L}{\partial\mathbf{O}}=\begin{pmatrix}1&1\\1&1\end{pmatrix}\in\mathbb{R}^{2\times2}\]
+  <p><strong>第 2 步</strong>，\(\mathbf{O}=\mathbf{P}\mathbf{V}\)（\(\mathbf{P},\mathbf{V}\in\mathbb{R}^{2\times2}\)）：\(dL=\operatorname{tr}(\mathbf{G}_O^{\top}d\mathbf{P}\,\mathbf{V})=\operatorname{tr}(\mathbf{V}\mathbf{G}_O^{\top}d\mathbf{P})\)，用式 (10.6) 循环后对照式 (10.1)：</p>
+  \[\mathbf{G}_P=\frac{\partial L}{\partial\mathbf{P}}=\mathbf{G}_O\mathbf{V}^{\top}=\begin{pmatrix}1&1\\1&1\end{pmatrix}\begin{pmatrix}2&0\\0&1\end{pmatrix}=\begin{pmatrix}2&1\\2&1\end{pmatrix}\in\mathbb{R}^{2\times2}\]
+  <p><strong>第 3 步</strong>，softmax 逐行。对一行 \(\mathbf{p}=\operatorname{softmax}(\mathbf{s})\in\mathbb{R}^{2}\)，其 Jacobian 与反向的 Jacobian–向量积为</p>
+  \[\frac{\partial\mathbf{p}}{\partial\mathbf{s}}=\operatorname{diag}(\mathbf{p})-\mathbf{p}\mathbf{p}^{\top}\in\mathbb{R}^{2\times2},\qquad \frac{\partial L}{\partial\mathbf{s}}=\bigl(\operatorname{diag}(\mathbf{p})-\mathbf{p}\mathbf{p}^{\top}\bigr)\,\mathbf{g},\ \ \mathbf{g}=\frac{\partial L}{\partial\mathbf{p}} \tag{10.8}\]
+  <p>第 1 行：\(\mathbf{p}=(0.6698,0.3302)\)，记 \(a=p_1p_2=0.2212\)，则 \(\operatorname{diag}(\mathbf{p})-\mathbf{p}\mathbf{p}^{\top}=\bigl(\begin{smallmatrix}a&-a\\-a&a\end{smallmatrix}\bigr)\)，乘 \(\mathbf{g}=(2,1)^{\top}\)：\((2a-a,\,-2a+a)=(a,-a)\)。第 2 行的 \(\mathbf{p}\) 分量对调，\(a\) 相同，也得 \((a,-a)\)。拼回矩阵：</p>
+  \[\mathbf{G}_S=\frac{\partial L}{\partial\mathbf{S}}=\begin{pmatrix}0.2212&-0.2212\\0.2212&-0.2212\end{pmatrix}\in\mathbb{R}^{2\times2}\]
+  <p><strong>第 4 步</strong>，\(\mathbf{S}=\mathbf{Q}\mathbf{K}^{\top}/\sqrt{d_k}\)：\(dL=\operatorname{tr}(\mathbf{G}_S^{\top}d\mathbf{Q}\mathbf{K}^{\top})/\sqrt{2}=\operatorname{tr}((\mathbf{G}_S\mathbf{K}/\sqrt{2})^{\top}d\mathbf{Q})\)，故</p>
+  \[\mathbf{G}_Q=\frac{\partial L}{\partial\mathbf{Q}}=\frac{1}{\sqrt{2}}\mathbf{G}_S\mathbf{K}=\frac{1}{1.4142}\mathbf{G}_S=\begin{pmatrix}0.1564&-0.1564\\0.1564&-0.1564\end{pmatrix}\in\mathbb{R}^{2\times2}\]
+  <p><strong>第 5 步</strong>，\(\mathbf{Q}=\mathbf{X}\mathbf{W}_Q\)：同理 \(\partial L/\partial\mathbf{W}_Q=\mathbf{X}^{\top}\mathbf{G}_Q\in\mathbb{R}^{2\times2}\)；此处 \(\mathbf{X}=\mathbf{I}\)，故不变。读出 \((1,1)\) 元：</p>
+  \[\frac{\partial L}{\partial w}=\bigl(\mathbf{G}_Q\bigr)_{11}=\frac{0.2212}{1.4142}\approx 0.1564\]
+  <p>python3 复核：中心有限差分得 \(0.1563986\)，与手算 \(0.221181/1.414214=0.156399\) 一致。</p></div>
+  <p>把例 10.2 的链路一般化（\(\mathbf{P},\mathbf{S}\in\mathbb{R}^{n\times n}\)，\(\mathbf{Q},\mathbf{K}\in\mathbb{R}^{n\times d_k}\)，\(\mathbf{V},\mathbf{O}\in\mathbb{R}^{n\times d_v}\)，记上游梯度 \(\mathbf{G}_O=\partial L/\partial\mathbf{O}\)），就是注意力反传的全部五个矩阵梯度：</p>
+  \[\mathbf{G}_V=\mathbf{P}^{\top}\mathbf{G}_O,\quad \mathbf{G}_P=\mathbf{G}_O\mathbf{V}^{\top},\quad \mathbf{G}_S=\operatorname{softmax\text{-}JVP}(\mathbf{G}_P),\quad \mathbf{G}_Q=\frac{\mathbf{G}_S\mathbf{K}}{\sqrt{d_k}},\quad \mathbf{G}_K=\frac{\mathbf{G}_S^{\top}\mathbf{Q}}{\sqrt{d_k}} \tag{10.9}\]
+  <p>其中 softmax-JVP 按式 (10.8) 逐行作用；最后 \(\partial L/\partial\mathbf{W}_Q=\mathbf{X}^{\top}\mathbf{G}_Q\in\mathbb{R}^{d_{\text{model}}\times d_k}\)，\(\mathbf{K},\mathbf{V}\) 同理。每写一个，先对一遍维度——这就是白板推导的保命动作。</p>
+  <p>两处从玩具到真实：其一，因果语言模型的注意力带 mask——\(\mathbf{S}\) 的上三角填 \(-\infty\)，softmax 后上三角为 \(0\)，反向时 \(\mathbf{G}_S\) 的上三角自然也是 \(0\)，式 (10.9) 的形状与推导一步不变，只是矩阵里一半元素恒零（FlashAttention 正是连这些零都不肯算才快）。其二，多头时每个头独立走式 (10.9) 这一套，梯度在 concat 处按头切块、各回各家，维度推演与 §6.5 完全同构。</p>
+  <p>若还要继续往前一层传，输入梯度是三条支路之和：\(\partial L/\partial\mathbf{X}=\mathbf{G}_Q\mathbf{W}_Q^{\top}+\mathbf{G}_K\mathbf{W}_K^{\top}+\mathbf{G}_V\mathbf{W}_V^{\top}\in\mathbb{R}^{n\times d_{\text{model}}}\)。顺便对一笔账：式 (10.9) 的五个矩阵乘，每个的 FLOPs 与前向对应乘法相当——注意力反向的矩阵乘开销约为前向的 2 倍，这正是第九章「前向 2N、反向 4N」在单个算子上的样子。</p>
+  <aside class="mn">第 3 步是全场唯一「非矩阵乘」的环节：softmax 按行作用，梯度也按行做 Jacobian–向量积。FlashAttention 的重算，省的就是这里要用到的 \(\mathbf{P}\)（见 §9.3）。</aside>
+
+  <h3 id="ch10-s5"><span class="h3-num">10.5</span> 实战推导 3：交叉熵对 logits 的梯度</h3>
+  <div class="thm"><span class="box-tag">结论 10.3</span><p>设 logits \(\mathbf{z}\in\mathbb{R}^{V}\)，\(\mathbf{p}=\operatorname{softmax}(\mathbf{z})\)，正确类为 \(y\)（one-hot 向量 \(\mathbf{y}\)），交叉熵 \(\mathcal{L}=-\log p_y\)。则</p>
+  \[\frac{\partial\mathcal{L}}{\partial\mathbf{z}}=\mathbf{p}-\mathbf{y}\in\mathbb{R}^{V} \tag{10.10}\]
+  <p><strong>推导</strong>　把 \(\mathcal{L}\) 写成 \(-z_y+\log\sum_{j}e^{z_j}\)，对第 \(i\) 个分量求导：第一项给出 \(-\mathbb{1}\{i=y\}\)，第二项（log-sum-exp）的导数恰好是 softmax 本身，即 \(e^{z_i}/\sum_j e^{z_j}=p_i\)，合起来 \(p_i-y_i\)，按分量排回向量即式 (10.10)。本章独立推完；第十五章若在损失函数语境再遇此式，可直接引用。</p></div>
+  <p>实际训练里还要再走一步：损失对 batch 的 \(B\) 条样本、每条 \(T\) 个位置取平均（§5.3 的无偏估计），所以每个位置的 logits 梯度都要乘 \(1/(BT)\)——式 (10.10) 的形状不变，只是整体缩一个常数。梯度累积、数据并行求平均时，缩的也是这个常数。</p>
+  <div class="example"><span class="box-tag">例 10.3</span><p><strong>题目</strong>　\(\mathbf{z}=(2.0,\,1.0,\,0.1)\)，正确类为第 1 类（\(\mathbf{y}=(1,0,0)\)）。求 \(\partial\mathcal{L}/\partial\mathbf{z}\)。</p>
+  <p><strong>解</strong>　softmax（同第三章的数值）：\(\mathbf{p}=(0.6590,\,0.2424,\,0.0986)\)，代入式 (10.10)：</p>
+  \[\frac{\partial\mathcal{L}}{\partial\mathbf{z}}=(0.6590-1,\ 0.2424,\ 0.0986)=(-0.3410,\ 0.2424,\ 0.0986)\]
+  <p>（python3 复核：\(\mathcal{L}=0.4170\)，有限差分梯度与上式逐位吻合。）读法：每个 logit 的梯度就是它自己的概率，唯独正确类减 1——增大正确类 logit、压低其余，幅度正比于当前概率。</p></div>
+  <aside class="mn">\(\mathbf{p}-\mathbf{y}\) 是「预测减真值」，反向传播里最干净的一条式子：框架的 fused cross-entropy kernel 正是利用它，从不显式构造 softmax 的 Jacobian。</aside>
+
+  <h3 id="ch10-s6"><span class="h3-num">10.6</span> 常见误用</h3>
+  <div class="warn"><span class="box-tag">常见误用</span><p><strong>分母/分子布局混用，转置错位。</strong>前半段按分母布局、后半段按分子布局（或抄了另一布局的公式），结果是梯度整体转置。方阵时不报形状错误，训练「能跑」却在学一个转置错位的梯度，loss 降得慢且找不到原因。改法：全推导固定一种布局；每个梯度落地前做形状自检（梯度形状 = 参数形状）；新写的 backward 用有限差分对拍一次，就像本章三个例子做的那样。</p></div>
+  <div class="warn"><span class="box-tag">常见误用</span><p><strong>把 \(\partial(\mathbf{A}\mathbf{B})\) 当标量乘积法则直接套。</strong>写「\(\partial(\mathbf{A}\mathbf{B})/\partial x=(\partial\mathbf{A}/\partial x)\mathbf{B}+\mathbf{A}(\partial\mathbf{B}/\partial x)\)」当矩阵等式用是错的：\(\partial\mathbf{A}/\partial x\) 按布局是三维对象，与 \(\mathbf{B}\) 根本乘不起来。正确姿势是微分形式 \(d(\mathbf{A}\mathbf{B})=(d\mathbf{A})\mathbf{B}+\mathbf{A}(d\mathbf{B})\)（微分与 \(\mathbf{A},\mathbf{B}\) 同形，乘法合法），再代入式 (10.1) 用迹的循环性归位——例 10.2 的第 2、4、5 步全是这个套路。</p></div>
+
+  <h3 id="ch10-ai"><span class="h3-num">10.7</span> 在 AI 中的位置</h3>
+  <table class="tbl"><thead><tr><th>本章结论</th><th>具体 AI 组件 / 机制</th><th>缺了会怎样</th></tr></thead><tbody>
+  <tr><td>分母布局 + 形状自检（§10.1）</td><td>读 PyTorch/JAX autograd 源码；给自定义算子写 backward</td><td>梯度转置错位：方阵不报错，模型默默学歪</td></tr>
+  <tr><td>式 (10.7) LayerNorm Jacobian</td><td>LN 的反向 kernel；理解「LN 把梯度投影到零均值、零 \(\hat{\mathbf{x}}\) 方向」的几何</td><td>把 LN 当逐元素算子，以为梯度直通，错估深层的梯度流</td></tr>
+  <tr><td>式 (10.8) softmax 的 Jacobian–向量积</td><td>注意力反向的唯一非标量环节；FlashAttention 重算 \(\mathbf{P}\) 的理论依据</td><td>看不懂重算省的是什么；手写注意力反向卡在 softmax</td></tr>
+  <tr><td>式 (10.9) 注意力反传五式</td><td>面试白板题「推注意力梯度」；自定义 attention kernel 的 backward</td><td>只会调 API，改注意力变体（加 mask、改缩放）时无从下手</td></tr>
+  <tr><td>式 (10.10) \(\mathbf{p}-\mathbf{y}\)</td><td>每个训练步的输出层；RLHF/采样里的 logprob 梯度（接第十五章）</td><td>以为 CE 反向要显式构造 \(V\times V\) 的 Jacobian，性能和直觉双输</td></tr>
+  </tbody></table>
+  <p>一句话收束：布局定规矩、微分加迹是扳手、每个梯度对一遍形状——剩下的事，LayerNorm、注意力、交叉熵各演一遍，就都是熟路了。</p>
+</section>

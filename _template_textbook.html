@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大模型数学 · 现代教科书版（零基础自学 · 16 章）</title>
+<style>
+:root{
+  --paper:#FBF7F0; --paper-2:#F5EEE2; --card:#FFFFFF;
+  --ink:#221D15; --ink-2:#4A4438; --muted:#6F6756;
+  --line:#E7DFD0; --line-strong:#D3C8B2;
+  --accent:#0E6E5C; --accent-dark:#0A5245; --accent-soft:#E6F2EF;
+  --accent2:#C05A2E; --accent2-soft:#FCEEE6;
+  --amber:#B98A1D; --amber-soft:#FBF4E4;
+  --ok:#4C7A3F; --ok-soft:#EDF4E8;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Helvetica Neue","PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif;
+  --measure:700px; --radius:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16.5px;line-height:1.85;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+::selection{background:var(--accent);color:#fff}
+a{color:inherit;text-decoration:none}
+section,[id^="tb"]{scroll-margin-top:76px}
+.topbar{height:8px;background:var(--ink)}
+
+/* 封面 */
+.cover{max-width:1184px;margin:0 auto;padding:80px 32px 56px;border-bottom:1px solid var(--line-strong)}
+.cover .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--accent);display:flex;align-items:center;gap:12px;margin-bottom:26px;text-transform:uppercase}
+.cover .kicker::after{content:"";flex:1;height:1px;background:var(--line-strong)}
+.cover h1{font-size:clamp(34px,5vw,58px);line-height:1.15;font-weight:800;letter-spacing:.01em;max-width:15em}
+.cover .sub{margin-top:20px;font-size:18.5px;color:var(--ink-2);max-width:42em;line-height:1.8}
+.cover .rew-note{margin-top:24px;display:inline-block;font-size:13.5px;color:var(--accent2);background:var(--accent2-soft);border:1px solid var(--accent2);border-radius:var(--radius);padding:12px 18px;line-height:1.75;max-width:46em}
+.spec{margin-top:42px;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));border-top:2px solid var(--ink)}
+.spec div{padding:14px 16px 14px 0;border-bottom:1px solid var(--line)}
+.spec dt{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--muted);margin-bottom:4px}
+.spec dd{font-size:14px;font-weight:600;line-height:1.5}
+.spec dd .plain{font-weight:400;color:var(--ink-2)}
+
+/* 骨架 */
+.layout{max-width:1184px;margin:0 auto;padding:0 32px;display:grid;grid-template-columns:210px minmax(0,1fr);gap:0 48px;align-items:start}
+.sidenav{position:sticky;top:0;padding:36px 0;height:100vh;overflow:auto;border-right:1px solid var(--line)}
+.sidenav .nav-title{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--muted);margin-bottom:12px;padding-right:12px}
+.sidenav ol{list-style:none}
+.sidenav a{display:grid;grid-template-columns:30px 1fr;gap:8px;padding:6px 12px 6px 0;font-size:13px;color:var(--ink-2);border-left:2px solid transparent;transition:.15s}
+.sidenav a .n{font-family:var(--mono);font-size:11px;color:var(--muted);padding-top:2px}
+.sidenav a:hover{color:var(--ink)}
+.sidenav a.active{color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.sidenav a.active .n{color:var(--accent)}
+.sidenav .tools{margin-top:26px;display:flex;flex-direction:column;gap:10px;padding-right:12px}
+.sidenav .tools button{font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-2);background:none;border:1px solid var(--line-strong);border-radius:var(--radius);padding:8px 12px;cursor:pointer;text-align:left}
+.sidenav .tools button:hover{border-color:var(--accent);color:var(--accent)}
+.sidenav .tools svg{width:13px;height:13px;vertical-align:-2px;margin-right:5px}
+.sidenav .ver-links{margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
+.sidenav .ver-links a{display:block;font-family:var(--mono);font-size:11px;color:var(--muted);padding:5px 0}
+.sidenav .ver-links a:hover{color:var(--accent)}
+.content{padding:8px 0 120px;min-width:0}
+
+/* 总目录 */
+.masthead-sec{padding-top:56px}
+.sec-label{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--accent);display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.sec-label::after{content:"";flex:1;height:1px;background:var(--line)}
+.masthead-sec h2{font-size:28px;font-weight:800}
+.masthead-sec .lede{color:var(--ink-2);font-size:15px;max-width:var(--measure);margin-top:8px}
+.toc-list{margin-top:32px;border-top:2px solid var(--ink)}
+.toc-row{display:grid;grid-template-columns:56px 1fr;gap:20px;padding:16px 8px;border-bottom:1px solid var(--line);align-items:baseline;transition:background .15s;border-radius:var(--radius)}
+.toc-row:hover{background:var(--accent-soft)}
+.toc-num{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--accent);
+  border:1.5px solid var(--accent);border-radius:2px;padding:4px 0;text-align:center;
+  print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.toc-row:hover .toc-num{background:var(--accent);color:var(--paper)}
+.toc-title{font-size:17px;font-weight:700;display:block;line-height:1.4}
+.toc-sub{font-size:13.5px;color:var(--muted);display:block;margin-top:2px}
+.toc-sub-none{font-style:italic}
+
+/* 章节 */
+.chapter{padding-top:64px}
+.ch-open{border-top:3px solid var(--accent);padding-top:30px;margin-bottom:8px}
+.ch-kicker{font-family:var(--mono);font-size:11px;letter-spacing:.13em;color:var(--accent);margin-bottom:12px;
+  display:inline-block;border:1px solid var(--accent);border-radius:2px;padding:3px 10px;background:var(--accent-soft);
+  print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.ch-title{font-size:clamp(26px,3.6vw,40px);font-weight:800;letter-spacing:.01em;line-height:1.2}
+.ch-sub{font-size:17.5px;color:var(--ink-2);margin-top:12px;font-weight:500}
+.ch-lede{margin-top:18px;font-size:15.5px;color:var(--ink-2);max-width:var(--measure);background:var(--accent-soft);border-radius:var(--radius);padding:16px 20px;line-height:1.8}
+.ch-map{margin-top:14px;font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.ch-map .map-tag{color:var(--accent);font-weight:700;letter-spacing:.1em;margin-right:8px}
+.ch-toc{margin:26px 0 8px;display:flex;flex-wrap:wrap;gap:8px 22px;max-width:var(--measure)}
+.ch-toc a{font-family:var(--mono);font-size:12px;color:var(--ink-2);border-bottom:1px solid var(--line-strong);padding-bottom:2px}
+.ch-toc a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+
+.chapter h3{font-size:22px;font-weight:800;margin:52px 0 20px;max-width:var(--measure);display:flex;align-items:baseline;gap:14px}
+.chapter h4{font-size:16px;font-weight:700;margin:30px 0 12px;max-width:var(--measure)}
+.chapter p{max-width:var(--measure);margin:15px 0;font-size:16.5px}
+.chapter ul,.chapter ol{max-width:var(--measure);margin:15px 0 15px 26px}
+.chapter li{margin:7px 0;line-height:1.8}
+.kt{font-weight:700;color:var(--accent-dark)}
+.todo{font-weight:700;color:#B9472F;background:#FBEAE5;padding:1px 6px;border-radius:4px;font-size:14px}
+
+/* 组件框：档案卡（教科书版） */
+.intuition,.def,.derive,.example,.warn,.checkpoint,.quiz{
+  position:relative;max-width:var(--measure);margin:26px 0;padding:18px 22px 15px;border-radius:3px;
+  font-size:15.5px;line-height:1.8}
+.intuition{background:var(--accent-soft);border:1px solid #CBE3DD;border-left:3px solid var(--accent)}
+.def{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--ink)}
+.derive{background:#FDFCFA;border:1px dashed var(--line-strong);border-left:3px solid var(--accent2)}
+.example{background:var(--card);border:1px solid var(--line-strong);border-left:3px solid var(--accent)}
+.warn{background:var(--accent2-soft);border:1px solid #F0CDBB;border-left:3px solid var(--accent2)}
+.checkpoint{background:var(--ok-soft);border:1px solid #D2E2C8;border-left:3px solid var(--ok)}
+.quiz{background:var(--card);border:1.5px solid var(--accent);border-radius:3px;padding:20px 24px}
+.box-tag{display:flex;align-items:baseline;gap:9px;margin:0 0 10px}
+.ctab{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.06em;white-space:nowrap;
+  padding:2px 8px;background:var(--ink);color:var(--paper);border-radius:2px;flex:none;
+  print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.intuition .ctab,.example .ctab,.quiz .ctab{background:var(--accent)}
+.derive .ctab,.warn .ctab{background:var(--accent2)}
+.checkpoint .ctab{background:var(--ok)}
+.box-tag.bare .ctab{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.derive .box-tag.bare .ctab,.warn .box-tag.bare .ctab{color:var(--accent2);border-color:var(--accent2)}
+.checkpoint .box-tag.bare .ctab{color:var(--ok);border-color:var(--ok)}
+.clabel{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+.clabel:empty{display:none}
+.quiz .box-tag .clabel{font-size:11.5px}
+.intuition p,.def p,.derive p,.example p,.warn p,.checkpoint p,.quiz p{margin:9px 0;max-width:none}
+.checkpoint ul,.quiz ol{margin:8px 0 8px 22px;max-width:none}
+/* 自测题折叠答案 */
+.quiz details{margin:10px 0;border-top:1px solid var(--line);padding-top:10px}
+.quiz summary{cursor:pointer;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent);list-style:none;display:inline-flex;align-items:center;gap:6px}
+.quiz summary::before{content:"▸";transition:transform .15s}
+.quiz details[open] summary::before{transform:rotate(90deg)}
+.quiz details .ans{margin-top:10px;padding:12px 16px;background:var(--paper-2);border-radius:6px;font-size:14.5px}
+.quiz ol li{margin:14px 0}
+
+/* 批注 */
+aside.mn{float:right;clear:right;width:195px;margin:6px 0 16px 28px;font-size:12.5px;line-height:1.7;color:var(--muted);border-left:2px solid var(--line);padding:4px 0 4px 14px}
+aside.mn::before{content:"批注";display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:var(--accent);margin-bottom:5px}
+
+/* 表格/图/代码 */
+table.tbl{width:100%;max-width:var(--measure);border-collapse:collapse;margin:24px 0;font-size:14px;background:var(--card)}
+.tbl th{font-family:var(--mono);font-size:11px;color:var(--ink-2);text-align:left;padding:9px 12px;border-bottom:2px solid var(--ink);font-weight:600}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.65}
+.tbl tr:last-child td{border-bottom:2px solid var(--ink)}
+figure.fig{max-width:var(--measure);margin:28px 0;padding:18px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius)}
+figure.fig>svg{display:block;margin:0 auto}
+figcaption{margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;line-height:1.6}
+.chapter code{font-family:var(--mono);font-size:13.5px;background:var(--paper-2);border:1px solid var(--line);padding:1px 6px;border-radius:4px}
+.chapter pre{max-width:var(--measure);background:var(--ink);color:#EDECE4;padding:16px 18px;border-radius:var(--radius);overflow-x:auto;margin:22px 0;font-size:13px;line-height:1.65}
+.chapter pre code{background:none;border:none;padding:0;color:inherit}
+.chapter mjx-container[jax="SVG"][display="true"]{margin:22px 0 !important;max-width:var(--measure);box-sizing:border-box;overflow-x:auto;overflow-y:hidden;padding:6px 0}
+mjx-assistive-mml{max-width:1px !important;max-height:1px !important;width:1px !important;height:1px !important;overflow:hidden !important}
+.chapter mjx-container[jax="SVG"]{font-size:103%}
+
+/* 交叉引用链接与锚点 */
+a.xref{color:inherit;text-decoration:none;border-bottom:1px dotted #B9AC96}
+a.xref:hover{color:var(--accent);border-bottom-color:var(--accent)}
+.ti-sec{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:2px}
+.anchor{display:inline-block;width:0;height:0;overflow:hidden;scroll-margin-top:100px}
+
+.footer{border-top:2px solid var(--ink)}
+.footer-inner{max-width:1184px;margin:0 auto;padding:32px;display:flex;flex-wrap:wrap;gap:14px 40px;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.05em;line-height:2}
+
+@media(max-width:1080px){
+  .layout{grid-template-columns:1fr;gap:0}
+  .sidenav{position:sticky;top:0;z-index:40;height:auto;padding:0;border-right:none;border-bottom:1px solid var(--line);background:var(--paper);display:flex;overflow-x:auto;scrollbar-width:none}
+  .sidenav::-webkit-scrollbar{display:none}
+  .sidenav .nav-title,.sidenav .tools,.sidenav .ver-links{display:none}
+  .sidenav ol{display:flex;gap:2px;padding:10px 4px}
+  .sidenav a{display:block;padding:6px 11px;border-left:none;border-bottom:2px solid transparent;white-space:nowrap;font-size:12px}
+  .sidenav a .n{display:none}
+  .sidenav a .nt{display:none}
+  .sidenav a .ns{display:inline}
+  .sidenav a.active{border-bottom-color:var(--accent)}
+  section,[id^="tb"]{scroll-margin-top:104px}
+}
+.sidenav a .ns{display:none}
+/* 屏幕端（非打印）：允许 display 公式容器收缩到父宽并内部横滚 */
+@media screen{
+  .chapter mjx-container[jax="SVG"][display="true"]{min-width:0 !important}
+}
+/* 窄屏：超长行内公式变为可横滚的行内块，避免整页横向溢出 */
+@media screen and (max-width:760px){
+  .chapter mjx-container[jax="SVG"]:not([display="true"]){display:inline-block;max-width:100%;overflow-x:auto;overflow-y:hidden}
+  .chapter .tbl{display:block;overflow-x:auto}
+}
+@media(max-width:760px){
+  aside.mn{float:none;width:auto;margin:14px 0;border-left:2px solid var(--accent);padding:8px 0 8px 14px}
+  .toc-row{grid-template-columns:44px 1fr;gap:14px}
+}
+@media print{
+  .topbar,.sidenav,.ch-toc{display:none !important}
+  body{background:#fff;font-size:10pt;line-height:1.6}
+  .layout{display:block;padding:0}
+  .chapter-wrap{break-before:page}
+  .chapter-wrap::before{content:attr(data-running);display:block;font-family:var(--mono);font-size:8.5pt;color:#555;border-bottom:1px solid #999;padding-bottom:4pt;margin-bottom:14pt}
+  .chapter{padding-top:0}
+  .intuition,.def,.derive,.example,.warn,.checkpoint,.quiz{break-inside:avoid;background:#fff}
+  .quiz details{break-inside:avoid}
+  .quiz details .ans{display:block}
+  aside.mn{float:none;width:auto;margin:8pt 0;color:#444;border-color:#bbb;border-left:2px solid #bbb;padding:4pt 0 4pt 10pt}
+  mjx-container[jax="SVG"][display="true"]{break-inside:avoid}
+  @page{size:A4;margin:1.8cm;@bottom-center{content:counter(page);font-family:Menlo,monospace;font-size:9pt;color:#555}}
+  /* 每章命名页：页眉随章变化（Chrome/Edge 支持 named pages） */
+__PRINT_PAGES__
+}
+</style>
+</head>
+<body>
+<div class="topbar"></div>
+<header class="cover" id="top">
+  <div class="kicker">零基础自学 · 由浅入深 · 16 章</div>
+  <h1>大模型数学<br>现代教科书</h1>
+  <p class="sub">写给想从头学懂大模型数学的人：每个概念先给直觉，再给定义，每一步推导都交代为什么。配自测题，学完能自查。</p>
+  <p class="rew-note"><strong>说明</strong>：本书依据一篇公众号文章的 16 章目录<strong>重新撰写</strong>（章名与副标题照录原目录，各章标「据原文目录」），正文为本书作者所写，非原作者 PDF。与「学术严谨版」「极简工具书版」为同一目录的三种呈现。</p>
+  <dl class="spec">
+    <div><dt>定位 / FOR</dt><dd>零基础自学<br><span class="plain">由浅入深 · 不跳步</span></dd></div>
+    <div><dt>目录来源 / TOC</dt><dd>公众号文章目录图<br><span class="plain">「AI智能研究站」2026.10.30</span></dd></div>
+    <div><dt>学法 / HOW</dt><dd>直觉→定义→推导<br><span class="plain">例题 + 检查点 + 自测</span></dd></div>
+    <div><dt>公式 / MATH</dt><dd>MathJax 本地渲染<br><span class="plain">离线 · 独立复核</span></dd></div>
+    <div><dt>性质 / NATURE</dt><dd>重写 · 非原件<br><span class="plain">通用数学 + 目录解读</span></dd></div>
+    <div><dt>日期 / DATE</dt><dd>2026.11.06<br><span class="plain">单文件 · 可打印</span></dd></div>
+  </dl>
+</header>
+
+<div class="layout">
+  <nav class="sidenav" aria-label="目录">
+    <div class="nav-title">目录 · CONTENTS</div>
+    <ol>
+      <li><a href="#top" data-nav="top"><span class="n">◦</span>封面</a></li>
+      <li><a href="#catalog" data-nav="catalog"><span class="n">=</span>总目录</a></li>
+      __NAV__
+    </ol>
+    <div class="tools">
+      <button onclick="window.print()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v7H6z"/></svg>打印成书</button>
+    </div>
+    <div class="ver-links">
+      <a href="index.html">→ 学术严谨版</a>
+      <a href="cheatsheet.html">→ 极简工具书版</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <section class="masthead-sec" id="catalog">
+      <div class="sec-label">总目录 · 16 章</div>
+      <h2>目录</h2>
+      <p class="lede">零基础自学路径：按 00→15 顺序读，每章开头的「本章路线」告诉你怎么走。章名与副标题照录原文目录。</p>
+      <div class="toc-list">__TOC_ROWS__</div>
+    </section>
+__BODY__
+  </main>
+</div>
+
+<footer class="footer"><div class="footer-inner">
+  <span>《大模型数学·现代教科书版》<br>零基础自学 · 直觉先行 · 不跳步</span>
+  <span>目录来源：公众号「AI智能研究站」2026.10.30 文章目录图<br>重写版，非原作者 PDF</span>
+  <span>三版并行：学术严谨 / 现代教科书 / 极简工具书<br>MathJax 本地 · 离线 · 2026.11.06</span>
+</div></footer>
+
+<script>
+window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],tags:'none',packages:{'[+]':['ams','boldsymbol','mathtools']}},svg:{fontCache:'global'},options:{enableMenu:false}};
+</script>
+<script src="vendor/tex-svg-full.js" id="MathJax-script"></script>
+<script>
+(function(){
+  var links=Array.prototype.slice.call(document.querySelectorAll('.sidenav a[href^="#"]'));
+  if(!('IntersectionObserver' in window))return;
+  var map={};links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a;});
+  var targets=Object.keys(map).map(function(id){return document.getElementById(id);}).filter(Boolean);
+  var obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');});var a=map[e.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-15% 0px -75% 0px'});
+  targets.forEach(function(t){obs.observe(t);});
+})();
+</script>
+<script>
+/* 打印前展开全部 <details>（自测题答案），打印后恢复原状——
+   否则 Chrome 打印时折叠答案不可见，打印成书缺内容 */
+(function(){
+  var marked=[];
+  window.addEventListener('beforeprint',function(){
+    marked=[];
+    document.querySelectorAll('details:not([open])').forEach(function(d){
+      d.setAttribute('open','');marked.push(d);
+    });
+  });
+  window.addEventListener('afterprint',function(){
+    marked.forEach(function(d){d.removeAttribute('open');});marked=[];
+  });
+})();
+</script>
+</body>
+</html>

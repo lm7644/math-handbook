@@ -1,0 +1,158 @@
+<section class="chapter" id="ch08" data-num="08">
+  <header class="ch-open">
+    <p class="ch-kicker">第八章 · 据原文目录</p>
+    <h2 class="ch-title">附录：常用公式与学习资源</h2>
+    <p class="ch-sub">符号表、书单与 30 天节奏</p>
+    <p class="ch-lede">本章不教新数学，只做三件事：把全书出现过的符号收进一张总表，把最常用的公式收进一张速查表，再给一份只含真实读物的书单和一张 30 天打卡表。它的用法是「查」而不是「读」：面试前翻公式，读论文时对符号，学下一章前按节奏表定位。所有公式都与前七章的写法逐字一致，并标注原始式号，遇到不懂的直接回跳。</p>
+  </header>
+  <nav class="ch-toc" aria-label="章内目录">
+    <a href="#ch08-s1">8.1 全书符号总表</a>
+    <a href="#ch08-s2">8.2 关键公式速查</a>
+    <a href="#ch08-s3">8.3 学习资源：读什么、读到哪</a>
+    <a href="#ch08-s4">8.4 30 天节奏表</a>
+    <a href="#ch08-ai">8.5 在 AI 中的位置</a>
+  </nav>
+
+  <h3 id="ch08-s1"><span class="h3-num">8.1</span> 全书符号总表</h3>
+  <p>全书约定：向量用粗体小写（\(\mathbf{x}\)，默认列向量），矩阵用粗体大写（\(\mathbf{W}\)），标量用斜体（\(x\)），集合用花体（\(\mathbb{R}^{n}\)），损失用 \(\mathcal{L}\)，函数类算子用正体（\(\operatorname{softmax}\)）。下表按主题分组，「首见」指该符号第一次出现的章。</p>
+  <table class="tbl">
+    <thead><tr><th>符号</th><th>含义</th><th>首见</th></tr></thead>
+    <tbody>
+      <tr><td>\(\mathbb{R}^{n}\)</td><td>\(n\) 维实向量空间；嵌入、隐藏状态、logits 的居所</td><td>第零章</td></tr>
+      <tr><td>\(\mathbf{x},\ \mathbf{q},\ \mathbf{k},\ \mathbf{v}\)</td><td>向量（粗体小写）；注意力的查询、键、值</td><td>第零章</td></tr>
+      <tr><td>\(\mathbf{W},\ \mathbf{Q},\ \mathbf{K},\ \mathbf{V}\)</td><td>矩阵（粗体大写）；权重或成批的向量</td><td>第零章</td></tr>
+      <tr><td>\(\mathbf{W}^{\top}\)</td><td>转置；\(\mathbf{Q}\mathbf{K}^{\top}\) 里用它对齐维度做相似度</td><td>第零章</td></tr>
+      <tr><td>\(\mathbf{W}^{-1}\)</td><td>逆矩阵；解线性方程、理解条件数</td><td>第七章</td></tr>
+      <tr><td>\(\operatorname{diag}(\mathbf{x})\)</td><td>以向量为对角线的对角矩阵</td><td>第一章</td></tr>
+      <tr><td>\(\operatorname{tr}(\mathbf{A})\)</td><td>迹，对角线元素之和</td><td>第十章</td></tr>
+      <tr><td>\(\odot\)</td><td>逐元素乘（Hadamard 积）；LayerNorm 的 \(\boldsymbol{\gamma}\odot\hat{\mathbf{x}}\)</td><td>第二章</td></tr>
+      <tr><td>\(\nabla_{\mathbf{x}},\ \dfrac{\partial \mathcal{L}}{\partial \mathbf{W}}\)</td><td>梯度算子与偏导；反向传播的输入与输出</td><td>第零章</td></tr>
+      <tr><td>\(\eta\)</td><td>学习率</td><td>第零章</td></tr>
+      <tr><td>\(p(\cdot),\ P(\cdot)\)</td><td>概率密度 / 概率</td><td>第三章</td></tr>
+      <tr><td>\(\mathbb{E}[\cdot],\ \operatorname{Var}(\cdot)\)</td><td>期望与方差</td><td>第二章</td></tr>
+      <tr><td>\(T\)</td><td>采样温度；对 logits 除以 \(T\) 再做 softmax</td><td>第零章</td></tr>
+      <tr><td>\(H(p),\ H(p,q)\)</td><td>熵与交叉熵（注意与「头数」符号区分语境）</td><td>第四章</td></tr>
+      <tr><td>\(\operatorname{KL}(p\,\|\,q)\)</td><td>KL 散度；RLHF 的策略约束项</td><td>第四章</td></tr>
+      <tr><td>\(\operatorname{PPL}\)</td><td>困惑度，平均负对数似然的指数</td><td>第四章</td></tr>
+      <tr><td>\(\beta_1,\ \beta_2,\ \varepsilon\)</td><td>Adam 的一阶、二阶矩衰减率与数值保险丝</td><td>第五章</td></tr>
+      <tr><td>\(\operatorname{softmax}\)</td><td>归一化指数函数，logits → 概率分布</td><td>第零章</td></tr>
+      <tr><td>\(V\)</td><td>词表大小（通常 3 万至 25 万）</td><td>第零章</td></tr>
+      <tr><td>\(d_{\text{model}}\)</td><td>隐藏维度（模型的「宽度」）</td><td>第六章</td></tr>
+      <tr><td>\(d_k,\ d_v\)</td><td>每个注意力头的键/查询、值维度</td><td>第零章</td></tr>
+      <tr><td>\(h\)</td><td>注意力头数，\(d_k=d_{\text{model}}/h\)</td><td>第六章</td></tr>
+      <tr><td>\(L\)</td><td>Transformer 层数</td><td>第二章</td></tr>
+    </tbody>
+  </table>
+  <p>记号纪律：同一字母在不同章按语境取值，正文就地声明——\(\beta\) 在第五章是动量与 Adam 的衰减率（式 5.7、5.10），在第十一章是 KL 惩罚系数（式 11.8）；\(H\) 在第四章是熵，\(h\) 在第六章是注意力头数（大小写区分）；\(k\) 在第二、七章专指梯度累积步数（式 2.16），其它处按上下文（如下标、常数）；\(s\) 在第零、六章是注意力分数，自第九章起是序列长，第十一章是状态。</p>
+  <aside class="mn">读论文时的第一条纪律：先对符号表再读公式。不同论文里 \(d\) 可能指 \(d_{\text{model}}\) 也可能指 \(d_k\)，差一个头数 \(h\)，结论差一个数量级。</aside>
+
+  <h3 id="ch08-s2"><span class="h3-num">8.2</span> 关键公式速查</h3>
+  <p>下表汇总全书最高频的公式，写法与各章逐字一致，「来源」列给出原始式号——速查表只做索引，推导过程请回跳对应章。矩阵维度标注以原章为准。全书的中心公式值得单独再写一遍（即式 0.1、6.3）：</p>
+  \[\operatorname{Attention}(\mathbf{Q},\mathbf{K},\mathbf{V})=\operatorname{softmax}\!\left(\dfrac{\mathbf{Q}\mathbf{K}^{\top}}{\sqrt{d_k}}\right)\mathbf{V},\qquad \mathbf{Q}\in\mathbb{R}^{n\times d_k},\ \mathbf{K}\in\mathbb{R}^{m\times d_k},\ \mathbf{V}\in\mathbb{R}^{m\times d_v}\]
+  <table class="tbl">
+    <thead><tr><th>公式名</th><th>公式</th><th>用途 / 在哪用（来源）</th></tr></thead>
+    <tbody>
+      <tr><td>softmax</td><td>\(p_i=\operatorname{softmax}(\mathbf{z})_i=\dfrac{e^{z_i}}{\sum_{j=1}^{V}e^{z_j}}\)</td><td>logits 变概率：输出头、注意力权重（式 0.2）</td></tr>
+      <tr><td>数值稳定 softmax</td><td>\(\operatorname{softmax}(\mathbf{s})_j=\dfrac{e^{s_j-m}}{\sum_l e^{s_l-m}},\ m=\max_l s_l\)</td><td>防溢出，框架内部都这么算（式 6.4、7.3）</td></tr>
+      <tr><td>log-sum-exp</td><td>\(\log p(y)=z_y-m-\log\bigl(\sum_j e^{z_j-m}\bigr)\)</td><td>直接算对数概率，不下溢（式 7.4）</td></tr>
+      <tr><td>交叉熵损失（NLL）</td><td>\(\mathcal{L}=-\dfrac{1}{N}\sum_{i=1}^{N}\ln q_\theta(y_i)\)</td><td>预训练 / SFT 损失，即极大似然（式 4.5–4.7）</td></tr>
+      <tr><td>softmax + 交叉熵梯度</td><td>\(\dfrac{\partial \mathcal{L}}{\partial z_i}=p_i-y_i\)</td><td>输出层梯度一行写完（第二章；完整推导见第十五章例 15.3）</td></tr>
+      <tr><td>KL 散度</td><td>\(\operatorname{KL}(p\,\|\,q)=\sum_x p(x)\log\dfrac{p(x)}{q(x)}\)</td><td>RLHF/PPO 策略约束，注意不对称（式 4.8）</td></tr>
+      <tr><td>困惑度</td><td>\(\mathrm{PPL}=\exp\!\left(-\dfrac{1}{N}\sum_{i=1}^{N}\ln q(y_i)\right)\)</td><td>语言模型评估指标，损失与 PPL 互换（式 4.9）</td></tr>
+      <tr><td>温度采样</td><td>\(p_i^{(T)}=\dfrac{p_i^{1/T}}{\sum_j p_j^{1/T}}\)</td><td>解码时调节分布锐度（式 3.14）</td></tr>
+      <tr><td>缩放点积注意力</td><td>\(\operatorname{Attention}(\mathbf{Q},\mathbf{K},\mathbf{V})=\operatorname{softmax}\!\left(\dfrac{\mathbf{Q}\mathbf{K}^{\top}}{\sqrt{d_k}}\right)\mathbf{V}\)</td><td>Transformer 核心（式 0.1、6.3）</td></tr>
+      <tr><td>缩放因子的来源</td><td>\(\operatorname{Var}(\mathbf{q}\cdot\mathbf{k})=d_k\)</td><td>为什么除以 \(\sqrt{d_k}\)（式 6.5；推导见第十五章例 15.1）</td></tr>
+      <tr><td>多头注意力</td><td>\(\operatorname{MHA}(\mathbf{X})=\operatorname{Concat}(\mathbf{head}_1,\dots,\mathbf{head}_h)\mathbf{W}_O,\ d_k=d_{\text{model}}/h\)</td><td>多头拼接降维（式 6.6、6.7）</td></tr>
+      <tr><td>残差梯度</td><td>\(\dfrac{\partial \mathbf{y}}{\partial \mathbf{x}}=\mathbf{I}+\dfrac{\partial F}{\partial \mathbf{x}}\)</td><td>恒等项给梯度高速公路（式 6.8）</td></tr>
+      <tr><td>LayerNorm</td><td>\(\operatorname{LN}(\mathbf{x})=\boldsymbol{\gamma}\odot\dfrac{\mathbf{x}-\mu}{\sqrt{\sigma^2+\epsilon}}+\boldsymbol{\beta}\)</td><td>每层特征归一（式 6.9）</td></tr>
+      <tr><td>梯度下降</td><td>\(\boldsymbol{\theta}_{t+1}=\boldsymbol{\theta}_t-\eta\,\nabla_{\boldsymbol{\theta}}\mathcal{L}(\boldsymbol{\theta}_t)\)</td><td>一切优化器的骨架（式 2.5）</td></tr>
+      <tr><td>动量</td><td>\(\mathbf{v}_t=\beta\mathbf{v}_{t-1}+\mathbf{g}_t,\quad \boldsymbol{\theta}_{t+1}=\boldsymbol{\theta}_t-\eta\mathbf{v}_t\)</td><td>抑制峡谷震荡（式 5.7）</td></tr>
+      <tr><td>Adam(W)</td><td>\(\hat{\mathbf{m}}_t=\dfrac{\mathbf{m}_t}{1-\beta_1^t},\ \hat{\mathbf{v}}_t=\dfrac{\mathbf{v}_t}{1-\beta_2^t},\ \boldsymbol{\theta}_{t+1}=\boldsymbol{\theta}_t-\eta\dfrac{\hat{\mathbf{m}}_t}{\sqrt{\hat{\mathbf{v}}_t}+\varepsilon}\)</td><td>LLM 预训练默认优化器（式 5.8–5.11）</td></tr>
+      <tr><td>损失缩放</td><td>\(\mathcal{L}_{\text{scaled}}=S\cdot\mathcal{L},\ \mathbf{g}=\frac{1}{S}\nabla\mathcal{L}_{\text{scaled}}\)</td><td>FP16 混合精度防梯度下溢（式 7.5）</td></tr>
+      <tr><td>梯度裁剪</td><td>\(\mathbf{g}\leftarrow\mathbf{g}\cdot\min\!\left(1,\ \tau/\lVert\mathbf{g}\rVert\right)\)</td><td>吃掉梯度尖峰（式 7.6）</td></tr>
+    </tbody>
+  </table>
+  <div class="example"><span class="box-tag">例 8.1</span><p><strong>题目</strong>　只用速查表，估算一个 7B 模型（\(L=32\)、\(d_{\text{model}}=4096\)）以 BF16 推理、上下文 4096 token 时的显存占用。</p>
+  <p><strong>解</strong>　分两块。（1）权重：BF16 每参数 2 字节，</p>
+  \[7\times10^{9}\ \text{参数}\times2\ \text{B}=14\,\text{GB}\approx13.0\,\text{GiB}\]
+  <p>（2）KV cache：每 token 每层存 K、V 各一份，共 \(2\cdot L\cdot d_{\text{model}}\) 个元素，乘 2 字节：</p>
+  \[2\times32\times4096\times2=524288\ \text{B}=0.5\ \text{MiB/token}\ \Rightarrow\ 4096\ \text{token}\times0.5\ \text{MiB}=2\ \text{GiB}\]
+  <p>合计约 \(15\,\text{GiB}\)，一张 24 GB 显卡放得下。这就是速查表的典型用法：不推导，只代入（KV cache 的完整推导见第十五章例 15.7）。</p></div>
+  <div class="warn"><span class="box-tag">常见误用</span><p><strong>把速查表当知识本身。</strong>只背结论</p>
+  \[\frac{\partial \mathcal{L}}{\partial z_i}=p_i-y_i\]
+  <p>面试官追问一句「为什么」就卡壳——答案在第二章的链式法则与第十五章例 15.3 的完整推导里。速查表是索引：每条公式都要能回跳到出处，把推导自己走一遍，才算真正拥有它。</p></div>
+
+  <h3 id="ch08-s3"><span class="h3-num">8.3</span> 学习资源：读什么、读到哪</h3>
+  <p>书单只收经得起检验的真实读物，每条注明「为什么读、读到哪」，不贪多。教材与本书章节的对应关系已标出，建议先读本书对应章，拿教材做加深。</p>
+  <ul>
+    <li>3Blue1Brown 视频系列《线性代数的本质》《微积分的本质》——零公式恐惧者的直觉起点；在第一、二章之前各看一遍，建立「矩阵即变换」「导数即变化率」的几何图像即可，不必做题。</li>
+    <li>Gilbert Strang《Introduction to Linear Algebra》——配第一章；读到特征值与 SVD（前 7 章）就足够覆盖大模型所需，重点体会列空间与秩。</li>
+    <li>Goodfellow, Bengio &amp; Courville《Deep Learning》（MIT Press）——配第二、三、五章；读第 2–4 章（线代/概率/数值）与第 6、8 章（反向传播与优化），是本书内容最接近的教科书底本。</li>
+    <li>李航《统计学习方法（第 2 版）》——配第三、四章；读第 1、2 章的统计学习概论与极大似然思想，把「训练 = 估计分布」这件事讲透。</li>
+    <li>Bishop《Pattern Recognition and Machine Learning》——配第三、四章；读第 1、2 章（概率分布与决策），视角比工科教材更贝叶斯。</li>
+    <li>Cover &amp; Thomas《Elements of Information Theory》——配第四章；读第 2 章（熵、相对熵、互信息）即可，KL 散度的一切性质都在那里。</li>
+    <li>Boyd &amp; Vandenberghe《Convex Optimization》——配第五章；读第 2–4 章建立凸性语言。记住本书第五章的提醒：凸性是脚手架，不是使用优化器的前提。</li>
+  </ul>
+  <p>论文按「先架构、后训练、再对齐与效率」的顺序读，每篇只需抓住核心公式：</p>
+  <ul>
+    <li>Vaswani et al., Attention Is All You Need, 2017, arXiv:1706.03762——一切的开端；对照本书第六章读，把缩放点积注意力与多头结构读熟。</li>
+    <li>Kaplan et al., 2020, arXiv:2001.08361 与 Hoffmann et al., Chinchilla, 2022, arXiv:2203.15556——scaling law 两篇；读懂「损失随规模幂律下降」与「数据-参数要配比」，训练预算的直觉由此来。</li>
+    <li>Hu et al., LoRA, 2021, arXiv:2106.09685——低秩微调；只有几页，核心是 \(\Delta\mathbf{W}=\mathbf{B}\mathbf{A}\) 的低秩假设，第十五章例 15.6 会算它的参数账。</li>
+    <li>Dao et al., FlashAttention, 2022, arXiv:2205.14135——注意力的高效实现；体会「同样的数学，换内存访问方式」如何省出一个数量级。</li>
+    <li>Schulman et al., PPO, 2017, arXiv:1707.06347；Ouyang et al., InstructGPT, 2022, arXiv:2203.02155；Rafailov et al., DPO, 2023, arXiv:2305.18290；Shao et al., GRPO/DeepSeekMath, 2024, arXiv:2402.03300——对齐四篇；读时盯住各目标函数里的 KL 项（本书第四章的式 4.8 在反复出现）。</li>
+  </ul>
+  <aside class="mn">读论文的最小单位是「公式」而不是「页」：每篇论文找到那 1–3 条核心公式，能复述每个符号的含义，这篇就算读过。</aside>
+
+  <h3 id="ch08-s4"><span class="h3-num">8.4</span> 30 天节奏表</h3>
+  <p>每天约 1.5–2 小时，30 天覆盖全书 16 章（第〇至十五章）。数学章配当天例题，应用章以「能向人复述主线」为验收标准。本章（第八章）安排在第 21 天，作为中场整理。</p>
+  <table class="tbl">
+    <thead><tr><th>天</th><th>内容</th><th>当天目标（一句）</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>第零章 前半</td><td>记住大模型吃哪几门数学与九站路线图</td></tr>
+      <tr><td>2</td><td>第零章 后半 + 例题</td><td>手算玩具模型的一次前向与损失</td></tr>
+      <tr><td>3</td><td>第一章 向量与矩阵乘法</td><td>任何乘法先标维度再动手</td></tr>
+      <tr><td>4</td><td>第一章 秩、特征值与分解</td><td>说出低秩结构与 LoRA 的关系</td></tr>
+      <tr><td>5</td><td>第一章 例题与复盘</td><td>手算一次小规模 \(\mathbf{Q}\mathbf{K}^{\top}\)</td></tr>
+      <tr><td>6</td><td>第二章 导数与链式法则</td><td>会写标量对向量的 Jacobian</td></tr>
+      <tr><td>7</td><td>第二章 反向传播</td><td>手推两层网络的一次反传</td></tr>
+      <tr><td>8</td><td>第二章 梯度消失与爆炸</td><td>解释 \(\sigma'\le1/4\) 为什么致命</td></tr>
+      <tr><td>9</td><td>第三章 分布、期望、方差</td><td>用 \(\operatorname{Var}=\mathbb{E}[X^2]-(\mathbb{E}X)^2\) 算一组数</td></tr>
+      <tr><td>10</td><td>第三章 MLE 与采样温度</td><td>说清「交叉熵 = 极大似然」</td></tr>
+      <tr><td>11</td><td>第四章 熵与交叉熵</td><td>手算一组 \(H(p,q)\) 并验证分解式</td></tr>
+      <tr><td>12</td><td>第四章 KL 散度与困惑度</td><td>算 PPL，说清 KL 为什么不对称</td></tr>
+      <tr><td>13</td><td>第五章 梯度下降与学习率</td><td>解释学习率过大、过小各会怎样</td></tr>
+      <tr><td>14</td><td>第五章 动量与 Adam</td><td>手算 Adam 的第一步更新</td></tr>
+      <tr><td>15</td><td>第五章 warmup 与 AdamW</td><td>说清解耦权重衰减差在哪一行</td></tr>
+      <tr><td>16</td><td>第六章 嵌入与位置编码</td><td>默写正弦位置编码公式</td></tr>
+      <tr><td>17</td><td>第六章 注意力演算</td><td>手算两个 token 的注意力输出</td></tr>
+      <tr><td>18</td><td>第六章 多头、LN、FFN 与参数量</td><td>算清一个 Transformer 块的参数账</td></tr>
+      <tr><td>19</td><td>第七章 浮点与 BF16</td><td>解释训练为什么选 BF16 而非 FP16</td></tr>
+      <tr><td>20</td><td>第七章 log-sum-exp 与梯度裁剪</td><td>把朴素 softmax 改写成稳定版</td></tr>
+      <tr><td>21</td><td>第八章（本附录）</td><td>把速查表抄成自己的一页纸，标出还不熟的式子</td></tr>
+      <tr><td>22</td><td>第九章（scaling law 专题）</td><td>复述损失随规模的幂律关系，划出与前八章相连的公式</td></tr>
+      <tr><td>23</td><td>第十章（进阶专题）</td><td>通读全章，向人讲清该章主线</td></tr>
+      <tr><td>24</td><td>第十一章（RLHF 专题）</td><td>找出目标函数里的 KL 项并说明其方向</td></tr>
+      <tr><td>25</td><td>第十二章（进阶专题）</td><td>通读全章，划出依赖第二、五章的推导</td></tr>
+      <tr><td>26</td><td>第十三章（推理与部署专题）</td><td>说清量化、KV cache 与第七章数值知识的关系</td></tr>
+      <tr><td>27</td><td>第十四章（进阶专题）</td><td>通读全章，列出仍不懂的三条公式留待复查</td></tr>
+      <tr><td>28</td><td>第十五章 例 15.1–15.4</td><td>默写 \(\sqrt{d_k}\)、log-sum-exp、\(p-y\)、残差四段推导</td></tr>
+      <tr><td>29</td><td>第十五章 例 15.5–15.8</td><td>能算 LayerNorm/LoRA 参数量与 KV cache 显存</td></tr>
+      <tr><td>30</td><td>第十五章 例 15.9–15.10 + 全书回顾</td><td>按节奏表自查一遍，模拟面试走一遍十道题</td></tr>
+    </tbody>
+  </table>
+  <aside class="mn">节奏表的隐藏用法：某天卡住超过两天，不要硬扛，把该章例题先抄一遍再独立做一遍，然后继续往下走——卡壳点多半会在后面章节的应用里自动解开。</aside>
+
+  <h3 id="ch08-ai"><span class="h3-num">8.5</span> 在 AI 中的位置</h3>
+  <p>附录本身不产生新能力，它是把前七章变成「可用工具」的接口层。典型场景：</p>
+  <table class="tbl">
+    <thead><tr><th>实际场景</th><th>用本章哪部分</th><th>缺了会怎样</th></tr></thead>
+    <tbody>
+      <tr><td>面试前 30 分钟突击</td><td>§8.2 速查表 + 第十五章推导题清单</td><td>记得结论不记得出处，被追问推导过程当场卡壳</td></tr>
+      <tr><td>读论文 / 读开源实现</td><td>§8.1 符号表对照论文记号</td><td>把论文里的 \(d\) 当成 \(d_{\text{model}}\) 或 \(d_k\)，复现参数差一个数量级</td></tr>
+      <tr><td>估算训练 / 推理成本</td><td>例 8.1 的代入法：参数量 × 字节数 + KV cache 公式</td><td>显卡买错档、上下文长度拍脑袋，上线即 OOM</td></tr>
+      <tr><td>制定学习计划</td><td>§8.4 节奏表按章打卡</td><td>在线代里磨蹭一个月，永远走不到注意力</td></tr>
+      <tr><td>系统补基础</td><td>§8.3 书单按「配第几章」对号入座</td><td>乱买教材从头啃，三个月还没碰到大模型相关内容</td></tr>
+    </tbody>
+  </table>
+  <p>一句话收束：正文七章负责「学会」，本章负责「记得住、查得到、用得上」。把速查表抄成自己的一页纸，是这 30 天里性价比最高的一个动作。</p>
+</section>

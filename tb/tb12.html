@@ -1,0 +1,158 @@
+<section class="chapter" id="tb12" data-num="12">
+  <header class="ch-open">
+    <p class="ch-kicker">第十二章 · 据原文目录 · 教科书版</p>
+    <h2 class="ch-title">向量检索与 RAG 的数学</h2>
+    <p class="ch-lede">本章按目录章名展开，目录原图未给副标题。要解决的问题很实际：模型训练完就「定格」了，你公司的退货政策、上周的新文档，它一概不知。RAG（检索增强生成）的补救办法是——答问之前先去资料库里查。本章回答三件事：文字怎么变成可检索的向量；三种相似度度量什么时候等价、什么时候打架；语料大到百万级时怎么用近似最近邻拿一点召回率换数量级的速度。最后把检索分数解释成概率，带你看清为什么「检索质量就是答案质量的上限」。</p>
+    <div class="ch-map"><span class="map-tag">本章路线</span>地图直觉 → 三种度量 → 近似最近邻 → 分数变后验 → 完整例题 → 自测</div>
+  </header>
+  <nav class="ch-toc" aria-label="章内目录">
+    <a href="#tb12-s1">12.1 嵌入检索：把文字变成地图上的点</a>
+    <a href="#tb12-s2">12.2 三种度量：余弦、点积、欧氏</a>
+    <a href="#tb12-s3">12.3 近似最近邻：IVF 与 HNSW</a>
+    <a href="#tb12-s4">12.4 RAG 的数学：把检索分数当后验</a>
+    <a href="#tb12-s5">12.5 完整例题：四文档小语料走一遍</a>
+    <a href="#tb12-ai">12.6 在 AI 中的位置</a>
+  </nav>
+
+  <h3 id="tb12-s1"><span class="h3-num">12.1</span> 嵌入检索：把文字变成地图上的点</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>嵌入检索 = 把每段文字变成地图上的一个点，找离你最近的点。</strong>想象一张巨大的城市地图：每篇文档按「内容」被钉在某个位置——讲退货的钉在东边，讲店铺历史的钉在西边。你的问题也被钉成一个点。检索就是拿尺子量：哪个文档点离你的问题点最近，就把它捞出来交给模型参考。地图画得好（语义相近的点真的挨在一起），检索就准；地图画歪了，后面全盘皆输。这张「地图」就是第一章学的向量空间，「钉子」就是嵌入向量。</p></div>
+  <p>把直觉落成定义。第一章说过，嵌入是把 token 变成向量；这里要的是把<strong>一整段文字</strong>变成一个向量。</p>
+  <div class="def"><span class="box-tag">定义 12.1 · 嵌入模型</span><p><span class="kt">嵌入模型</span>（embedding model）是一个映射 \(f:\text{文本}\to\mathbb{R}^{d}\)，训练目标只有一句话：<strong>语义相近的文本，向量相近</strong>。把语料库全部 \(N\) 篇文档预先嵌好，按行存成矩阵；查询来了，现算一个查询向量：</p></div>
+  \[ \mathbf{D}=\begin{pmatrix}\mathbf{d}_1^{\top}\\ \vdots\\ \mathbf{d}_N^{\top}\end{pmatrix}\in\mathbb{R}^{N\times d},\qquad \mathbf{q}=f(\text{query})\in\mathbb{R}^{d} \tag{12.1} \]
+  <p>维度标清楚：\(\mathbf{D}\) 是 \(N\) 行 \(d\) 列，每行一篇文档的向量；\(\mathbf{q}\) 是 \(d\) 维。注意一个关键纪律：<strong>查询和文档必须过同一个嵌入模型</strong>——同一张地图上的点才能比距离，各画各的地图，距离毫无意义。</p>
+  <div class="def"><span class="box-tag">定义 12.2 · 最近邻检索</span><p>给定相似度函数 \(\operatorname{sim}(\cdot,\cdot)\)，<span class="kt">最近邻检索</span>（nearest neighbor search）返回得分最高的 \(k\) 篇文档：\(\operatorname{top}\text{-}k=\arg\max\nolimits_{i}^{(k)}\ \operatorname{sim}(\mathbf{q},\mathbf{d}_i)\)。</p></div>
+  <p>全流程因此只有两步。<strong>离线建索引</strong>：语料切块、逐块过嵌入模型、把向量存进向量库——这一步做慢点没关系，只做一次。<strong>在线查询</strong>：问题过同一个嵌入模型得到 \(\mathbf{q}\)，检索出 top-\(k\)，把原文拼进 prompt 交给生成模型——这一步要快，用户在等。还有一个隐患先记下：分数高只说明「在嵌入模型的语义空间里离得近」，它是「真的包含答案」的<em>代理</em>，不是答案本身。12.4 节会把这层代理关系写成概率。</p>
+  <aside class="mn">嵌入模型是「翻译官」：把「退货」和「退款」这两个字面不同的词，翻成地图上挨着的两个点。翻译翻歪了，后面全盘皆输。</aside>
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：</p>
+    <ul>
+      <li>用「地图上的点」向一个不懂数学的同事解释嵌入检索在干什么；</li>
+      <li>说出式 (12.1) 里 \(\mathbf{D}\) 和 \(\mathbf{q}\) 各自的形状与来源；</li>
+      <li>解释为什么查询和文档必须用同一个嵌入模型；</li>
+      <li>说出「检索分数高」与「文档真含答案」之间的区别（代理 vs 本体）。</li>
+    </ul>
+  </div>
+
+  <h3 id="tb12-s2"><span class="h3-num">12.2</span> 三种度量：余弦、点积、欧氏</h3>
+  <p>「拿尺子量距离」这把尺子有三种常见规格，向量库里可选的相似度就这三种（第一章式 (1.3)(1.4) 已见过前两种，这里并排摆出来对比）：</p>
+  \[ \operatorname{cos\_sim}(\mathbf{q},\mathbf{d})=\frac{\mathbf{q}\cdot\mathbf{d}}{\|\mathbf{q}\|_2\,\|\mathbf{d}\|_2}\in[-1,1] \tag{12.2} \]
+  \[ \operatorname{dot}(\mathbf{q},\mathbf{d})=\mathbf{q}^{\top}\mathbf{d}=\textstyle\sum_j q_j d_j \tag{12.3} \]
+  \[ d_2(\mathbf{q},\mathbf{d})=\|\mathbf{q}-\mathbf{d}\|_2=\sqrt{\textstyle\sum_j (q_j-d_j)^{2}} \tag{12.4} \]
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>三种度量 = 三位性格迥异的评委。</strong>这是类比：余弦评委只看方向，两个向量指向越一致分越高，嗓门（模长）大小他不管；点积评委方向、嗓门都看，同方向时谁嗓门大谁加分；欧氏评委只看地图上两点的直线距离，越近越像。这个类比省掉了什么：省掉了公式与取值范围——评委的「性格」回到式 (12.2)–(12.4) 才有精确含义，「归一化后三者等价」类比装不下，只能靠下面的推导框。</p></div>
+  <p>先建立对三者的感觉：<strong>余弦</strong>只看方向——两个向量夹角小就亲近，不管谁长谁短；<strong>点积</strong>方向、长度都看——同方向的前提下，模长越长分越高；<strong>欧氏</strong>看绝对位置——地图上两点间的直线距离，越小越好。那它们什么时候是一家？答案是：把向量都压到单位球面上之后。</p>
+  <div class="derive"><span class="box-tag">推导 · 一步步来（归一化后三者等价）</span><p>前提：\(\mathbf{q},\mathbf{d}\) 都已 \(L_2\) 归一化，即 \(\|\mathbf{q}\|_2=\|\mathbf{d}\|_2=1\)。我们要证：点积等于余弦，且欧氏距离是余弦的单调减函数。</p>
+    <p>第一步，看余弦的定义式 (12.2)：分母是 \(\|\mathbf{q}\|_2\|\mathbf{d}\|_2=1\times1=1\)。分母为 1，除不除都一样，所以 \(\operatorname{cos\_sim}=\mathbf{q}\cdot\mathbf{d}=\operatorname{dot}\)。第一半证完——归一化后，点积和余弦是同一个数。</p>
+    <p>第二步，把欧氏距离的<em>平方</em>展开（平方不影响大小排序，却能把根号去掉）：</p>
+    \[\|\mathbf{q}-\mathbf{d}\|_2^{2}=\sum_j (q_j-d_j)^2=\sum_j q_j^2-2\sum_j q_j d_j+\sum_j d_j^2=\|\mathbf{q}\|_2^{2}-2\,\mathbf{q}\cdot\mathbf{d}+\|\mathbf{d}\|_2^{2} \tag{12.5}\]
+    <p>这一步用的只是「差的平方 = 平方差展开」，初中代数。</p>
+    <p>第三步，代入归一化条件 \(\|\mathbf{q}\|_2^2=\|\mathbf{d}\|_2^2=1\)：\(\|\mathbf{q}-\mathbf{d}\|_2^{2}=1-2\,\mathbf{q}\cdot\mathbf{d}+1=2-2\operatorname{cos\_sim}(\mathbf{q},\mathbf{d})\)。</p>
+    <p>第四步，看结论的形状：欧氏距离的平方 \(=2-2\times\) 余弦。余弦越大，右边越小——欧氏距离是余弦的严格单调减函数，<strong>排序完全一致</strong>。证毕。</p>
+  </div>
+  <p>所以：<strong>归一化之后，三种度量给出完全相同的排序</strong>；不归一化时它们各管各的——余弦只看方向，点积额外奖励「模长更长的文档」，欧氏额外惩罚「绝对位置上离得远」。式 (12.5) 也是一条工程结论的依据：嵌入模型把输出归一化后，用最便宜的点积就等价于用余弦。</p>
+  <aside class="mn">一句话记忆：先把所有向量压到单位球面上，三种度量就分不清谁是谁了；不压，点积就会被「长向量」收买。</aside>
+  <div class="example"><span class="box-tag">例 12.1 · 动手算</span>
+    <p><strong>题目</strong>　查询向量 \(\mathbf{q}=(1,1)^{\top}\)，三个候选文档向量 \(\mathbf{d}_1=(0.8,0.6)^{\top}\)、\(\mathbf{d}_2=(3,0.5)^{\top}\)、\(\mathbf{d}_3=(1.2,1.1)^{\top}\)。分别用三种度量排序，观察分歧。</p>
+    <p><strong>解</strong>　先备料——算四个模长（式 (1.2)）：\(\|\mathbf{q}\|_2=\sqrt{1^2+1^2}=\sqrt{2}\approx1.414\)；\(\|\mathbf{d}_1\|_2=\sqrt{0.64+0.36}=1\)；\(\|\mathbf{d}_2\|_2=\sqrt{9+0.25}=\sqrt{9.25}\approx3.041\)；\(\|\mathbf{d}_3\|_2=\sqrt{1.44+1.21}=\sqrt{2.65}\approx1.628\)。再逐个算三种度量。以 \(\mathbf{d}_3\) 为例走一遍：点积 \(=1\times1.2+1\times1.1=2.3\)；余弦 \(=2.3/(1.414\times1.628)=0.999\)；欧氏 \(=\sqrt{(1-1.2)^2+(1-1.1)^2}=\sqrt{0.04+0.01}=0.224\)。三个候选全部算完，列成表：</p>
+    \[ \begin{array}{c|ccc} &amp; \mathbf{d}_1 &amp; \mathbf{d}_2 &amp; \mathbf{d}_3\\ \hline \operatorname{dot} &amp; 1.4 &amp; 3.5 &amp; 2.3\\ \operatorname{cos\_sim} &amp; 0.990 &amp; 0.814 &amp; 0.999\\ d_2 &amp; 0.447 &amp; 2.062 &amp; 0.224 \end{array} \]
+    <p>现在读表。<strong>点积排序</strong>：\(\mathbf{d}_2\succ\mathbf{d}_3\succ\mathbf{d}_1\)——模长 \(3.04\) 的「长文档」\(\mathbf{d}_2\) 夺冠，尽管它方向偏（余弦只有 0.814）。<strong>余弦排序</strong>：\(\mathbf{d}_3\succ\mathbf{d}_1\succ\mathbf{d}_2\)——方向最一致的 \(\mathbf{d}_3\) 夺冠，\(\mathbf{d}_2\) 垫底。<strong>欧氏</strong>（越小越好）：\(\mathbf{d}_3\prec\mathbf{d}_1\prec\mathbf{d}_2\)，与余弦一致。<strong>三种度量两种冠军</strong>——选哪个直接改变检索结果。注意 \(\mathbf{d}_1\) 恰好是单位向量：它的点积恰为余弦的 \(\|\mathbf{q}\|_2\) 倍（\(1.4=\sqrt{2}\times0.990\)），数值不相等，排序也照样从点积垫底翻到余弦第二——只归一化一个向量救不了它，只有全部向量都归一化，等价性才成立。python3 验算：\(\mathbf{q}\cdot\mathbf{d}_2=1\times3+1\times0.5=3.5\)，\(\|\mathbf{q}-\mathbf{d}_3\|_2=\sqrt{0.05}=0.224\)，\(2.3/(\sqrt{2}\cdot\sqrt{2.65})=0.9991\)，全部吻合。</p>
+  </div>
+  <div class="warn"><span class="box-tag">常见坑</span><p><strong>没归一化就用点积，长文档占便宜。</strong>例 12.1 里模长 \(3.04\) 的 \(\mathbf{d}_2\) 点积排第一、余弦垫底——点积把「模长」混进了「相关」。真实语料里，嵌入向量的模长常常跟文档长度、用词频率相关，于是长文档系统性地霸榜，不管它是否切题。改法两条，任选其一：入库前统一做 \(L_2\) 归一化（由式 (12.5)，归一化后点积即余弦）；或建库时直接声明用余弦度量，让向量库替你除模长。</p></div>
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：</p>
+    <ul>
+      <li>默写三种度量的公式（式 (12.2)–(12.4)），并各用一句话说出它们「看什么」；</li>
+      <li>把 \(\|\mathbf{q}-\mathbf{d}\|_2^2\) 展开成 \(2-2\operatorname{cos\_sim}\)，每步说清理由；</li>
+      <li>解释例 12.1 里 \(\mathbf{d}_2\) 为什么点积夺冠却余弦垫底；</li>
+      <li>说出工程结论：归一化之后用最便宜的点积即可。</li>
+    </ul>
+  </div>
+
+  <h3 id="tb12-s3"><span class="h3-num">12.3</span> 近似最近邻：IVF 与 HNSW</h3>
+  <p>语料一小，暴力检索就行——对每个查询把式 (12.3) 算 \(N\) 遍。成本是</p>
+  \[ \operatorname{cost}_{\text{brute}}=O(Nd) \tag{12.6} \]
+  <p>代入 \(N=10^{6}\)、\(d=1024\)：每个查询约 \(1.02\times10^{9}\) 次乘加，还要扫过 \(10^6\times1024\times4\) B \(\approx4.1\) GB 的数据——单查询就吃不消，更别说并发。<span class="kt">近似最近邻</span>（approximate nearest neighbor，ANN）的思路是：<strong>接受偶尔漏掉真正的最近邻，换数量级的加速</strong>。两套主流机制，各砍一刀。</p>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>IVF 像查图书馆的索书号。</strong>找一本书不必逐架扫荡：先查目录确定它在「文学区三楼」，再只扫荡那一个书架。k-means 聚类就是给向量库分「区」，每个区一个质心当索书号；查询时先跟所有索书号比一遍，只进最近的几个区细看。漏检的风险一目了然：书真被分错区，你就永远找不到它。<strong>HNSW 像问路。</strong>去一个陌生地址，先上高速跳到大致城区（顶层稀疏长边），再下干道进街区（中层），最后钻小巷精修门牌（底层稠密短边）。每一步都只跟「邻居」比远近，对数级步数就能走到目标附近。</p></div>
+  <p><strong>IVF（倒排文件索引，inverted file）</strong>：离线时用 k-means 把 \(N\) 个向量聚成 \(C\) 个桶，每桶记一个质心 \(\mathbf{c}_r\)；查询时先跟 \(C\) 个质心比一遍，只扫描最近的 \(\operatorname{nprobe}\) 个桶：</p>
+  \[ r^{*}=\arg\max_{r}\ \operatorname{cos\_sim}(\mathbf{q},\mathbf{c}_r),\qquad \operatorname{cost}_{\text{IVF}}\approx Cd+\frac{\operatorname{nprobe}}{C}Nd \tag{12.7} \]
+  <p>式 (12.7) 两项各是什么？第一项 \(Cd\) 是「跟所有索书号比一遍」；第二项 \(\frac{\operatorname{nprobe}}{C}Nd\) 是「进桶细查」——每桶平均 \(N/C\) 个向量，查 \(\operatorname{nprobe}\) 桶。代入 \(C=4096\)、\(\operatorname{nprobe}=8\)：质心比对约 \(4.2\times10^{6}\) 次运算，桶内扫描约 \(2.0\times10^{6}\)，合计 \(6.2\times10^{6}\)，比暴力的 \(1.02\times10^{9}\) 快约 <strong>165 倍</strong>。代价写在分数里：只看了全库的 \(8/4096\approx0.2\%\)——真正的最近邻若落在没探的桶里，就永久丢失。这就是<span class="kt">召回率</span>（recall，ANN 命中的 top-\(k\) 占暴力 top-\(k\) 的比例）的来源：\(\operatorname{nprobe}\) 调大，召回升、延迟升；调小，两头降。<strong>召回率与延迟，是同一根旋钮的两端。</strong></p>
+  <p><strong>HNSW（分层可导航小世界图，hierarchical navigable small world）</strong>：把向量组织成多层图——顶层是稀疏长边，负责「跳大区」；底层是稠密短边，负责「精修」。查询从顶层贪心走向离 \(\mathbf{q}\) 更近的邻居，走不动就下降一层，直到底层。本书不证它的正确性，只记机制：对数级的跳数换来高召回；调参 <code>ef</code>（搜索时保留的候选池大小）控制召回率与延迟的交换比——<code>ef</code> 越大，候选池越深，越准也越慢，和 \(\operatorname{nprobe}\) 是同一类旋钮。</p>
+  <p>还有第三刀，砍的方向不同。<strong>PQ（乘积量化，product quantization）</strong>：不砍「看多少向量」，砍「每个向量占多少字节」。把 \(d\) 维向量切成 \(M\) 段：</p>
+  \[ \mathbf{d}=\big(\mathbf{d}^{(1)},\dots,\mathbf{d}^{(M)}\big),\qquad \mathbf{d}^{(m)}\in\mathbb{R}^{d/M} \tag{12.8} \]
+  <p>每段用 256 个质心的码本量化成 1 字节（1 字节正好存 0–255 的编号）。代入 \(d=1024\)、\(M=128\)（每段 8 维）：一条向量从 \(1024\times4=4096\) 字节压到 \(128\) 字节，<strong>32 倍压缩</strong>；码本本身只有 \(128\times256\times8\) 个浮点数，约 1 MB。距离不再精确计算，而是查「查询对各段码本的距离表」——本质上不存向量本身，只存它在每段子空间里接近哪个典型模式。</p>
+  <aside class="mn">三件套的分工：IVF 砍「看多少向量」，HNSW 砍「走多少步」，PQ 砍「每条向量多少字节」。nprobe、ef 调的是同一件事——拿多少召回率换多少延迟。</aside>
+  <div class="example"><span class="box-tag">例 12.2 · 动手算（小索引走一遍 IVF 两步）</span>
+    <p><strong>题目</strong>　微型向量库 \(N=6\)、\(d=2\)，k-means 已聚成 \(C=2\) 桶：桶 1（质心 \(\mathbf{c}_1=(1,0)^{\top}\)）装 \(\mathbf{d}_1=(3,1)^{\top}\)、\(\mathbf{d}_2=(2,1)^{\top}\)、\(\mathbf{d}_3=(4,1)^{\top}\)；桶 2（质心 \(\mathbf{c}_2=(0,1)^{\top}\)）装 \(\mathbf{d}_4=(1,3)^{\top}\)、\(\mathbf{d}_5=(1,2)^{\top}\)、\(\mathbf{d}_6=(0,3)^{\top}\)。查询 \(\mathbf{q}=(2,1)^{\top}\)，度量用余弦（式 (12.2)），\(\operatorname{nprobe}=1\)，找 top-1。走一遍 IVF 的两步，再与暴力检索对答案。</p>
+    <p><strong>解</strong>　先说明桶的归属可以自查：每篇文档跟自己桶质心的余弦都大于跟另一个桶的，例如 \(\mathbf{d}_3\)：\(\operatorname{cos\_sim}(\mathbf{d}_3,\mathbf{c}_1)=4/\sqrt{17}\approx0.970\)，\(\operatorname{cos\_sim}(\mathbf{d}_3,\mathbf{c}_2)=1/\sqrt{17}\approx0.243\)——k-means 没分错区。</p>
+    <p><strong>第一步，跟质心比（式 (12.7) 的第一项 \(Cd\)）。</strong>备料：\(\|\mathbf{q}\|_2=\sqrt{4+1}=\sqrt{5}\)。\(\operatorname{cos\_sim}(\mathbf{q},\mathbf{c}_1)=\frac{2\times1+1\times0}{\sqrt{5}\times1}=\frac{2}{\sqrt{5}}\approx0.894\)；\(\operatorname{cos\_sim}(\mathbf{q},\mathbf{c}_2)=\frac{2\times0+1\times1}{\sqrt{5}\times1}=\frac{1}{\sqrt{5}}\approx0.447\)。\(0.894&gt;0.447\)，桶 1 中标——只进桶 1，桶 2 整桶跳过。</p>
+    <p><strong>第二步，桶内细查（式 (12.7) 的第二项）。</strong>逐个算：\(\operatorname{cos\_sim}(\mathbf{q},\mathbf{d}_1)=\frac{6+1}{\sqrt{5}\sqrt{10}}=\frac{7}{\sqrt{50}}\approx0.990\)；\(\operatorname{cos\_sim}(\mathbf{q},\mathbf{d}_2)=\frac{4+1}{\sqrt{5}\sqrt{5}}=\frac{5}{5}=1.000\)；\(\operatorname{cos\_sim}(\mathbf{q},\mathbf{d}_3)=\frac{8+1}{\sqrt{5}\sqrt{17}}=\frac{9}{\sqrt{85}}\approx0.976\)。桶内冠军是 \(\mathbf{d}_2\)，IVF 收工。</p>
+    <p><strong>对照暴力。</strong>把跳过的桶 2 补算出来对答案：\(\operatorname{cos\_sim}(\mathbf{q},\mathbf{d}_4)=\frac{2+3}{\sqrt{5}\sqrt{10}}=\frac{5}{\sqrt{50}}\approx0.707\)，\(\operatorname{cos\_sim}(\mathbf{q},\mathbf{d}_5)=\frac{2+2}{\sqrt{5}\sqrt{5}}=0.800\)，\(\operatorname{cos\_sim}(\mathbf{q},\mathbf{d}_6)=\frac{0+3}{\sqrt{5}\times3}=\frac{1}{\sqrt{5}}\approx0.447\)——全部低于桶 1 的垫底成绩 \(0.976\)，暴力 top-1 同样是 \(\mathbf{d}_2\)，这次没漏。代价账：IVF 算了 \(2+3=5\) 次余弦，暴力要 \(6\) 次——库小只省一点；同一招放大到 \(N=10^{6}\)，就是上文按式 (12.7) 算出的约 165 倍加速。</p>
+    <p><strong>反例：漏检长什么样。</strong>把查询换成 \(\mathbf{q}'=(1,1)^{\top}\)。它对两个质心打平：\(\operatorname{cos\_sim}(\mathbf{q}',\mathbf{c}_1)=\operatorname{cos\_sim}(\mathbf{q}',\mathbf{c}_2)=1/\sqrt{2}\approx0.707\)，进哪桶都说得过去。但暴力的前两名是 \(\mathbf{d}_2\) 与 \(\mathbf{d}_5\)——各得 \(3/\sqrt{10}\approx0.949\)，其余四篇最高只有 \(4/\sqrt{20}\approx0.894\)——而 \(\mathbf{d}_2\) 在桶 1、\(\mathbf{d}_5\) 在桶 2。\(\operatorname{nprobe}=1\) 注定丢掉其中一个：recall@2 封顶 \(1/2\)。真近邻落在没探的桶里就永久丢失，这就是召回率代价的具体形状。（python3 验算：\(2/\sqrt{5}=0.8944\)，\(7/\sqrt{50}=0.9899\)，\(9/\sqrt{85}=0.9762\)，\(3/\sqrt{10}=0.9487\)，\(4/\sqrt{17}=0.9701\)，全部吻合。）</p>
+  </div>
+  <div class="warn"><span class="box-tag">常见坑</span><p><strong>以为 ANN 是无损的。</strong>IVF 只扫了 \(0.2\%\) 的库、HNSW 贪心跳会错过角落、PQ 连距离都是近似——三者都用召回率换速度。线上典型症状是「偶发检索不到明明存在的文档」，且随 nprobe、ef 调小而恶化。改法：上线前用一批真实查询跑暴力检索当基准，测出召回率，把 nprobe、ef 调到召回达标（比如 recall@10 ≥ 0.95）再谈延迟优化。</p></div>
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：</p>
+    <ul>
+      <li>写出暴力检索成本 \(O(Nd)\)，并解释式 (12.7) 两项各自的来历；</li>
+      <li>用「索书号」和「问路」讲清 IVF 与 HNSW 的直觉；</li>
+      <li>说出召回率的定义，以及 nprobe、ef 各自拧动什么；</li>
+      <li>算 PQ 的压缩比：给定 \(d\) 与 \(M\)，说出从多少字节压到多少字节。</li>
+    </ul>
+  </div>
+
+  <h3 id="tb12-s4"><span class="h3-num">12.4</span> RAG 的数学：把检索分数当后验</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>把检索分数变成后验，像按面试分分配录取名额。</strong>这是类比：候选人（文档）各有面试分（相似度），但分数不是概率——可正可负、和不为 1；取指数再按比例切蛋糕，分高者拿大头，人人有份；温度 \(\tau\) 管悬殊，小则赢家通吃，大则雨露均沾。这个类比省掉了什么：省掉了「为什么取指数」（保证非负），也省掉一句警告——切得再像概率，它仍是拿相似度当「真含答案」的代理，不是真概率。</p></div>
+  <p>检索分数本身不是概率——余弦在 \([-1,1]\) 之间，不满足「非负、和为 1」。但第三章的老朋友 softmax 能把它变成分布。把语料看成一个离散随机变量，定义「文档 \(\mathbf{d}_i\) 包含答案」的近似后验：</p>
+  \[ p(\mathbf{d}_i\mid \mathbf{q})=\frac{\exp(s_i/\tau)}{\sum_{j=1}^{N}\exp(s_j/\tau)},\qquad s_i=\operatorname{cos\_sim}(\mathbf{q},\mathbf{d}_i) \tag{12.9} \]
+  <p>其中<span class="kt">温度</span> \(\tau&gt;0\) 控制集中度（跟第三章式 (3.15) 是同一个旋钮）：\(\tau\to0\) 时全部质量压到第一名，\(\tau\) 大则分布趋平。为什么叫「近似」？因为「文档真包含答案」的真实概率无从计算，式 (12.9) 拿相似度当了代理——12.1 节埋下的隐患，现在落成公式了。</p>
+  <p>有了这个分布，就能写出 RAG 的概率解释。生成答案时，模型面对的是「不知道哪篇文档有答案」的不确定性，概率论的标准做法是对文档变量做边缘化（第三章：全概率公式）：</p>
+  \[ p(\mathbf{y}\mid \mathbf{x})=\sum_{i=1}^{N} p(\mathbf{d}_i\mid\mathbf{x})\,p(\mathbf{y}\mid\mathbf{x},\mathbf{d}_i)\ \approx\ \sum_{i\in\operatorname{top}\text{-}k}\tilde{p}_i\, p(\mathbf{y}\mid\mathbf{x},\mathbf{d}_i) \tag{12.10} \]
+  <p>左边读作：答案的分布 = 每篇文档「有答案的概率」乘以「给定这篇文档时答案的分布」，全部加起来。右边是工程近似：只保留 top-\(k\)，权重 \(\tilde{p}_i\) 截断后重归一化。工程实现并不真做加权求和，而是把 top-\(k\) 文档原文直接拼进 prompt——「按检索结果条件化」由模型在上下文中自己完成，式 (12.10) 就是这件事的概率解释。推论直接而残酷：<strong>真正包含答案的文档若没进 top-\(k\)，它在求和里的权重就是零，生成模型再强也只能凭参数记忆硬编。</strong></p>
+  <p>两个影响这个分布的工程旋钮。<strong>top-\(k\) 与重排</strong>（rerank）：第一阶段用<span class="kt">双塔编码器</span>（bi-encoder，\(\mathbf{q}\) 与 \(\mathbf{d}\) 各自独立编码，快但粗）召回几十篇；第二阶段用<span class="kt">交叉编码器</span>（cross-encoder，把查询与文档拼接后逐对过模型打分，慢但准）重排出 top-5。rerank 同时改变式 (12.10) 的候选集合与权重 \(\tilde{p}_i\)，常是性价比最高的检索提质手段。<strong>chunk 大小</strong>：切块小，向量语义集中、命中准，但上下文被切碎、块数暴涨；切块大，上下文完整，但一个向量被迫代表多个主题，噪声把分数稀释。常见折中是 256–512 token 加 10% 左右的重叠。</p>
+  <div class="example"><span class="box-tag">例 12.3 · 动手算（同一组分数，三种温度）</span>
+    <p><strong>题目</strong>　某查询对三篇文档的检索分数 \(s=(2,1,0)\)（点积分数，可以是任意实数）。用式 (12.9) 分别按 \(\tau=1\)、\(\tau=0.5\)、\(\tau=2\) 算后验，看温度把分布拧向哪里；再回答一个疑问：不取指数、直接拿分数除以总和当概率，行不行？</p>
+    <p><strong>解</strong>　式 (12.9) 的动作顺序固定：分数先除以 \(\tau\)，逐项取指数，再除以总和 \(Z\)。三种温度各走一遍。</p>
+    <p><strong>第一种，\(\tau=1\)。</strong>分数不变，仍是 \((2,1,0)\)。取指数：\(e^{2}\approx7.389\)、\(e^{1}\approx2.718\)、\(e^{0}=1\)。总和 \(Z\approx7.389+2.718+1=11.107\)。逐个相除：\(p\approx(0.665,\ 0.245,\ 0.090)\)。第一名拿走近七成，第二名仍有两成多。</p>
+    <p><strong>第二种，\(\tau=0.5\)。</strong>先除温度：\((2,1,0)/0.5=(4,2,0)\)。取指数：\(e^{4}\approx54.598\)、\(e^{2}\approx7.389\)、\(e^{0}=1\)，总和 \(Z\approx62.987\)。相除得 \(p\approx(0.867,\ 0.117,\ 0.016)\)——第一名独吞近九成，逼近「赢家通吃」。</p>
+    <p><strong>第三种，\(\tau=2\)。</strong>先除温度：\((2,1,0)/2=(1,\ 0.5,\ 0)\)。取指数：\(e^{1}\approx2.718\)、\(e^{0.5}\approx1.649\)、\(e^{0}=1\)，总和 \(Z\approx5.367\)。相除得 \(p\approx(0.506,\ 0.307,\ 0.186)\)——分布明显摊平，第三名的权重从 \(0.090\) 涨到 \(0.186\)。</p>
+    <p><strong>读数。</strong>同一组分数，\(\tau\) 从 \(0.5\) 拧到 \(2\)，第一名的份额从 \(0.867\) 一路滑到 \(0.506\)：\(\tau\) 小则质量压向第一名，\(\tau\) 大则趋平——这正是上文对式 (12.9) 的文字描述，现在变成了亲手算出的数。RAG 里 \(\tau\) 一般保持默认，但认得这个旋钮，见到它就知道它在拧什么。</p>
+    <p><strong>反例：直接归一化为什么不行。</strong>设分数 \(s=(-1,1,2)\)，总和为 \(2\)，直接相除得 \((-0.5,\ 0.5,\ 1.0)\)——冒出负的「概率」，不合法；换成 \(s=(-1,0,1)\)，总和为 \(0\)，直接除零。取指数后每一项恒正、总和恒正，两个毛病同时治好——这就是式 (12.9) 里 \(\exp\) 的职责。（python3 验算：\(\tau=1\) 时 \(Z=11.107\)、\(p=(0.6652,0.2447,0.0900)\)；\(\tau=0.5\) 时 \(Z=62.987\)、\(p=(0.8668,0.1173,0.0159)\)；\(\tau=2\) 时 \(Z=5.367\)、\(p=(0.5065,0.3072,0.1863)\)，全部吻合。）</p>
+  </div>
+
+  <h3 id="tb12-s5"><span class="h3-num">12.5</span> 完整例题：四文档小语料走一遍</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>本节像把造好的机器通电，看零件依次转动。</strong>这是类比：前面造好的零件——嵌入（翻译官）、度量（尺子）、后验（切蛋糕）——现在装成流水线，用 4 篇文档、1 个问题，让数字从「用户提问」一路流到「拼好的 prompt」。这个类比省掉了什么：省掉了零件为什么这样设计（那是 §12.1–§12.4 的定义与推导）；本节只让你看见「检索质量是答案质量的上限」真实发生。</p></div>
+  <div class="example"><span class="box-tag">例 12.4 · 动手算</span>
+    <p><strong>题目</strong>　小语料 4 块（已切成 chunk）：\(\mathbf{d}_1\)「退货政策：签收后 7 天内可无理由退货」、\(\mathbf{d}_2\)「本店成立于 2015 年，主营户外用品」、\(\mathbf{d}_3\)「换货流程：联系客服登记，3 个工作日内发出新件」、\(\mathbf{d}_4\)「会员积分每消费 1 元积 1 分」。用户问「买了之后不想要了怎么办」。嵌入模型（\(d=4\)）给出 \(\mathbf{q}=(1,2,0,1)^{\top}\)，\(\mathbf{d}_1=(2,4,0,2)^{\top}\)，\(\mathbf{d}_2=(0,1,2,0)^{\top}\)，\(\mathbf{d}_3=(1,1,0,0)^{\top}\)，\(\mathbf{d}_4=(0,0,2,2)^{\top}\)。走一遍「嵌入→打分→top-2→拼 prompt」，并比较全量后验与 top-2 后验。</p>
+    <p><strong>解</strong>　分四步走，每步对应流水线的一站。</p>
+    <p><strong>第一步，打分（式 (12.2)）。</strong>先备料：\(\|\mathbf{q}\|_2=\sqrt{1+4+0+1}=\sqrt{6}\)。逐个算点积和模长，再相除。以 \(\mathbf{d}_1\) 为例：\(\mathbf{q}\cdot\mathbf{d}_1=1\times2+2\times4+0\times0+1\times2=12\)，\(\|\mathbf{d}_1\|_2=\sqrt{4+16+0+4}=\sqrt{24}\)，余弦 \(=12/(\sqrt{6}\sqrt{24})=12/\sqrt{144}=12/12=1.000\)——方向完全一致。四个都算完：</p>
+    \[ \operatorname{cos\_sim}:\quad \mathbf{d}_1=1.000,\quad \mathbf{d}_2=\frac{2}{\sqrt{6}\sqrt{5}}=0.365,\quad \mathbf{d}_3=\frac{3}{\sqrt{6}\sqrt{2}}=\frac{3}{\sqrt{12}}=0.866,\quad \mathbf{d}_4=\frac{2}{\sqrt{6}\sqrt{8}}=0.289 \]
+    <p>注意 \(\mathbf{d}_1\) 的向量恰是 \(\mathbf{q}\) 的两倍（\((2,4,0,2)=2\times(1,2,0,1)\)）——同方向，所以余弦满分。这就是余弦「只看方向不看长度」的活例。</p>
+    <p><strong>第二步，取 top-2。</strong>按分数排序 \(1.000&gt;0.866&gt;0.365&gt;0.289\)，前两名是 \(\{\mathbf{d}_1,\mathbf{d}_3\}\)。退货政策与换货流程入选，店铺历史与积分规则出局——排序合理。</p>
+    <p><strong>第三步，算后验（式 (12.9)，\(\tau=1\)）。</strong>先取指数：\(e^{1}\approx2.718\)、\(e^{0.365}\approx1.441\)、\(e^{0.866}\approx2.377\)、\(e^{0.289}\approx1.335\)。归一化常数 \(Z\approx7.871\)。逐个相除：</p>
+    \[ p(\mathbf{d}\mid\mathbf{q})_{\text{全量}}\approx(0.345,\ 0.183,\ 0.302,\ 0.170),\qquad p(\mathbf{d}\mid\mathbf{q})_{\text{top-2 重归一化}}\approx\Big(\frac{2.718}{2.718+2.377},\ \frac{2.377}{5.096}\Big)=(0.533,\ 0.467) \]
+    <p>读一下两个分布的差别：全量后验里 \(\mathbf{d}_1\) 只占 \(0.345\)；截断重归一化后升到 \(0.533\)——top-\(k\) 不只是「丢掉后几名」，它把丢掉的质量按比例还给了入选者。</p>
+    <p><strong>第四步，拼 prompt。</strong>「已知资料：①退货政策：签收后 7 天内可无理由退货；②换货流程：联系客服登记，3 个工作日内发出新件……问题：买了之后不想要了怎么办？请根据资料回答。」模型按式 (12.10) 的条件化在上下文中完成：以约 \(0.53:0.47\) 的「注意力预算」依据 \(\mathbf{d}_1\)、\(\mathbf{d}_3\) 作答，给出「7 天内可无理由退货，联系客服登记」。</p>
+    <p><strong>反事实看上限。</strong>若嵌入模型没训练好，把「不想要了」嵌得离 \(\mathbf{d}_2\)（店铺历史）、\(\mathbf{d}_4\)（积分）更近，top-2 就不含退货政策——式 (12.10) 里 \(p(\mathbf{y}\mid\mathbf{x},\mathbf{d}_1)\) 的权重为零，prompt 里没有答案材料，模型只能硬编。这就是 garbage in garbage out：<strong>检索质量是答案质量的上限</strong>。（python3 验算：\(\mathbf{q}\cdot\mathbf{d}_1=12\)，\(\cos=12/\sqrt{144}=1\)；\(Z=2.718+1.441+2.377+1.335=7.871\)；\(2.718/5.096=0.533\)，全部吻合。）</p>
+  </div>
+
+  <h3 id="tb12-ai"><span class="h3-num">12.6</span> 在 AI 中的位置</h3>
+  <p>RAG 是企业落地的默认方案——私有数据进不了训练集，就进检索库。本章每条结论对应的组件与故障：</p>
+  <table class="tbl">
+    <thead>
+      <tr><th>本章结论</th><th>具体组件/机制</th><th>缺了会怎样</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>嵌入映射，式 (12.1)</td><td>嵌入模型选型（多语言、领域微调）：向量空间质量决定一切下游</td><td>「退货」与「退款」映射不到一起，例 12.4 的反事实成真，答案上限被锁死</td></tr>
+      <tr><td>归一化等价，式 (12.5)</td><td>向量库度量配置（cosine / inner product / L2）</td><td>不归一化就用点积，长文档霸榜，检索排序系统性失真</td></tr>
+      <tr><td>IVF/PQ，式 (12.7)(12.8)</td><td>FAISS、Milvus 等向量库的 nprobe、ef、\(M\) 参数的含义</td><td>不懂取舍：nprobe=1 上线后召回塌陷，或全量暴力检索延迟爆炸</td></tr>
+      <tr><td>近似后验，式 (12.9)(12.10)</td><td>top-\(k\) 截断、rerank 重排的概率解释</td><td>把相似度分数当概率设阈值（「0.8 以下不相关」），阈值毫无依据</td></tr>
+      <tr><td>chunk 取舍（§12.4）</td><td>文档切分策略（256–512 token 加重叠）</td><td>切太大向量被多主题稀释，切太小答案上下文断裂，两头都降召回</td></tr>
+    </tbody>
+  </table>
+  <p>一句话收束：RAG 的数学就是「度量（§12.2）+ 索引（§12.3）+ 一个把分数当后验的边缘化（§12.4）」。检索错了，生成模型只是在更快地编错答案；下一章就算「生成」这一步本身的推理账。</p>
+
+  <div class="quiz"><span class="box-tag">自测题</span>
+    <p><strong>第 1 题（推导）</strong>　设 \(\mathbf{u},\mathbf{w}\) 都是单位向量（\(\|\mathbf{u}\|_2=\|\mathbf{w}\|_2=1\)）。证明：点积、余弦、欧氏距离三者给出相同的排序，并写出欧氏距离平方与余弦的关系式。</p>
+    <details><summary>看答案</summary><p>分两步。第一步，余弦 \(=\frac{\mathbf{u}\cdot\mathbf{w}}{\|\mathbf{u}\|_2\|\mathbf{w}\|_2}=\frac{\mathbf{u}\cdot\mathbf{w}}{1}=\) 点积，二者本就是同一个数，排序当然相同。第二步，展开欧氏距离的平方：\(\|\mathbf{u}-\mathbf{w}\|_2^2=\|\mathbf{u}\|_2^2-2\mathbf{u}\cdot\mathbf{w}+\|\mathbf{w}\|_2^2=2-2\,\mathbf{u}\cdot\mathbf{w}\)（式 (12.5)）。它是余弦的严格单调减函数（余弦越大，\(2-2\times\)余弦越小），所以按欧氏距离从小到大排 = 按余弦从大到小排。三者排序完全一致。这就是「归一化后用点积即可」的全部依据。</p></details>
+    <p><strong>第 2 题（计算）</strong>　\(\mathbf{u}=(0.6,0.8)^{\top}\)、\(\mathbf{w}=(0.8,-0.6)^{\top}\)。先验证两者都是单位向量，再算点积、余弦、欧氏距离，并检查 \(2-2\cos\) 是否等于 \(\|\mathbf{u}-\mathbf{w}\|_2^2\)。</p>
+    <details><summary>看答案</summary><p>模长：\(\|\mathbf{u}\|_2=\sqrt{0.36+0.64}=1\)，\(\|\mathbf{w}\|_2=\sqrt{0.64+0.36}=1\)，都是单位向量。点积 \(=0.6\times0.8+0.8\times(-0.6)=0.48-0.48=0\)；归一化余弦 \(=\) 点积 \(=0\)——两向量垂直（夹角 \(90^\circ\)）。欧氏：\(\|\mathbf{u}-\mathbf{w}\|_2=\sqrt{(0.6-0.8)^2+(0.8+0.6)^2}=\sqrt{0.04+1.96}=\sqrt{2}\approx1.414\)。验证：\(2-2\cos=2-0=2=\|\mathbf{u}-\mathbf{w}\|_2^2\)，吻合。读数：余弦 0 表示「毫不相关」，此时欧氏距离达到单位球面上的最大值 \(\sqrt{2}\)。（python3 验算：<code>0.6*0.8+0.8*(-0.6)=0.0</code>，<code>0.04+1.96=2.0</code>。）</p></details>
+    <p><strong>第 3 题（概念 + 计算）</strong>　某向量库 \(N=10^{6}\)、\(d=1024\)、\(C=4096\) 个 IVF 桶。(a) \(\operatorname{nprobe}=8\) 与 \(\operatorname{nprobe}=64\) 各扫全库的百分之几？(b) 用式 (12.7) 分别估算两种设置的运算量，以及相对暴力检索的加速比。(c) 把 \(\operatorname{nprobe}\) 从 8 调到 64，召回率和延迟各怎么变？</p>
+    <details><summary>看答案</summary><p>(a) 扫描比例 \(=\operatorname{nprobe}/C\)：\(8/4096\approx0.2\%\)；\(64/4096\approx1.56\%\)。(b) 暴力 \(=Nd=1.02\times10^{9}\)。\(\operatorname{nprobe}=8\)：\(Cd+\frac{8}{4096}Nd=4.19\times10^{6}+2.0\times10^{6}\approx6.2\times10^{6}\)，加速约 \(1.02\times10^{9}/6.2\times10^{6}\approx165\) 倍。\(\operatorname{nprobe}=64\)：\(4.19\times10^{6}+1.6\times10^{7}\approx2.02\times10^{7}\)，加速约 \(51\) 倍。(c) \(\operatorname{nprobe}\) 升 8 倍：扫描面大 8 倍，落在被探桶里的真近邻更多——召回率升；运算量从 \(6.2\times10^{6}\) 涨到 \(2.02\times10^{7}\)——延迟升。同一根旋钮的两端：召回率与延迟一起涨，工程上要做的是找到「召回达标的最小 nprobe」，而不是越大越好。（python3 验算：\(4096\times1024=4194304\)；\(64/4096\times10^{6}\times1024=1.6\times10^{7}\)；\(1024000000/20194304\approx50.7\)。）</p></details>
+  </div>
+</section>

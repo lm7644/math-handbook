@@ -1,0 +1,179 @@
+<section class="chapter" id="ch00" data-num="00">
+  <header class="ch-open">
+    <p class="ch-kicker">第零章 · 据原文目录</p>
+    <h2 class="ch-title">认知篇：大模型到底吃哪几门数学</h2>
+    <p class="ch-sub">先把整本手册要补的数学骨架立起来</p>
+    <p class="ch-lede">本章回答一个问题：一个 token 从进来到出去，每一步落在哪门数学的辖区。答案是五门——线性代数、微积分、概率论、信息论、优化方法，各管一段，刚好够用。读完你能拿到全书的地图：每个组件出问题，知道该翻哪一章。</p>
+  </header>
+  <nav class="ch-toc" aria-label="章内目录">
+    <a href="#ch00-s1">0.1 一个 token 的旅程</a><a href="#ch00-s2">0.2 五门数学，为什么刚好够</a><a href="#ch00-s3">0.3 这本书怎么用</a><a href="#ch00-s4">0.4 例 0.1：玩具级端到端</a><a href="#ch00-ai">0.5 在 AI 中的位置</a>
+  </nav>
+
+  <h3 id="ch00-s1"><span class="h3-num">0.1</span> 一个 token 的旅程</h3>
+  <p>大模型的推理看起来神秘，拆开就是一条数学流水线。把一个 token 从进来到出去完整跟一遍，每一站都有明确的数学归属。</p>
+  <p><strong>推理的六站。</strong></p>
+  <p>第 1 站，分词：文本被切成 token，每个 token 对应一个整数 id。这一步是纯查表，没有数学。第 2 站，<span class="kt">嵌入</span>（embedding）查表：用 id 从嵌入矩阵 \(\mathbf{E}\in\mathbb{R}^{V\times d}\) 里取出第 \(t\) 行，得到一个向量 \(\mathbf{e}\in\mathbb{R}^{d}\)。这是线性代数（第一章）。第 3 站，<span class="kt">注意力</span>（attention）：</p>
+  \[ \operatorname{Attention}(\mathbf{Q},\mathbf{K},\mathbf{V})=\operatorname{softmax}\!\left(\dfrac{\mathbf{Q}\mathbf{K}^{\top}}{\sqrt{d_k}}\right)\mathbf{V},\qquad \mathbf{Q}\in\mathbb{R}^{n\times d_k},\ \mathbf{K}\in\mathbb{R}^{m\times d_k},\ \mathbf{V}\in\mathbb{R}^{m\times d_v} \tag{0.1} \]
+  <p>\(\mathbf{Q}\mathbf{K}^{\top}\) 是矩阵乘法，\(\operatorname{softmax}\) 把打分变成权重，再乘 \(\mathbf{V}\) 做加权求和——主体是线性代数，归一化思想来自概率论。第 4 站，前馈网络 FFN：两次矩阵乘法夹一个非线性，纯线性代数。第 5 站，输出分布：最后一层给出 logits \(\mathbf{z}\in\mathbb{R}^{V}\)，用 \(\operatorname{softmax}\) 把它变成下一个 token 的概率分布</p>
+  \[ p_i=\operatorname{softmax}(\mathbf{z})_i=\dfrac{e^{z_i}}{\sum_{j=1}^{V} e^{z_j}},\qquad \mathbf{z}\in\mathbb{R}^{V} \tag{0.2} \]
+  <p>第 6 站，采样：按分布 \(p\) 抽出下一个 token，<span class="kt">温度</span>（temperature）\(T\) 控制分布的锐度：</p>
+  \[ p_i(T)=\dfrac{e^{z_i/T}}{\sum_{j} e^{z_j/T}} \tag{0.3} \]
+  <p>\(T&lt;1\) 分布变尖（更保守），\(T&gt;1\) 变平（更发散）。这一步是概率论。</p>
+  <p><strong>训练再多走三站。</strong>第 7 站，损失：<span class="kt">交叉熵</span>（cross-entropy）度量预测分布离真实答案（one-hot 向量 \(\mathbf{y}\)）有多远：</p>
+  \[ \mathcal{L}=-\sum_{c=1}^{V} y_c \ln p_c=-\ln p_{c^{*}} \tag{0.4} \]
+  <p>其中 \(c^{*}\) 是正确 token 的下标。这是信息论的辖区。第 8 站，<span class="kt">反向传播</span>（backpropagation）：链式法则把损失对每个参数的偏导从输出端一路传回每一层。链式法则本身只有一句话：若 \(h=f(g(x))\)，则</p>
+  \[ \dfrac{\mathrm{d}h}{\mathrm{d}x}=\dfrac{\mathrm{d}f}{\mathrm{d}g}\cdot\dfrac{\mathrm{d}g}{\mathrm{d}x} \tag{0.5} \]
+  <p>这是微积分（第二章）。第 9 站，优化器：SGD 沿负梯度走一步，Adam 在此之上加动量与自适应步长：</p>
+  \[ \theta \leftarrow \theta-\eta\,\nabla_{\theta}\mathcal{L} \tag{0.6} \]
+  <p>这是优化方法的辖区。</p>
+  <aside class="mn">推理只走前六站，后三站只在训练时存在——这就是推理不需要算梯度、显存更省的原因。</aside>
+  <figure class="fig">
+    <svg viewBox="0 0 760 420" role="img" aria-label="一个 token 的数学全链路依赖图">
+      <defs>
+        <marker id="arr0" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="var(--line)"/>
+        </marker>
+        <marker id="arr1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="var(--ink)"/>
+        </marker>
+      </defs>
+      <!-- 五门数学 -->
+      <g stroke="var(--accent)" stroke-width="1.6" fill="none">
+        <rect x="30" y="28" width="120" height="36" rx="6"/>
+        <rect x="175" y="28" width="120" height="36" rx="6"/>
+        <rect x="320" y="28" width="120" height="36" rx="6"/>
+        <rect x="465" y="28" width="120" height="36" rx="6"/>
+        <rect x="610" y="28" width="120" height="36" rx="6"/>
+      </g>
+      <g fill="var(--ink)" font-size="13" text-anchor="middle">
+        <text x="90" y="43">线性代数</text>
+        <text x="235" y="43">微积分</text>
+        <text x="380" y="43">概率论</text>
+        <text x="525" y="43">信息论</text>
+        <text x="670" y="43">优化方法</text>
+      </g>
+      <g fill="var(--accent)" font-size="10" text-anchor="middle">
+        <text x="90" y="57">第一章</text>
+        <text x="235" y="57">第二章</text>
+        <text x="380" y="57">概率统计章</text>
+        <text x="525" y="57">信息论章</text>
+        <text x="670" y="57">优化章</text>
+      </g>
+      <!-- 依赖边 -->
+      <g stroke="var(--line)" stroke-width="1.2" fill="none" marker-end="url(#arr0)">
+        <path d="M90,64 C110,180 120,260 132,326"/>
+        <path d="M90,64 C150,170 190,260 214,326"/>
+        <path d="M90,64 C170,160 260,260 296,326"/>
+        <path d="M235,64 C320,190 470,270 540,326"/>
+        <path d="M380,64 L380,326"/>
+        <path d="M380,64 C470,190 640,280 704,326"/>
+        <path d="M525,64 C510,170 480,260 464,326"/>
+        <path d="M670,64 C660,170 640,260 628,326"/>
+      </g>
+      <!-- 流水线：推理六站 -->
+      <g stroke="var(--ink)" stroke-width="1.6" fill="none">
+        <rect x="16" y="330" width="72" height="30" rx="5"/>
+        <rect x="98" y="330" width="72" height="30" rx="5"/>
+        <rect x="180" y="330" width="72" height="30" rx="5"/>
+        <rect x="262" y="330" width="72" height="30" rx="5"/>
+        <rect x="344" y="330" width="72" height="30" rx="5"/>
+        <rect x="672" y="330" width="72" height="30" rx="5"/>
+      </g>
+      <!-- 流水线：训练三站 -->
+      <g stroke="var(--accent2)" stroke-width="1.6" fill="none">
+        <rect x="426" y="330" width="72" height="30" rx="5"/>
+        <rect x="508" y="330" width="72" height="30" rx="5"/>
+        <rect x="590" y="330" width="72" height="30" rx="5"/>
+      </g>
+      <g fill="var(--ink)" font-size="11" text-anchor="middle">
+        <text x="52" y="349">token id</text>
+        <text x="134" y="349">嵌入查表</text>
+        <text x="216" y="349">注意力</text>
+        <text x="298" y="349">FFN</text>
+        <text x="380" y="349">softmax</text>
+        <text x="462" y="349">交叉熵损失</text>
+        <text x="544" y="349">反向传播</text>
+        <text x="626" y="349">参数更新</text>
+        <text x="708" y="349">采样输出</text>
+      </g>
+      <!-- 链路箭头 -->
+      <g stroke="var(--ink)" stroke-width="1.6" fill="none" marker-end="url(#arr1)">
+        <line x1="88" y1="345" x2="96" y2="345"/>
+        <line x1="170" y1="345" x2="178" y2="345"/>
+        <line x1="252" y1="345" x2="260" y2="345"/>
+        <line x1="334" y1="345" x2="342" y2="345"/>
+        <line x1="416" y1="345" x2="424" y2="345"/>
+        <line x1="498" y1="345" x2="506" y2="345"/>
+        <line x1="580" y1="345" x2="588" y2="345"/>
+        <line x1="662" y1="345" x2="670" y2="345"/>
+      </g>
+      <!-- 图例 -->
+      <g font-size="10" fill="var(--ink)">
+        <rect x="16" y="392" width="22" height="12" rx="3" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="44" y="402">推理链路（训练也走）</text>
+        <rect x="220" y="392" width="22" height="12" rx="3" fill="none" stroke="var(--accent2)" stroke-width="1.6"/>
+        <text x="248" y="402">仅训练多走的三步</text>
+        <rect x="420" y="392" width="22" height="12" rx="3" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="448" y="402">五门数学（箭头指向其用武之地）</text>
+      </g>
+    </svg>
+    <figcaption>图 0.1　一个 token 的数学全链路：下方是流水线，上方是五门数学，箭头表示这门数学用在哪一站。</figcaption>
+  </figure>
+  <p>五门数学在本书各有专章：线性代数是第一章，微积分与反向传播是第二章；概率论与数理统计是第三章，信息论是第四章，优化方法是第五章。</p>
+
+  <h3 id="ch00-s2"><span class="h3-num">0.2</span> 五门数学，为什么刚好够</h3>
+  <p>因为每一门都在回答一个别的门答不了的问题，而且这些问题加起来恰好覆盖整条链路：</p>
+  <p><strong>表示问题。</strong>词、图、语音都不是数，怎么变成能算的对象？线性代数把它们放进向量空间，语义关系变成几何关系（第一章）。</p>
+  <p><strong>学习问题。</strong>有了表示，几十亿个参数怎么调？微积分告诉你每个参数对损失负多大责任（梯度），优化方法把「沿梯度走」变成稳定高效的算法（第二章及优化一章）。</p>
+  <p><strong>不确定性问题。</strong>下一个词从来不是唯一答案，模型输出的是分布。概率论提供谈论随机性的语言：分布、期望、采样、条件概率。</p>
+  <p><strong>度量问题。</strong>什么叫「预测得好」？信息论回答：交叉熵就是用模型的分布去编码真实数据、平均要多花的比特数；它越小，模型越贴近真实。</p>
+  <aside class="mn">记忆钩子：线代管算，微积分管改，概率管乱，信息论管评，优化管稳。</aside>
+  <p>五门各管一段，拼起来覆盖训练与推理全链路；主干之外并不需要更多数学——图论、群论、微分几何在 LLM 主干里都用不上。所以说「刚好够」：少一门链路断掉，多一门也是浪费。</p>
+  <div class="warn"><span class="box-tag">常见误用</span><p><strong>「先把数学系课程全学完，再碰大模型。」</strong>错在把「够用」当成「求全」：LLM 主干只用五门数学的各一部分——线性代数要到特征值与 SVD，但用不到 Jordan 标准型；概率论要到条件分布与采样，但用不到测度论。全学一遍周期以年计，多数人中途放弃。改法：按图 0.1 的链路反推要学什么，学到能复现每章例题就往前走，撞到缺口再回头补。</p></div>
+
+  <h3 id="ch00-s3"><span class="h3-num">0.3</span> 这本书怎么用</h3>
+  <p>三种读法，按你的处境选：</p>
+  <p><strong>顺序通读。</strong>适合时间完整、想系统补课的人。章节按依赖关系排：先表示（线代），再学习（微积分、优化），再不确定性（概率），再度量（信息论）。</p>
+  <p><strong>按需查。</strong>适合边做边补的人。工作中撞到具体机制（例如 LoRA、温度采样、KL 散度），按图 0.1 找到它属于哪一站，直接读对应章节，读完回到工作。</p>
+  <p><strong>面试冲刺。</strong>时间紧就只读每章的「在 AI 中的位置」小节和全部例题——这两样是面试被问得最多的部分，例题全部可以手算复现。</p>
+  <p><strong>先修要求。</strong>只需要两条：高中代数（会展开括号、会解一元二次方程），以及会读 Python（能看懂数组切片和 for 循环）。其余一切符号本书现用现定义，每道例题的数字都可以用 <code>python3</code> 当场验算。</p>
+
+  <h3 id="ch00-s4"><span class="h3-num">0.4</span> 把整条链走一遍</h3>
+  <p>下面用一个全部数字手算可验的玩具例子，把 0.1 的九站完整走一遍。它的意义不在数值本身，而在于让你亲眼看到：LLM 的每一步，都是这五门数学之一。</p>
+  <div class="example">
+    <span class="box-tag">例 0.1</span>
+    <p><strong>题目</strong>　玩具模型：词表只有 4 个词，嵌入维数 \(d=2\)。输入 token「今」的 id 是 2。已知嵌入矩阵、注意力参数、FFN 参数与输出层如下，求：(a) 它预测下一个 token 是「天」（类 0）还是「地」（类 1）的概率；(b) 若正确答案是「天」，交叉熵损失是多少；(c) 损失对 logits 的梯度；(d) 温度 \(T=0.5\) 与 \(T=2\) 下的采样概率。</p>
+    <p><strong>解</strong>　分四步走，每步标注它属于哪门数学。</p>
+    <p>第一步，嵌入查表（线性代数）。id \(=2\)，取嵌入矩阵第 2 行：</p>
+    \[ \mathbf{E}=\begin{pmatrix}0.2 &amp; 0.1\\-0.4 &amp; 0.8\\1.0 &amp; 2.0\\0.0 &amp; -0.6\end{pmatrix}\in\mathbb{R}^{4\times 2},\qquad \mathbf{e}=(1.0,\ 2.0)^{\top}\in\mathbb{R}^{2} \]
+    <p>第二步，注意力（线性代数 + 概率归一化）。玩具起见令 \(\mathbf{q}=\mathbf{e}\)，两个历史位置的 \(\mathbf{k}_1=(1,0)^{\top}\)、\(\mathbf{k}_2=(0,0)^{\top}\)，打分与 softmax 权重为（为保留干净数字，此处省略式 (0.1) 的 \(1/\sqrt{d_k}\) 缩放）：</p>
+    \[ s_1=\mathbf{q}\cdot\mathbf{k}_1=1,\quad s_2=\mathbf{q}\cdot\mathbf{k}_2=0,\qquad \operatorname{softmax}(1,0)=\left(\dfrac{e}{e+1},\ \dfrac{1}{e+1}\right)=(0.7311,\ 0.2689) \]
+    <p>取 \(\mathbf{v}_1=(1,0)^{\top}\)、\(\mathbf{v}_2=(0,1)^{\top}\)，加权求和得上下文向量 \(\mathbf{c}=0.7311\,\mathbf{v}_1+0.2689\,\mathbf{v}_2=(0.7311,\ 0.2689)^{\top}\in\mathbb{R}^{2}\)。</p>
+    <p>第三步，FFN（线性代数）。\(\mathbf{W}\in\mathbb{R}^{2\times 2}\)、\(\mathbf{b}\in\mathbb{R}^{2}\) 如下，一次矩阵乘法加偏置：</p>
+    \[ \mathbf{y}=\mathbf{W}\mathbf{c}+\mathbf{b}=\begin{pmatrix}1 &amp; 1\\1 &amp; -1\end{pmatrix}\begin{pmatrix}0.7311\\0.2689\end{pmatrix}+\begin{pmatrix}0\\0\end{pmatrix}=\begin{pmatrix}0.7311+0.2689\\0.7311-0.2689\end{pmatrix}=\begin{pmatrix}1.0000\\0.4621\end{pmatrix}\in\mathbb{R}^{2} \]
+    <p>（第二分量按未舍入值算：\(0.73106-0.26894=0.46212\approx0.4621\)；若拿舍入后的四位数直接相减会得到 0.4622，那是舍入假象。）</p>
+    <p>第四步，输出、损失与梯度（概率论、信息论、微积分）。玩具模型直接取 logits \(\mathbf{z}=\mathbf{y}\)，由式 (0.2)：</p>
+    \[ \mathbf{p}=\operatorname{softmax}(1.0000,\ 0.4621)=(0.6313,\ 0.3687) \tag{0.7} \]
+    <p>即模型给「天」的概率是 \(0.6313\)。正确答案是「天」时，由式 (0.4)：</p>
+    \[ \mathcal{L}=-\ln 0.6313\approx 0.4600 \tag{0.8} \]
+    <p>损失对 logits 的梯度有一个极干净的结果（softmax 加交叉熵的链式法则，第二章会完整推导）：</p>
+    \[ \dfrac{\partial \mathcal{L}}{\partial \mathbf{z}}=\mathbf{p}-\mathbf{y}=(-0.3687,\ 0.3687) \tag{0.9} \]
+    <p>它将被链式法则继续往 FFN、注意力、嵌入一路传回去。最后看采样：由式 (0.3)，\(T=0.5\) 时概率变成 \((0.7457,\ 0.2543)\)，更尖锐；\(T=2\) 时变成 \((0.5668,\ 0.4332)\)，更接近均匀。所有数字均可用 python3 验算。</p>
+  </div>
+  <aside class="mn">整条链九站，没有一步超出这五门数学。以后遇到看不懂的机制，先问：它属于哪一站？</aside>
+
+  <h3 id="ch00-ai"><span class="h3-num">0.5</span> 在 AI 中的位置</h3>
+  <p>本章本身就是地图。把流水线的每一站、它用的数学、所在章节、缺了会出的故障列成一张表，全书其余章节都是这张表的展开。</p>
+  <table class="tbl">
+    <thead>
+      <tr><th>LLM 组件</th><th>所用数学</th><th>本书位置</th><th>缺了会怎样</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>嵌入查表、线性层、FFN、注意力打分 \(\mathbf{Q}\mathbf{K}^{\top}\)</td><td>线性代数（向量、矩阵乘法）</td><td>第一章</td><td>看不懂任何一层在算什么；维度一错就是运行时报错或静默算错</td></tr>
+      <tr><td>反向传播、梯度</td><td>微积分（链式法则、偏导）</td><td>第二章</td><td>无法理解「参数为什么这样更新」，调参全靠猜</td></tr>
+      <tr><td>softmax 输出、温度采样、Beam Search</td><td>概率论（分布、期望、采样）</td><td>概率统计章</td><td>把概率当成确定答案；不会解释采样参数为什么改变输出风格</td></tr>
+      <tr><td>交叉熵损失、KL 散度（RLHF 约束）</td><td>信息论（熵、交叉熵、散度）</td><td>信息论章</td><td>不知道损失在度量什么；看不出策略漂移会在什么时候失控</td></tr>
+      <tr><td>SGD、Adam、学习率调度</td><td>优化方法</td><td>优化章</td><td>训练发散了只会重启；不会判断是学习率问题还是数据问题</td></tr>
+    </tbody>
+  </table>
+</section>

@@ -1,0 +1,142 @@
+<section class="chapter" id="ch09" data-num="09">
+  <header class="ch-open">
+    <p class="ch-kicker">第九章 · 据原文目录</p>
+    <h2 class="ch-title">大模型训练里的数学</h2>
+    <p class="ch-sub">scaling law、FLOPs、显存怎么算</p>
+    <p class="ch-lede">训练一个 7B 模型，要多少算力、多少天、多少显存？本章给出三支笔就能算的账本：C≈6ND 的 FLOPs 估算、Kaplan 与 Chinchilla 的 scaling law、混合精度下 16N 字节的显存账，外加三种并行方式的通信账与流水线气泡公式。学完你应能看着训练配置表说出每个数字的来历，并判断一份训练预算靠不靠谱。</p>
+  </header>
+  <nav class="ch-toc" aria-label="章内目录">
+    <a href="#ch09-s1">9.1 训练 FLOPs：C ≈ 6ND 怎么来的</a>
+    <a href="#ch09-s2">9.2 scaling law：Kaplan 幂律与 Chinchilla 最优</a>
+    <a href="#ch09-s3">9.3 显存四本账</a>
+    <a href="#ch09-s4">9.4 三种并行与流水线气泡</a>
+    <a href="#ch09-s5">9.5 常见误用</a>
+    <a href="#ch09-ai">9.6 在 AI 中的位置</a>
+  </nav>
+
+  <h3 id="ch09-s1"><span class="h3-num">9.1</span> 训练 FLOPs：C ≈ 6ND 怎么来的</h3>
+  <p>训练的算力消耗以 <span class="kt">FLOPs</span>（floating-point operations，浮点运算次数）计，一次乘加算 2 次。大头在矩阵乘：对含 \(N\) 个参数的模型，每处理一个 token，前向传播把每个参数恰好用进一次乘加（第六章的每个线性层都是 \(\mathbf{y}=\mathbf{W}\mathbf{x}\)，\(\mathbf{W}\in\mathbb{R}^{m\times n}\) 的每个元素乘一次、加一次），故前向约 \(2N\)。反向传播要算两份梯度（第二章）：对激活的梯度 \(\partial\mathcal{L}/\partial\mathbf{x}=\mathbf{W}^{\top}(\partial\mathcal{L}/\partial\mathbf{y})\)，每个参数再参与一次乘加，2N；对参数自身的梯度 \(\partial\mathcal{L}/\partial\mathbf{W}=(\partial\mathcal{L}/\partial\mathbf{y})\,\mathbf{x}^{\top}\)，又是 2N，故反向约 \(4N\)：</p>
+  \[\text{前向}\approx 2N,\qquad\text{反向}\approx 4N\quad(\text{每 token})\]
+  <div class="thm"><span class="box-tag">结论 9.1</span><p>前向 2N、反向 4N，合起来就是训练估算的头号公式：</p>
+  \[C\approx 6ND \tag{9.1}\]
+  <p>其中 \(N\) 是参数量，\(D\) 是训练 token 数。注意它是<strong>量级估计</strong>：只数了矩阵乘的乘加，没数注意力分数 \(\mathbf{Q}\mathbf{K}^{\top}\) 与 \(\mathbf{P}\mathbf{V}\) 的 FLOPs（随序列长增长，长序列时占比可观），也没数激活重算、归一化等逐元素操作。所以式 (9.1) 用来估数量级与相对配比，不当精确账单（§9.5 还会强调）。</p></div>
+  <p>「量级」到底多大量级？把漏掉的最大一项——注意力分数——补上算一笔。取 7B 档配置（\(L=32\)、\(d_{\text{model}}=4096\)，故 \(N\approx12Ld_{\text{model}}^2=6.4\times10^{9}\)）：每 token 的注意力分数 FLOPs（\(\mathbf{Q}\mathbf{K}^{\top}\) 加 \(\mathbf{P}\mathbf{V}\)，各头合计）前向为 \(4Ld_{\text{model}}s\)；训练还要加反向，按 §10.4 反向约两倍于前向（矩阵乘整体的经验口径，逐层 Q/K/V/O 分解见 §10.4），训练口径约为 \(12Ld_{\text{model}}s\)，与 \(6N\) 之比为</p>
+  \[\frac{12Ld_{\text{model}}s}{6N}=\frac{s}{6\,d_{\text{model}}}\]
+  <p>\(s=2048\) 时该比值为 \(8.3\%\)（python3 验算：\(2048/(6\times4096)=0.0833\)），短序列下 6ND 确实拿住了大头；但 \(s=128\)k 时比值升到 \(131072/(6\times4096)\approx5.3\)——超长上下文训练里注意力项是权重矩阵乘的 5 倍多，式 (9.1) 约占真实总账的 \(1/(1+5.3)\approx16\%\)。这就是「6ND 是量级估计」的具体含义：短序列够用，长序列要自行加上 \(s\) 相关项。</p>
+  <div class="example"><span class="box-tag">例 9.1</span><p><strong>题目</strong>　7B 模型（\(N=7\times10^{9}\)）训 \(D=1\times10^{12}\)（1T）token。求总 FLOPs，并换算成 A100（BF16 峰值 312 TFLOPS，利用率取 50%）需要的 GPU·天。</p>
+  <p><strong>解</strong>　代入式 (9.1)：</p>
+  \[C=6\times7\times10^{9}\times10^{12}=4.2\times10^{22}\ \text{FLOPs}\]
+  <p>单卡有效算力 \(R=312\times10^{12}\times0.5=1.56\times10^{14}\) FLOP/s。换算公式：</p>
+  \[T=\frac{6ND}{R\cdot 86400}\quad(\text{GPU·天}) \tag{9.2}\]
+  <p>代入：\(T=4.2\times10^{22}/(1.56\times10^{14}\times86400)=2.69\times10^{8}\,\text{s}/86400\approx 3116\) GPU·天 \(\approx 8.5\) GPU·年（python3 验算：\(4.2\times10^{22}/1.56\times10^{14}=2.692\times10^{8}\) 秒，\(/86400=3116\) 天）。即 1024 张 A100 约 3 天——这正是 LLaMA-1 7B 量级的训练规模。</p></div>
+  <aside class="mn">那个 50% 是 MFU（模型算力利用率），工程上 40%–55% 已属良好。若按峰值 312 TFLOPS 满算，工期直接低估一半——见 §9.5。</aside>
+
+  <h3 id="ch09-s2"><span class="h3-num">9.2</span> scaling law：Kaplan 幂律与 Chinchilla 最优</h3>
+  <p>给定模型和数据，loss 能降到多少？Kaplan et al. 2020（arXiv:2001.08361）在大量训练跑分上拟合出：当另一种资源不构成瓶颈时，测试 loss 对参数量、数据量各自是<strong>幂律</strong>（power law）：</p>
+  \[L(N)=\left(\frac{N_c}{N}\right)^{\alpha_N},\qquad \alpha_N\approx 0.076 \tag{9.3}\]
+  \[L(D)=\left(\frac{D_c}{D}\right)^{\alpha_D},\qquad \alpha_D\approx 0.095 \tag{9.4}\]
+  <p>其中 \(N\) 为非嵌入参数量；常数 \(N_c\approx8.8\times10^{13}\)、\(D_c\approx5.4\times10^{13}\) 是他们在自己设置下的拟合值，对算力 \(C\) 也有同类形式（\(\alpha_C\approx0.050\)）。幂律的含义：在 log-log 坐标下是一条直线——把 \(N\) 或 \(D\) 放大 10 倍，loss 只下降一个固定比例，收益指数递减。Kaplan 由此建议：预算增长时应优先把模型做大（\(N\) 约占 \(C^{0.73}\)、\(D\) 约占 \(C^{0.27}\)）。</p>
+  <p>Chinchilla（Hoffmann et al. 2022, arXiv:2203.15556）重做了一遍，关键差别是把每个配置的学习率调度调到位（呼应 §5.6：衰减形状直接影响最终 loss）。结论翻转：Kaplan 的大模型普遍<strong>没训饱</strong>，算力最优时 \(N\) 与 \(D\) 应近似等比例放大，实用规则是</p>
+  \[D^{*}\approx 20N \tag{9.5}\]
+  <p>即每个参数配约 20 个 token。70B 的 Chinchilla 配 1.4T token 正是按此规则。</p>
+  <div class="def"><span class="box-tag">定义 9.1</span><p><span class="kt">算力最优</span>（compute-optimal）：给定预算 \(C\approx6ND\)，在所有满足约束的 \((N,D)\) 中选使 \(L\) 最小的那一对。式 (9.5) 给出的是工程近似：例如 7B 模型的算力最优点是 \(D^{*}\approx1.4\times10^{11}\)（140B）token。</p></div>
+  <p>用例 9.1 的预算实际解一次：把 \(C=4.2\times10^{22}\) 与 \(D=20N\) 联立，\(6N\cdot20N=120N^{2}=C\)，得</p>
+  \[N^{*}=\sqrt{\frac{C}{120}}=\sqrt{\frac{4.2\times10^{22}}{120}}\approx1.87\times10^{10},\qquad D^{*}=20N^{*}\approx3.7\times10^{11}\]
+  <p>（python3 验算：\(N^{*}\approx18.7\)B，\(D^{*}\approx374\)B。）即同一份算力，Chinchilla 口径的最优花法是训一个 19B 模型、喂 374B token；LLaMA-1 却选了 7B 模型喂 1T token——模型不到最优的一半，数据近三倍。</p>
+  <p>工程含义是「<strong>小模型喂更多数据</strong>」。式 (9.5) 只对训练算力负责；但推理成本与延迟随 \(N\) 走，模型一旦上线要被调用亿万次。因此牺牲一点训练预算、把训练 token 数推到 Chinchilla 最优之上，是划算的：LLaMA-1 7B 直接喂了 1T token，约 143 token/参数，是式 (9.5) 的 7 倍——训练多花算力，推理永久便宜。开源 7B/13B 遍地开花，靠的就是这笔账。</p>
+  <p>幂律还有第二工程用途：<strong>外推</strong>。在 \(10^{19}\)–\(10^{20}\) FLOPs 的小规模上扫几组 \((N,D)\)，拟合出式 (9.3)、(9.4) 的指数，就能外推 100 倍预算下的 loss，先回答「值不值得训」再烧钱。这也是对 §5.6 的呼应：外推只在调度一致时成立，比较两条曲线前先确认 warmup 比例与衰减形状相同。</p>
+  <aside class="mn">拿两个模型的「最终 loss」比较前，先对齐 \(D/N\) 配比与学习率调度——调度没衰减到底的模型，loss 是被高估的（见 §5.6）。</aside>
+
+  <h3 id="ch09-s3"><span class="h3-num">9.3</span> 显存四本账</h3>
+  <p>训练显存分四本账：<strong>参数、梯度、优化器状态、激活</strong>。前三本与参数量 \(N\) 成正比，叫静态显存；第四本与 batch、序列长、层数成正比。按第七章的混合精度 + 第五章式 (5.17) 的 AdamW（一阶矩 \(m\)、二阶矩 \(v\) 各存一份 FP32），逐本算：</p>
+  <table class="tbl"><thead><tr><th>账本</th><th>内容</th><th>字节数（每参数）</th></tr></thead><tbody>
+  <tr><td>参数</td><td>BF16 权重（前向/反向用）＋ FP32 主权重（优化器更新用，见 §7.3）</td><td>\(2+4\)</td></tr>
+  <tr><td>梯度</td><td>BF16 梯度（本口径；若框架用 FP32 存梯度则为 4）</td><td>\(2\)</td></tr>
+  <tr><td>优化器状态</td><td>AdamW 的 \(m\)、\(v\)，各一份 FP32（式 5.8、5.9）</td><td>\(4+4\)</td></tr>
+  <tr><td>激活</td><td>各层中间结果，\(\propto\) batch × 序列长 × 层数，与 \(N\) 无简单比例</td><td>另算</td></tr>
+  </tbody></table>
+  <div class="thm"><span class="box-tag">结论 9.2</span><p>混合精度 + AdamW 的静态显存（梯度按 BF16 计的一致口径）：</p>
+  \[M_{\text{静态}}\approx 16N\ \text{字节}=\underbrace{2N}_{\text{BF16 权重}}+\underbrace{4N}_{\text{FP32 主权重}}+\underbrace{2N}_{\text{梯度}}+\underbrace{4N+4N}_{\text{Adam 的 }m,\,v} \tag{9.6}\]
+  <p>口径说明：梯度若按 FP32 存则是 \(18N\)；纯推理只需 BF16 权重一份，即 \(2N\)——所以「能推理」与「能全量训练」差约 8 倍。</p></div>
+  <div class="example"><span class="box-tag">例 9.2</span><p><strong>题目</strong>　7B 模型全量微调，估算静态显存；判断单卡 80G（A100/H100）能否放下。</p>
+  <p><strong>解</strong>　按式 (9.6)：</p>
+  \[M_{\text{静态}}=16\times7\times10^{9}=1.12\times10^{11}\ \text{字节}=112\ \text{GB}\approx104.3\ \text{GiB}\]
+  <p>（python3 验算：\(1.12\times10^{11}/2^{30}=104.3\) GiB。）单卡 80 GiB，<strong>静态部分就超出 30%</strong>，激活还一字节没算——放不下。出路三条：ZeRO 分片（见 §9.4）、LoRA 只训少量参数（Hu et al. 2021, arXiv:2106.09685，优化器状态按可训练参数算）、或多卡并行。对照：同模型纯推理只要 \(2N=14\) GB，一张 24G 卡就够。</p></div>
+  <p>激活账举一个具体来源：注意力权重矩阵 \(\mathbf{P}\in\mathbb{R}^{n\times n}\)（式 6.3），每层每头占</p>
+  \[M_{P}=s^{2}\times 2\ \text{字节/头} \tag{9.7}\]
+  <p>以 7B 档配置（\(s=2048\)、32 头、32 层）代入：每层 \(2048^{2}\times2\times32=256\) MiB，32 层合计 8 GiB——这只是单样本（batch=1）一份 \(\mathbf{P}\) 的钱，还要乘 batch——micro-batch 开 32 就是 256 GiB，比式 (9.6) 的静态账还大（python3 验算：\(2048^{3}\) 字节 \(=8\) GiB，恰为整数）。FlashAttention（Dao et al. 2022, arXiv:2205.14135）分块计算、不把 \(\mathbf{P}\) 落地，把这本账削到近零；激活重算（checkpointing）则只存层边界激活、反向时重算，用约三成的额外算力换激活显存——这也是式 (9.1) 只是下界的原因之一。</p>
+  <aside class="mn">四本账记法：参数 1 份、主权重 1 份、梯度 1 份、Adam 2 份——「1+1+1+2」，换成字节是 2+4+2+8。</aside>
+
+  <h3 id="ch09-s4"><span class="h3-num">9.4</span> 三种并行与流水线气泡</h3>
+  <p>单卡放不下、算不动，就把模型切开。三种并行切的是三个不同维度，通信模式也完全不同：</p>
+  <table class="tbl"><thead><tr><th>并行方式</th><th>切什么维度</th><th>通信内容与量级（定性）</th><th>适合放在哪</th></tr></thead><tbody>
+  <tr><td><span class="kt">数据并行</span>（DP）</td><td>batch 维：各卡算不同样本</td><td>每步一次梯度 all-reduce，通信量 ≈ 2 倍梯度大小（ring 算法），与 batch 无关</td><td>可跨机，网络要求最低</td></tr>
+  <tr><td><span class="kt">张量并行</span>（TP）</td><td>隐藏维：把 \(\mathbf{W}\) 按列/行切开</td><td>每个线性层前向、反向都要 all-reduce 激活，频次极高、单次量小</td><td>只适合 NVLink 机内</td></tr>
+  <tr><td><span class="kt">流水线并行</span>（PP）</td><td>层维：不同卡放不同层</td><td>只在 stage 边界传激活（每边界 \(b\times s\times d_{\text{model}}\) 个元素），总量最小</td><td>可跨机，但有气泡</td></tr>
+  </tbody></table>
+  <p>把表里 DP 一行落到实处：ring all-reduce 下每卡每步收发总量约为 \(2\times\frac{G-1}{G}\) 倍梯度大小（\(G\) 为并行度），大 \(G\) 时即「约 2 倍梯度大小」。7B 模型的 BF16 梯度是 14 GB，故每步每卡约 28 GB 通信——听起来大，但每步只有这一次，跨机以太网/IB 尚能藏在计算背后。TP 则相反：7B 有 32 层、每层多处 all-reduce，每步通信次数上百，单次延迟直接暴露，所以 TP 跨机基本不可行，只能待在 NVLink 域内。</p>
+  <p>气泡是 PP 的固有代价。把 batch 切成 \(m\) 个 micro-batch 流水灌入 \(p\) 级流水线：从第一级开工到最后一级收工共 \(m+p-1\) 个时间槽，而每一级真正在计算的只有 \(m\) 个槽，其余 \(p-1\) 个槽在等上游或等下游（图 9.1）。</p>
+  <div class="thm"><span class="box-tag">结论 9.3</span><p>GPipe 调度下的<span class="kt">流水线气泡</span>比例：</p>
+  \[\text{气泡比例}=\frac{p-1}{m+p-1} \tag{9.8}\]
+  <p>\(p\) 为流水线级数，\(m\) 为 micro-batch 数。图 9.1 只画了前向，反向同构，合计比例相同。</p></div>
+  <figure class="fig">
+    <svg viewBox="0 0 620 216" role="img" aria-label="流水线并行气泡示意图，p=4，m=8">
+      <defs>
+        <marker id="arr9" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--ink)"></path>
+        </marker>
+      </defs>
+      <!-- 行标签 -->
+      <text x="86" y="53" text-anchor="end" font-size="12" fill="var(--ink)">第 1 级</text>
+      <text x="86" y="91" text-anchor="end" font-size="12" fill="var(--ink)">第 2 级</text>
+      <text x="86" y="129" text-anchor="end" font-size="12" fill="var(--ink)">第 3 级</text>
+      <text x="86" y="167" text-anchor="end" font-size="12" fill="var(--ink)">第 4 级</text>
+      <!-- 第 1 级：计算 8 槽，空转 3 槽 -->
+      <rect x="100" y="36" width="240" height="26" fill="var(--accent)" fill-opacity="0.75"></rect>
+      <rect x="340" y="36" width="90" height="26" fill="none" stroke="var(--line)" stroke-width="1.2" stroke-dasharray="4 3"></rect>
+      <!-- 第 2 级：空转 1，计算 8，空转 2 -->
+      <rect x="100" y="74" width="30" height="26" fill="none" stroke="var(--line)" stroke-width="1.2" stroke-dasharray="4 3"></rect>
+      <rect x="130" y="74" width="240" height="26" fill="var(--accent)" fill-opacity="0.75"></rect>
+      <rect x="370" y="74" width="60" height="26" fill="none" stroke="var(--line)" stroke-width="1.2" stroke-dasharray="4 3"></rect>
+      <!-- 第 3 级：空转 2，计算 8，空转 1 -->
+      <rect x="100" y="112" width="60" height="26" fill="none" stroke="var(--line)" stroke-width="1.2" stroke-dasharray="4 3"></rect>
+      <rect x="160" y="112" width="240" height="26" fill="var(--accent)" fill-opacity="0.75"></rect>
+      <rect x="400" y="112" width="30" height="26" fill="none" stroke="var(--line)" stroke-width="1.2" stroke-dasharray="4 3"></rect>
+      <!-- 第 4 级：空转 3，计算 8 -->
+      <rect x="100" y="150" width="90" height="26" fill="none" stroke="var(--line)" stroke-width="1.2" stroke-dasharray="4 3"></rect>
+      <rect x="190" y="150" width="240" height="26" fill="var(--accent)" fill-opacity="0.75"></rect>
+      <!-- 时间轴 -->
+      <line x1="100" y1="192" x2="426" y2="192" stroke="var(--ink)" stroke-width="1.2" marker-end="url(#arr9)"></line>
+      <text x="436" y="196" font-size="12" fill="var(--ink)">时间</text>
+      <text x="145" y="28" text-anchor="middle" font-size="11" fill="var(--accent2)">p−1 = 3 槽空转</text>
+      <text x="310" y="208" text-anchor="middle" font-size="11" fill="var(--accent2)">每级计算 m = 8 槽</text>
+      <!-- 图例与读数 -->
+      <rect x="462" y="40" width="16" height="16" fill="var(--accent)" fill-opacity="0.75"></rect>
+      <text x="484" y="53" font-size="12" fill="var(--ink)">计算</text>
+      <rect x="462" y="66" width="16" height="16" fill="none" stroke="var(--line)" stroke-width="1.2" stroke-dasharray="4 3"></rect>
+      <text x="484" y="79" font-size="12" fill="var(--ink)">空转（气泡）</text>
+      <text x="462" y="116" font-size="12" fill="var(--ink)">气泡占比</text>
+      <text x="462" y="132" font-size="12" fill="var(--ink)">(p−1)/(m+p−1)</text>
+      <text x="462" y="148" font-size="12" fill="var(--accent)">= 3/11 ≈ 27%</text>
+    </svg>
+    <figcaption>图 9.1　流水线并行的气泡（p=4、m=8，仅前向）：每级 11 个时间槽里只有 8 个在算，其余等待。</figcaption>
+  </figure>
+  <div class="example"><span class="box-tag">例 9.3</span><p><strong>题目</strong>　\(p=4\) 级流水线，分别取 \(m=8\) 与 \(m=32\)，求气泡比例。</p>
+  <p><strong>解</strong>　代入式 (9.8)：\(m=8\) 时气泡 \(=3/11\approx27.3\%\)；\(m=32\) 时气泡 \(=3/35\approx8.6\%\)（python3 验算：\(3/11=0.2727\)，\(3/35=0.0857\)）。micro-batch 从 8 加到 32，气泡从 27% 压到 9%——但 \(m\) 不是免费午餐：micro-batch 太小 kernel 利用率下降，且未做重算时在飞激活的份数随 \(m\) 线性涨，显存先报警（见 §9.5）。</p></div>
+  <p>最后一句 ZeRO：它是数据并行的显存升级版——把优化器状态（以至梯度、参数）沿 DP 组切成 \(G\) 份，每卡只存 \(1/G\)，用时再 all-gather，用通信换回式 (9.6) 里最大那本账。ZeRO-1 只分片优化器状态，就已砍掉 \(8N/16N\) 的一半。</p>
+
+  <h3 id="ch09-s5"><span class="h3-num">9.5</span> 常见误用</h3>
+  <div class="warn"><span class="box-tag">常见误用</span><p><strong>把 6ND 当成精确值而非量级估计。</strong>式 (9.1) 没数注意力分数的 FLOPs（随序列长平方项增长）、没数激活重算（开 checkpointing 约多花 30%）、没数逐元素操作；真实账单与 6ND 差出几十个百分点很正常。配套错误是用峰值算力代替有效算力估工期：A100 的 312 TFLOPS 乘不上 50% 的 MFU，工期直接乐观一倍（例 9.1 的 3116 天会被错算成 1558 天）。改法：6ND 只用于数量级与配比估算，精确账用 profiler 实测。</p></div>
+  <div class="warn"><span class="box-tag">常见误用</span><p><strong>显存只算参数，忘了优化器状态。</strong>拿「7B 模型 = 14 GB」（那是纯推理的 \(2N\)）去规划全量微调，结果一启动就 OOM：按式 (9.6)，AdamW 下静态显存是 \(16N\approx104\) GiB，主权重加 \(m,v\) 两项就占 \(12N\)——优化器状态是参数本身的 4 倍。改法：先按式 (9.6) 算静态账，再加激活账，最后对照单卡显存决定 ZeRO 档位或并行度。</p></div>
+  <div class="warn"><span class="box-tag">常见误用</span><p><strong>对气泡比例的两个误读。</strong>一是以为 \(m\) 越大越赚、不设上限：micro-batch 缩得太小，kernel 效率下降，且 GPipe 下在飞激活份数随 \(m\) 增长，显存先爆。二是以为气泡「当 \(m\to\infty\) 才为 0」因而不敢上流水线：式 (9.8) 里 \(m=4p\) 时气泡已低于 20%，且 1F1B 调度能在不加气泡的前提下压峰值显存。改法：按 \(m\approx4p\) 起步、以显存上限收口，而不是追 \(m\) 的极限。</p></div>
+
+  <h3 id="ch09-ai"><span class="h3-num">9.6</span> 在 AI 中的位置</h3>
+  <table class="tbl"><thead><tr><th>本章结论</th><th>具体 AI 组件 / 机制</th><th>缺了会怎样</th></tr></thead><tbody>
+  <tr><td>式 (9.1) \(C\approx6ND\)</td><td>训练预算估算：给定 \(N,D\) 反推 GPU 数量与工期；读模型卡的 total FLOPs</td><td>报价与工期错一个数量级；分不清「训练贵」贵在哪个变量</td></tr>
+  <tr><td>式 (9.3)–(9.5) scaling law 与 \(D\approx20N\)</td><td>定 \(N\) 与 \(D\) 的配比；理解 LLaMA 为何 7B 配 1T token</td><td>盲目堆大模型或堆数据，同样的钱买到更高的 loss</td></tr>
+  <tr><td>式 (9.6) 静态显存 \(16N\)</td><td>判断单卡可行性；选 ZeRO 档位、LoRA 或并行度</td><td>按 \(2N\) 规划训练，任务开跑即 OOM</td></tr>
+  <tr><td>式 (9.7) 激活账与 FlashAttention</td><td>评估 FlashAttention、激活重算的显存收益；长序列训练规划</td><td>长序列下激活爆显存，却不知钱花在 \(\mathbf{P}\) 矩阵上</td></tr>
+  <tr><td>式 (9.8) 气泡公式与 DP/TP/PP 通信表</td><td>并行策略在集群拓扑上的摆放；pipeline 的 \(m\) 设置</td><td>把 TP 跨机摆放被通信拖死；PP 效率低下说不出原因</td></tr>
+  </tbody></table>
+  <p>一句话收束：训练预算用 \(6ND\) 估，配比用 \(D\approx20N\) 定，显存按 \(16N\) 算，并行按「切哪个维度、通信多少、气泡多大」三问选型——训练配置表里每个数字，都能回溯到本章某一条式子。</p>
+</section>

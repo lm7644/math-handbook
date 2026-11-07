@@ -1,0 +1,138 @@
+<section class="chapter" id="ch15" data-num="15">
+  <header class="ch-open">
+    <p class="ch-kicker">第十五章 · 据原文目录</p>
+    <h2 class="ch-title">高频面试题与推导实战</h2>
+    <p class="ch-sub">把最爱考的推导题一遍过掉</p>
+    <p class="ch-lede">大模型岗位的数学面试翻来覆去就那十几道题，本章选最高频的十道，每道按「题目 → 考点 → 完整解 → 面试官追问」四步走一遍。所有数字都用 python3 验算过，所有推导都能在本书前面章节找到出处。建议先遮住解答自己推，再对照；能独立复述十道题，数学这关基本就过了。</p>
+  </header>
+  <nav class="ch-toc" aria-label="章内目录">
+    <a href="#ch15-s1">15.1 怎么用这一章</a>
+    <a href="#ch15-s2">15.2 结构与数值稳定性四连推（例 15.1–15.4）</a>
+    <a href="#ch15-s3">15.3 参数、显存与优化器（例 15.5–15.8）</a>
+    <a href="#ch15-s4">15.4 评估与采样（例 15.9–15.10）</a>
+    <a href="#ch15-ai">15.5 在 AI 中的位置</a>
+  </nav>
+
+  <h3 id="ch15-s1"><span class="h3-num">15.1</span> 怎么用这一章</h3>
+  <p>每道题末尾标注「答不出来说明第几章没过关」，卡住就回那一章重读对应小节，而不是背答案。面试评价的不是「记没记住结论」，而是「能不能从方差、链式法则这些基本件把结论推出来」。十道题覆盖：注意力缩放、数值稳定、输出层梯度、残差、归一化、LoRA、KV cache、Adam、困惑度、温度——正好串起第二至七章的主干。</p>
+  <aside class="mn">面试官的经典套路：先问结论（人人会背），再追问「为什么」和「不这样会怎样」。本章每题的「追问」段就是按这个节奏准备的。</aside>
+
+  <h3 id="ch15-s2"><span class="h3-num">15.2</span> 结构与数值稳定性四连推（例 15.1–15.4）</h3>
+
+  <div class="example"><span class="box-tag">例 15.1</span><p><strong>题目</strong>　注意力打分为什么要除以 \(\sqrt{d_k}\)？推导 \(\operatorname{Var}(\mathbf{q}\cdot\mathbf{k})\)。</p>
+  <p><strong>考点</strong>　第六章式 (6.5)；方差的性质（第三章）。</p>
+  <p><strong>解</strong>　设 \(\mathbf{q},\mathbf{k}\in\mathbb{R}^{d_k}\)，各分量独立、均值 0、方差 1（初始化时近似成立）。点积 \(\mathbf{q}\cdot\mathbf{k}=\sum_{i=1}^{d_k}q_i k_i\)。单分量乘积的方差：\(\mathbb{E}[q_i k_i]=\mathbb{E}[q_i]\mathbb{E}[k_i]=0\)，故</p>
+  \[\operatorname{Var}(q_i k_i)=\mathbb{E}[q_i^{2}k_i^{2}]=\mathbb{E}[q_i^{2}]\,\mathbb{E}[k_i^{2}]=1\]
+  <p>独立性让和的方差等于方差的和：</p>
+  \[\operatorname{Var}(\mathbf{q}\cdot\mathbf{k})=\sum_{i=1}^{d_k}\operatorname{Var}(q_i k_i)=d_k,\qquad \operatorname{std}(\mathbf{q}\cdot\mathbf{k})=\sqrt{d_k} \tag{15.1}\]
+  <p>用 python3 采 20 万组标准正态分量验证（\(d_k=64\)）：经验方差 63.78，与 64 吻合。不缩放时打分的标准差随 \(\sqrt{d_k}\) 线性长大，\(d_k=64\) 时已达 8——softmax 输入跑到 ±8 量级，输出逼近 one-hot，进入饱和区、梯度趋零。除以 \(\sqrt{d_k}\) 后打分方差回到 1，softmax 落在敏感区间。</p>
+  <p><strong>追问与应答</strong>　问：训练后分量还独立吗？答：不再严格独立，但缩放把量级钉在 \(O(1)\) 的作用仍在；QK-Norm、可学温度等变体动机相同。问：为什么 softmax 饱和梯度就没了？答：饱和时输出接近 one-hot，\(p_i(1-p_i)\to0\)，softmax 的 Jacobian 趋于 0。</p>
+  <p><strong>这题答不出来说明第六章（§6.4）没过关。</strong></p></div>
+
+  <div class="example"><span class="box-tag">例 15.2</span><p><strong>题目</strong>　softmax 的数值稳定怎么做？推导 log-sum-exp。</p>
+  <p><strong>考点</strong>　第七章式 (7.3)、(7.4)。</p>
+  <p><strong>解</strong>　朴素实现 \(\operatorname{softmax}(z_i)=e^{z_i}/\sum_j e^{z_j}\) 在 logits 稍大时直接溢出：\(e^{1000}\) 在 float64 下都是 \(\texttt{inf}\)。技巧是分子分母同乘 \(e^{-m}\)（\(m=\max_j z_j\)）：</p>
+  \[\operatorname{softmax}(z_i)=\frac{e^{z_i}\cdot e^{-m}}{\sum_j e^{z_j}\cdot e^{-m}}=\frac{e^{z_i-m}}{\sum_j e^{z_j-m}},\qquad m=\max_j z_j \tag{15.2}\]
+  <p>数学上恒等，数值上最大的指数变成 \(e^{0}=1\)，其余都不超过 1，上溢彻底消除。验证：\(\mathbf{z}=(1000,1001,1002)\)，稳定版输出 \((0.0900,\ 0.2447,\ 0.6652)\)，与数学结果一致。训练算损失时连概率都不用显式算，直接在 log 域做（log-sum-exp）：</p>
+  \[\log p(y)=z_y-m-\log\Bigl(\sum_j e^{\,z_j-m}\Bigr) \tag{15.3}\]
+  <p>避免「先算小概率再取对数」的下溢路径。</p>
+  <p><strong>追问与应答</strong>　问：减别的常数行不行？答：数学上减任何常数都行，减最大值还能保证每项 \(\le1\)，是最优选择。问：GPU 上的代价？答：多一次 max 归约；FlashAttention 的 online softmax 把 max 与求和融进分块循环，避免二次读写显存（Dao et al., FlashAttention, 2022, arXiv:2205.14135）。</p>
+  <p><strong>这题答不出来说明第七章没过关。</strong></p></div>
+
+  <div class="example"><span class="box-tag">例 15.3</span><p><strong>题目</strong>　证明：交叉熵对 logits 的梯度等于 \(p-y\)。</p>
+  <p><strong>考点</strong>　第二章链式法则；第四章交叉熵。</p>
+  <p><strong>解</strong>　设 logits \(\mathbf{z}\in\mathbb{R}^{V}\)，\(\mathbf{p}=\operatorname{softmax}(\mathbf{z})\)，\(\mathbf{y}\) 为 one-hot 标签，正确类为 \(y\)。损失：</p>
+  \[\mathcal{L}=-\ln p_y=-z_y+\log\sum_{j=1}^{V}e^{z_j}\]
+  <p>对 \(z_i\) 求偏导：第一项给出 \(-\mathbb{1}[i=y]=-y_i\)，第二项用链式法则给出 \(e^{z_i}/\sum_j e^{z_j}=p_i\)，合起来：</p>
+  \[\frac{\partial \mathcal{L}}{\partial z_i}=-\,y_i+\frac{e^{z_i}}{\sum_j e^{z_j}}=p_i-y_i \tag{15.4}\]
+  <p>数字验证（python3 有限差分）：\(\mathbf{z}=(2.0,1.0,0.1)\)，正确类为 0，得 \(\mathbf{p}=(0.6590,\,0.2424,\,0.0986)\)，梯度 \(\mathbf{p}-\mathbf{y}=(-0.3410,\,0.2424,\,0.0986)\)，与数值微分一致。</p>
+  <p><strong>追问与应答</strong>　问：这个形式说明什么？答：梯度 = 预测 − 标签，模型越自信的错类被推得越狠；且 \(|p_i-y_i|\le1\)，输出层梯度天然有界。问：label smoothing 后呢？答：只需把 \(\mathbf{y}\) 换成平滑目标 \((1-\varepsilon)\mathbf{y}+\varepsilon/V\)，式 (15.4) 形式不变。</p>
+  <p><strong>这题答不出来说明第二章没过关。</strong></p></div>
+
+  <div class="example"><span class="box-tag">例 15.4</span><p><strong>题目</strong>　残差连接为什么能缓解梯度消失？</p>
+  <p><strong>考点</strong>　第二章梯度连乘；第六章式 (6.8)。</p>
+  <p><strong>解</strong>　残差块 \(\mathbf{y}=\mathbf{x}+F(\mathbf{x})\)（\(\mathbf{x},F(\mathbf{x})\in\mathbb{R}^{d_{\text{model}}}\)）的 Jacobian 是</p>
+  \[\frac{\partial \mathbf{y}}{\partial \mathbf{x}}=\mathbf{I}+\frac{\partial F}{\partial \mathbf{x}} \tag{15.5}\]
+  <p>关键在恒等项 \(\mathbf{I}\)：深层连乘展开后存在一条「全程只乘单位阵」的直通路径，即使每个 \(\partial F/\partial\mathbf{x}\) 都很小，梯度也能近乎不衰减地传回浅层。对照无残差网络：设每层 Jacobian 谱范数 0.2，50 层连乘后梯度幅度不超过</p>
+  \[0.2^{50}\approx1.1\times10^{-35}\]
+  <p>直接消失（python3 验算）。残差不是让梯度变大，而是保证它有条「高速公路」，\(\partial F/\partial\mathbf{x}\) 只需学修正量。</p>
+  <p><strong>追问与应答</strong>　问：残差会导致梯度爆炸吗？答：会，若 \(\mathbf{I}+\partial F/\partial\mathbf{x}\) 的范数持续大于 1，连乘照样发散——所以要配 LayerNorm 与合适初始化管住 \(F\) 的尺度（第六章）。问：和 LSTM 什么关系？答：残差是「门恒开」的特例，LSTM 的 cell state 直通是同一思想。</p>
+  <p><strong>这题答不出来说明第二章、第六章没过关。</strong></p></div>
+
+  <h3 id="ch15-s3"><span class="h3-num">15.3</span> 参数、显存与优化器（例 15.5–15.8）</h3>
+
+  <div class="example"><span class="box-tag">例 15.5</span><p><strong>题目</strong>　LayerNorm 可导吗？它有多少参数？</p>
+  <p><strong>考点</strong>　第六章式 (6.9)。</p>
+  <p><strong>解</strong>　LayerNorm 对 \(\mathbf{x}\in\mathbb{R}^{d_{\text{model}}}\) 的作用：</p>
+  \[\operatorname{LN}(\mathbf{x})=\boldsymbol{\gamma}\odot\frac{\mathbf{x}-\mu}{\sqrt{\sigma^2+\epsilon}}+\boldsymbol{\beta},\qquad \mu=\frac{1}{d_{\text{model}}}\sum_j x_j,\quad \sigma^2=\frac{1}{d_{\text{model}}}\sum_j (x_j-\mu)^2\]
+  <p>整个过程是加、减、乘、除、开方的复合，且 \(\sigma^2+\epsilon>0\) 保证分母非零——处处可导。注意反向传播时梯度必须穿过 \(\mu\) 与 \(\sigma^2\)（它们是 \(\mathbf{x}\) 的函数，不是常数）。参数量只有 \(\boldsymbol{\gamma},\boldsymbol{\beta}\) 两组，共 \(2\,d_{\text{model}}\) 个。以 GPT-2 small（12 层、\(d_{\text{model}}=768\)、每块 2 个 LN、末尾再 1 个）计：</p>
+  \[12\times2\times(2\times768)+2\times768=36864+1536=38400\]
+  <p>相对 1.17 亿总参数占比万分之三，可忽略。</p>
+  <p><strong>追问与应答</strong>　问：为什么主流 LLM 改用 RMSNorm？答：去掉均值项与 \(\boldsymbol{\beta}\)，只留均方根缩放加 \(\boldsymbol{\gamma}\)，参数减半、省一次归约，效果相当。问：为什么不用 BatchNorm？答：BN 依赖 batch 维统计，自回归推理 batch=1、序列变长、分布式切分下统计不稳；LN 在特征维统计，与 batch 无关。</p>
+  <p><strong>这题答不出来说明第六章没过关。</strong></p></div>
+
+  <div class="example"><span class="box-tag">例 15.6</span><p><strong>题目</strong>　LoRA 为什么省参数？为什么效果不明显下降？</p>
+  <p><strong>考点</strong>　第一章秩与低秩分解；参数量算术。</p>
+  <p><strong>解</strong>　冻结预训练权重 \(\mathbf{W}_0\in\mathbb{R}^{d\times d}\)，把增量约束为低秩乘积（Hu et al., LoRA, 2021, arXiv:2106.09685）：</p>
+  \[\mathbf{W}=\mathbf{W}_0+\Delta\mathbf{W}=\mathbf{W}_0+\mathbf{B}\mathbf{A},\qquad \mathbf{B}\in\mathbb{R}^{d\times r},\ \mathbf{A}\in\mathbb{R}^{r\times d},\ r\ll d \tag{15.6}\]
+  <p>可训练参数从 \(d^2\) 降到 \(2dr\)。代数字：\(d=768,\ r=8\)：</p>
+  \[2\times768\times8=12288\ \text{vs}\ 768^{2}=589824\ (\text{仅占 }2.08\%)\]
+  <p>\(d=12288,\ r=8\) 时 \(2dr=196608\) vs \(d^{2}\approx1.51\times10^{8}\)，仅占 \(0.13\%\)。效果不降的论据是低秩假设：预训练已把通用知识编码进 \(\mathbf{W}_0\)，下游任务适配只需在少数方向上调整，\(\Delta\mathbf{W}\) 的本征秩很低，\(r=8\)–\(64\) 足以覆盖主要调整方向；同时冻结 \(\mathbf{W}_0\) 让通用能力不被破坏。</p>
+  <p><strong>追问与应答</strong>　问：\(r\) 怎么选？答：任务越复杂越大，超过本征秩后收益饱和，实践常取 8–64。问：推理有额外开销吗？答：没有——把 \(\mathbf{B}\mathbf{A}\) 合并回 \(\mathbf{W}_0\) 即可，零额外延迟，这是 LoRA 相对 adapter 结构的优势。</p>
+  <p><strong>这题答不出来说明第一章没过关。</strong></p></div>
+
+  <div class="example"><span class="box-tag">例 15.7</span><p><strong>题目</strong>　推导 KV cache 的显存占用，并估算 7B 模型 4k 上下文要多少。</p>
+  <p><strong>考点</strong>　第六章注意力结构 + 第七章字节算术。</p>
+  <p><strong>解</strong>　自回归生成每步的注意力要用到全部历史 token 的 K、V，缓存它们避免每步重算。每个 token 在每一层存 K、V 各一份，合计 \(h\cdot d_k+h\cdot d_v=2\,d_{\text{model}}\) 个元素，共 \(L\) 层，每元素 \(b\) 字节：</p>
+  \[\text{每 token 字节数}=2\times L\times d_{\text{model}}\times b \tag{15.7}\]
+  <p>以 LLaMA-7B（\(L=32\)、\(d_{\text{model}}=4096\)、BF16 即 \(b=2\)）计：</p>
+  \[2\times32\times4096\times2=524288\ \text{B}=0.5\ \text{MiB/token}\ \Rightarrow\ 4096\ \text{token}\approx2\ \text{GiB}\]
+  <p>外推到 128k 上下文是 \(64\,\text{GiB}\)——长上下文推理的显存压力主要来自这里，而非权重。</p>
+  <p><strong>追问与应答</strong>　问：为什么缓存 K、V 而不缓存 Q？答：每步只产生一个新 query，历史 query 不再被任何后续计算使用。问：怎么省？答：MQA/GQA 让头共享 K、V（占用直接除以头数或头组数）、KV cache 量化到 INT8/FP8、滑窗注意力只留最近窗口。</p>
+  <p><strong>这题答不出来说明第六章没过关。</strong></p></div>
+
+  <div class="warn"><span class="box-tag">常见误用</span><p><strong>算 KV cache 漏因子。</strong>两个高频错误：忘了 K、V 是两份（漏乘 2），或忘了每层都要存（漏乘 \(L\)）——两者都忘，估算直接差 64 倍（LLaMA-7B 情形下）。自查口诀：「两个矩阵、每层一份、每元素 \(b\) 字节」，对着式 (15.7) 逐项打勾再报数。</p></div>
+
+  <div class="example"><span class="box-tag">例 15.8</span><p><strong>题目</strong>　Adam 的偏差修正为什么需要？推导 \(\mathbb{E}[\mathbf{m}_t]\)。</p>
+  <p><strong>考点</strong>　第五章式 (5.8)–(5.10)；第三章期望。</p>
+  <p><strong>解</strong>　一阶矩递推 \(\mathbf{m}_t=\beta_1\mathbf{m}_{t-1}+(1-\beta_1)\mathbf{g}_t\) 从零初始化，展开得加权和 \(\mathbf{m}_t=(1-\beta_1)\sum_{i=1}^{t}\beta_1^{t-i}\mathbf{g}_i\)。设梯度平稳（\(\mathbb{E}[\mathbf{g}_i]=\mathbb{E}[\mathbf{g}]\)），取期望：</p>
+  \[\mathbb{E}[\mathbf{m}_t]=(1-\beta_1)\sum_{i=1}^{t}\beta_1^{\,t-i}\,\mathbb{E}[\mathbf{g}]=(1-\beta_1^{t})\,\mathbb{E}[\mathbf{g}] \tag{15.8}\]
+  <p>等比数列求和给出因子 \(1-\beta_1^{t}\)：估计系统性偏小，除以它才无偏，这就是 \(\hat{\mathbf{m}}_t=\mathbf{m}_t/(1-\beta_1^{t})\) 的由来；二阶矩同理除以 \(1-\beta_2^{t}\)。量级感受：\(t=1,\ \beta_1=0.9\) 时 \(\mathbf{m}_1=0.1\,\mathbf{g}_1\)，不修正则第一步的有效步长被缩 10 倍；\(t=10\) 时 \(1-0.9^{10}\approx0.651\)，仍差三成。</p>
+  <p><strong>追问与应答</strong>　问：为什么训久了修正就没影响？答：\(\beta_1^{t}\) 几何衰减，\(t\) 大时因子趋于 1。问：不修会怎样？答：前几十步有效学习率系统性偏小，warmup 会部分掩盖，但严格说早期更新幅度失真。</p>
+  <p><strong>这题答不出来说明第五章没过关。</strong></p></div>
+
+  <h3 id="ch15-s4"><span class="h3-num">15.4</span> 评估与采样（例 15.9–15.10）</h3>
+
+  <div class="example"><span class="box-tag">例 15.9</span><p><strong>题目</strong>　困惑度和训练损失怎么换算？损失 2.3 对应多少 PPL？</p>
+  <p><strong>考点</strong>　第四章式 (4.9)。</p>
+  <p><strong>解</strong>　困惑度就是平均负对数似然（= 交叉熵损失 \(\mathcal{L}\)，单位 nat）的指数：</p>
+  \[\mathrm{PPL}=\exp\!\left(-\frac{1}{N}\sum_{i=1}^{N}\ln q(y_i)\right)=e^{\mathcal{L}} \tag{15.9}\]
+  <p>所以换算只要一个 \(\exp\)：\(\mathcal{L}=\ln 10\approx2.3026\) 对应 \(\mathrm{PPL}=10\)；\(\mathcal{L}=2.0\) 对应 \(\mathrm{PPL}\approx7.39\)。反向换算 \(\mathcal{L}=\ln\mathrm{PPL}\)。注意底数：若损失按 bit 计（\(\log_2\)），则 \(\mathrm{PPL}=2^{\mathcal{L}}\)，PyTorch 默认 nat，混用差 \(1/\ln2\approx1.44\) 倍（第四章的常见误用）。</p>
+  <p><strong>追问与应答</strong>　问：PPL = 10 的直觉？答：模型平均像「在 10 个等可能候选里挑下一个词」。问：能跨模型比 PPL 吗？答：只有同分词器、同测试集可比——词表切分粒度直接影响每 token 的平均难度。</p>
+  <p><strong>这题答不出来说明第四章没过关。</strong></p></div>
+
+  <div class="example"><span class="box-tag">例 15.10</span><p><strong>题目</strong>　写出温度采样公式，并说明 \(T\) 对分布的影响。</p>
+  <p><strong>考点</strong>　第三章式 (3.14)。</p>
+  <p><strong>解</strong>　温度采样等价于把 logits 除以 \(T\) 再做 softmax：</p>
+  \[p_i^{(T)}=\frac{p_i^{1/T}}{\sum_j p_j^{1/T}}=\operatorname{softmax}\!\left(\frac{\mathbf{z}}{T}\right)_i \tag{15.10}\]
+  <p>代数字（\(\mathbf{z}=(2.0,1.0,0.1)\)，python3 验算）：\(T=1\) 得 \((0.6590,\,0.2424,\,0.0986)\)；\(T=0.5\) 得 \((0.8638,\,0.1169,\,0.0193)\)，头部更尖；\(T=2\) 得 \((0.5017,\,0.3043,\,0.1940)\)，分布更平。极限行为：\(T\to0\) 退化为 argmax（贪心解码），\(T\to\infty\) 趋于均匀分布。</p>
+  <p><strong>追问与应答</strong>　问：温度和 top-p 能叠加吗？答：能，先用温度整形再按累计概率截尾——温度改形状，top-p 砍尾巴。问：\(T>1\) 什么时候有用？答：需要多样性的场景（头脑风暴、数据增广），代价是事实性与连贯性下降。</p>
+  <p><strong>这题答不出来说明第三章没过关。</strong></p></div>
+
+  <aside class="mn">十道题的记忆钩子：缩放（\(\sqrt{d_k}\)）、稳定（减 max）、梯度（\(p-y\)）、直通（\(\mathbf{I}\) 项）、归一（\(\boldsymbol{\gamma},\boldsymbol{\beta}\)）、低秩（\(\mathbf{B}\mathbf{A}\)）、缓存（\(2\cdot L\cdot d_{\text{model}}\)）、修正（\(1-\beta^{t}\)）、换算（\(e^{\mathcal{L}}\)）、整形（\(\mathbf{z}/T\)）。</aside>
+
+  <h3 id="ch15-ai"><span class="h3-num">15.5</span> 在 AI 中的位置</h3>
+  <p>这十道题不只是面试题库，每一道都对应一个真实工作场景：</p>
+  <table class="tbl">
+    <thead><tr><th>题目</th><th>对应工作场景</th><th>缺了会怎样</th></tr></thead>
+    <tbody>
+      <tr><td>例 15.1、15.4（缩放与残差）</td><td>面试推导题；review 自定义注意力/新架构代码</td><td>看不出别人实现里漏掉缩放因子，新结构训不动时不会从梯度通路排查</td></tr>
+      <tr><td>例 15.2（log-sum-exp）</td><td>训前 checklist；自实现损失函数</td><td>朴素 softmax 在大 logits 下溢出成 NaN，训练莫名其妙炸掉</td></tr>
+      <tr><td>例 15.3（p−y 梯度）</td><td>code review 自定义 head；手推反向传播验证框架</td><td>自动微分出 bug 时没有解析梯度做对照，无法定位</td></tr>
+      <tr><td>例 15.5（LayerNorm）</td><td>估算参数量、改归一化方案</td><td>把归一化统计量当常数写进自定义算子，反向传播静默出错</td></tr>
+      <tr><td>例 15.6、15.7（LoRA 与 KV cache）</td><td>微调方案选型；推理容量规划</td><td>微调成本估错一个数量级；长上下文上线即 OOM</td></tr>
+      <tr><td>例 15.8–15.10（Adam、PPL、温度）</td><td>读训练日志；调解码参数；写评测报告</td><td>把 warmup 期的更新失真误判为 bug；把 nat/bit 混用的 PPL 写进报告</td></tr>
+    </tbody>
+  </table>
+  <p>一句话收束：面试考推导，是因为推导能力是「训练出事时能不能自己排查」的代理指标。十道题能从头推出来，前面七章才算真正过关。</p>
+</section>

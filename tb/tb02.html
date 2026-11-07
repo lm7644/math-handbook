@@ -1,0 +1,411 @@
+<section class="chapter" id="tb02" data-num="02">
+  <header class="ch-open">
+    <p class="ch-kicker">第二章 · 据原文目录 · 教科书版</p>
+    <h2 class="ch-title">微积分与反向传播</h2>
+    <p class="ch-sub">从链式法则手推一次梯度怎么流</p>
+    <p class="ch-lede">训练神经网络，说到底是反复回答一个问题：每个参数该往哪边调、调多少？答案是梯度，而算梯度的全部数学只有一条链式法则。本章从「山路有多陡」讲起，把导数、偏导数、梯度逐个立起来，再把链式法则从一元慢慢推到向量形式，每一步都交代理由；然后在一个只有 6 个参数的小网络上，把前向和反向的每个数手算到底，并用 python3 逐一复核。学完这一章，autograd 在你眼里将不再是黑箱。</p>
+    <div class="ch-map"><span class="map-tag">本章路线</span>直觉 → 定义 → 推导 → 例子 → 自测</div>
+  </header>
+  <nav class="ch-toc" aria-label="章内目录">
+    <a href="#tb02-s1">2.1 导数：山路有多陡</a>
+    <a href="#tb02-s2">2.2 偏导数与梯度：山坡上的指南针</a>
+    <a href="#tb02-s3">2.3 链式法则：传话游戏（本章灵魂）</a>
+    <a href="#tb02-s4">2.4 计算图与反向传播</a>
+    <a href="#tb02-s5">2.5 例题：手推一个 2-2-1 网络</a>
+    <a href="#tb02-s6">2.6 梯度累积、消失与爆炸</a>
+    <a href="#tb02-s7">2.7 autograd：让机器替你推</a>
+    <a href="#tb02-ai">2.8 在 AI 中的位置</a>
+  </nav>
+
+  <h3 id="tb02-s1"><span class="h3-num">2.1</span> 导数：山路有多陡</h3>
+  <p>先交代这一章要解决什么。训练一个神经网络，就是反复做同一件事：算出一个叫「损失」的数（它衡量模型当前有多差），然后调整全部参数让损失变小一点，再变小一点。问题是：参数可能有几千亿个，每个参数「往大调还是往小调、调多猛」，凭什么决定？凭的是损失对每个参数的<span class="kt">变化率</span>——这个参数动一小步，损失跟着动多少。变化率的数学名字，就是导数。</p>
+
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>导数 = 山路的坡度 = 「变化有多快」。</strong>你在山路上迈步，脚下这一点的坡度回答的是：「我水平往前走一小步，海拔会变多少？」平地上走一公里海拔不变，坡度是 0；缓坡走一步升一点，坡度是小的正数；陡崖走一步升很多，坡度很大；下坡则坡度为负。导数就是把这个「坡度」从几何搬进函数：自变量 \(x\) 动一小步，函数值 \(f(x)\) 跟着动多少，两者的比值就是导数。想看动画版的直觉，可以配合 3Blue1Brown 的《微积分的本质》视频系列一起读。</p></div>
+
+  <p><strong>第一步：平均变化率。</strong>坡度该怎么量？最自然的办法是「量一段再除」：从 \(x_0\) 出发走一小段到 \(x_0+h\)，函数值从 \(f(x_0)\) 变成 \(f(x_0+h)\)，于是这一段上的<span class="kt">平均变化率</span>是
+  \[ \frac{f(x_0+h)-f(x_0)}{h}. \]
+  为什么除以 \(h\)？因为我们关心的不是「这段路总共升了多少」，而是「平均每走一单位水平距离升多少」——只有除掉 \(h\)，长路段和短路段才好比较。</p>
+  <p><strong>第二步：把 \(h\) 越缩越小。</strong>平均变化率量的是「一段路的平均坡度」，可山路不是均匀的，段取得太大就没法代表「脚下这一点」的坡度。怎么办？让 \(h\) 缩小：先取 \(h=1\)，再取 \(0.1\)、\(0.01\)、\(0.001\)……如果这串比值越来越接近某个固定的数，那个数就是「这一点处的瞬时变化率」。用具体函数走一遍这个过程。取 \(f(x)=x^2\)，\(x_0=3\)，则
+  \[ \frac{f(3+h)-f(3)}{h}=\frac{(3+h)^2-9}{h}. \]
+  为什么可以这样展开？因为 \((3+h)^2=9+6h+h^2\)（完全平方公式）。代入：
+  \[ \frac{9+6h+h^2-9}{h}=\frac{6h+h^2}{h}. \]
+  为什么能把分子两项拆开？因为加减法可以逐项相除。再为什么能约掉 \(h\)？因为 \(h\neq 0\) 时 \(\frac{6h+h^2}{h}=6+h\)。于是
+  \[ \frac{f(3+h)-f(3)}{h}=6+h\qquad(h\neq 0). \]
+  现在让 \(h\) 趋于 0：右边是 \(6+h\)，显然越来越靠近 \(6\)。所以 \(f(x)=x^2\) 在 \(x=3\) 处的瞬时变化率是 \(6\)。注意一个细节：\(h=0\) 时原式是 \(0/0\)，没有意义，所以我们从来不让 \(h\) 真的等于 0，只看它「无限接近 0 时比值接近谁」——这就是<span class="kt">极限</span>（limit）的思想。</p>
+
+  <div class="example"><span class="box-tag">例 2.1 · 动手算</span><p><strong>题目</strong>　用数值方法观察上面的极限：对 \(f(x)=x^2\)、\(x_0=3\)，分别取 \(h=1,\ 0.1,\ 0.01,\ 0.001\)，算平均变化率。</p>
+  <p><strong>解</strong>　由上面的推导，平均变化率 \(=6+h\)，所以理论上应得到 \(7,\ 6.1,\ 6.01,\ 6.001\)。用 python3 直接算原始定义 \(((3+h)^2-9)/h\) 复核：</p>
+  <pre><code>h=1     -&gt; 7.0
+h=0.1   -&gt; 6.100000000000012
+h=0.01  -&gt; 6.009999999999849
+h=0.001 -&gt; 6.000999999999479</code></pre>
+  <p>比值一路逼近 \(6\)，与代数推导 \(6+h\to 6\) 完全吻合。顺便看到：\(h\) 太小时浮点误差开始露头（第三位小数后的尾数），这就是为什么后面 2.7 节不主张用「数值差分」而要用链式法则算梯度——差分法又慢又有舍入误差。（已用 python3 验算。）</p></div>
+
+  <div class="def"><span class="box-tag">定义 2.1</span><p><span class="kt">导数</span>（derivative）：函数 \(f:\mathbb{R}\to\mathbb{R}\) 在点 \(x_0\) 处的瞬时变化率，定义为平均变化率在 \(h\to 0\) 时的极限
+  \[ f'(x_0)=\lim_{h\to 0}\frac{f(x_0+h)-f(x_0)}{h}. \tag{2.1} \]
+  几何上，它是曲线在该点处切线的斜率；物理上，位置对时间的导数是速度。导数为正，函数在该点上升（上坡）；为负，下降（下坡）；为零，该点局部是平的（山顶、谷底或平台）。</p></div>
+
+  <aside class="mn">记忆钩子：导数正 = 上坡，导数负 = 下坡，导数零 = 脚下是平的。想让函数值变小，就往导数的反方向挪。</aside>
+
+  <p>本章后面只用四条求导事实，先列在这里，用到时直接取（严格证明属于微积分课程，本书不展开，但每条都和我们上面的极限过程一脉相承）：</p>
+  <p>（i）幂法则：\(\dfrac{d}{dx}x^n=n\,x^{\,n-1}\)。\(n=2\) 时就是例 2.1 的 \(2x\)；（ii）指数函数：\(\dfrac{d}{dx}e^x=e^x\)——\(e^x\) 是「坡度恰好等于自身高度」的函数；（iii）常数倍：\((c\,f)'=c\,f'\)——竖直方向拉伸 \(c\) 倍，坡度也拉伸 \(c\) 倍；（iv）和法则：\((f+g)'=f'+g'\)——两段高度变化相加，总变化率就是各自变化率相加。</p>
+
+  <h3 id="tb02-s2"><span class="h3-num">2.2</span> 偏导数与梯度：山坡上的指南针</h3>
+  <p>神经网络的损失不只依赖一个参数，而是同时依赖亿万个。一元导数不够用了，需要把「变化率」推广到多元函数。</p>
+
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>梯度 = 站在山坡上，指南针指向最陡的上坡方向。</strong>现在你不在一条山路上，而在一片山坡的某一点。你可以朝东走、朝北走、朝任意方向走，每个方向都有自己的「坡度」。<strong>偏导数</strong>回答的是其中两个特殊方向：只朝东（\(x_1\) 方向）走，坡度多少？只朝北（\(x_2\) 方向）走，坡度多少？而<strong>梯度</strong>是把所有坐标方向的坡度打包成一个箭头，这个箭头恰好指向「最陡的上坡方向」，箭头长度就是最陡方向的坡度。想下山（让损失变小），就朝箭头的反方向走。</p></div>
+
+  <p>怎么定义「只朝东走」的坡度？办法是把其他变量全部<strong>钉死当常数</strong>，只留下一个变量动——这就把多元问题降回了一元，可以直接套定义 2.1。</p>
+
+  <div class="def"><span class="box-tag">定义 2.2</span><p><span class="kt">偏导数</span>（partial derivative）：设 \(f:\mathbb{R}^{n}\to\mathbb{R}\)，在点 \(\mathbf{a}\) 处只让第 \(i\) 个坐标动、其余固定，所得变化率
+  \[ \frac{\partial f}{\partial x_i}(\mathbf{a})=\lim_{h\to 0}\frac{f(\mathbf{a}+h\mathbf{e}_i)-f(\mathbf{a})}{h}, \tag{2.2} \]
+  其中 \(\mathbf{e}_i\) 是第 \(i\) 个标准基向量（第 \(i\) 位为 1、其余为 0 的向量，表示「只沿第 \(i\) 个方向走」）。记号用花体的 \(\partial\) 而非 \(d\)，只为提醒「还有其他变量被钉着」。计算上毫无新内容：把别的字母当常数，对目标字母用一元求导法则。</p></div>
+
+  <p>举个手感的例子：\(f(x_1,x_2)=x_1^2\,x_2+x_2\)。求 \(\partial f/\partial x_1\) 时把 \(x_2\) 看成常数：\(x_1^2 x_2\) 对 \(x_1\) 求导，由幂法则与常数倍法则得 \(2x_1 x_2\)；第二项 \(x_2\) 不含 \(x_1\)，是常数，导数为 0。所以 \(\partial f/\partial x_1=2x_1 x_2\)。同理求 \(\partial f/\partial x_2\)：\(x_1^2 x_2\) 对 \(x_2\) 是「常数 \(x_1^2\) 乘以 \(x_2\)」，导数为 \(x_1^2\)；\(x_2\) 的导数是 1。所以 \(\partial f/\partial x_2=x_1^2+1\)。</p>
+
+  <div class="def"><span class="box-tag">定义 2.3</span><p><span class="kt">梯度</span>（gradient）：把全部偏导数排成一个列向量
+  \[ \nabla f(\mathbf{x})=\begin{bmatrix}\dfrac{\partial f}{\partial x_1}(\mathbf{x})\\ \vdots\\ \dfrac{\partial f}{\partial x_n}(\mathbf{x})\end{bmatrix}\in\mathbb{R}^{n}. \tag{2.3} \]
+  注意梯度与 \(\mathbf{x}\) 同维度：有 \(n\) 个变量，梯度就有 \(n\) 个分量。符号 \(\nabla\) 读作「nabla」。后面写成 \(\nabla_{\boldsymbol{\theta}}\mathcal{L}\) 时，下标表示「对哪组变量求偏导」。</p></div>
+
+  <p>接下来把「朝任意方向走」的坡度形式化。</p>
+  <div class="def"><span class="box-tag">定义 2.4</span><p><span class="kt">方向导数</span>（directional derivative）：沿单位向量 \(\mathbf{u}\) 方向的变化率
+  \[ D_{\mathbf{u}}f(\mathbf{x})=\lim_{t\to 0}\frac{f(\mathbf{x}+t\mathbf{u})-f(\mathbf{x})}{t}=\nabla f(\mathbf{x})^{\top}\mathbf{u},\qquad \|\mathbf{u}\|=1. \tag{2.4} \]</p></div>
+  <div class="derive"><span class="box-tag">推导 · 一步步来</span><p>为什么式 (2.4) 右边等于梯度与 \(\mathbf{u}\) 的点积？分四步。<strong>第一步（多元线性近似）</strong>：当所有变量都只动一点点时，函数的总变化约等于各方向变化之和——这是「光滑函数局部像平面」的多元版本，和一元时「曲线局部像切线」是同一个思想：
+  \[ f(\mathbf{x}+\boldsymbol{\Delta})-f(\mathbf{x})\approx \frac{\partial f}{\partial x_1}\Delta_1+\cdots+\frac{\partial f}{\partial x_n}\Delta_n. \]
+  <strong>第二步（代入具体位移）</strong>：我们走的位移是 \(\boldsymbol{\Delta}=t\mathbf{u}\)，即每个分量 \(\Delta_i=t\,u_i\)。代入上式得
+  \[ f(\mathbf{x}+t\mathbf{u})-f(\mathbf{x})\approx t\left(\frac{\partial f}{\partial x_1}u_1+\cdots+\frac{\partial f}{\partial x_n}u_n\right). \]
+  <strong>第三步（除以 \(t\) 取极限）</strong>：两边除以 \(t\)，\(t\) 约掉；\(t\to 0\) 时近似误差是比 \(t\) 更高阶的小量，除掉后消失，近似号变等号。<strong>第四步（认出点积）</strong>：括号里正是 \(\nabla f(\mathbf{x})\) 与 \(\mathbf{u}\) 的对应分量乘积之和，即 \(\nabla f(\mathbf{x})^{\top}\mathbf{u}\)。证毕。</p></div>
+
+  <div class="thm"><span class="box-tag">结论 2.1</span><p><strong>梯度是最陡上升方向，其长度是最陡方向的坡度。</strong>推导只需要柯西–施瓦茨不等式 \(|\mathbf{a}^{\top}\mathbf{b}|\le\|\mathbf{a}\|\,\|\mathbf{b}\|\)——它由第一章式 (1.3) 的点积几何面孔结合 \(|\cos\theta|\le 1\) 立得。对任意单位方向 \(\mathbf{u}\)：
+  \[ \left|D_{\mathbf{u}}f(\mathbf{x})\right|=\left|\nabla f(\mathbf{x})^{\top}\mathbf{u}\right|\le \|\nabla f(\mathbf{x})\|\,\|\mathbf{u}\|=\|\nabla f(\mathbf{x})\|. \]
+  第一步等号用的是式 (2.4)；第二步不等号是柯西–施瓦茨；第三步因为 \(\mathbf{u}\) 是单位向量。柯西–施瓦茨取等号的条件是两向量同向，所以让 \(D_{\mathbf{u}}f\) 最大的方向是 \(\mathbf{u}^{*}=\nabla f/\|\nabla f\|\)，最大值恰为 \(\|\nabla f\|\)：
+  \[ \max_{\|\mathbf{u}\|=1}D_{\mathbf{u}}f(\mathbf{x})=\|\nabla f(\mathbf{x})\|,\qquad \mathbf{u}^{*}=\frac{\nabla f(\mathbf{x})}{\|\nabla f(\mathbf{x})\|}. \tag{2.5} \]
+  直觉框里的「指南针」至此被严格证明：梯度方向 = 最陡上坡方向，梯度的模 = 那个方向的坡度。要下山就取负梯度，这就是<span class="kt">梯度下降</span>（gradient descent）：
+  \[ \boldsymbol{\theta}_{t+1}=\boldsymbol{\theta}_{t}-\eta\,\nabla_{\boldsymbol{\theta}}\mathcal{L}(\boldsymbol{\theta}_{t}), \tag{2.6} \]
+  其中 \(\boldsymbol{\theta}\) 是全部参数排成的向量，\(\eta>0\) 是<span class="kt">学习率</span>（learning rate），控制每步走多远。整个深度学习都建立在式 (2.6) 上：SGD、Adam 等优化器的区别仅在于「用什么改良版的梯度、什么会自动调节的 \(\eta\)」。</p></div>
+
+  <div class="example"><span class="box-tag">例 2.2 · 动手算</span><p><strong>题目</strong>　\(f(x_1,x_2)=x_1^2\,x_2+x_2\)。求在点 \((2,1)\) 处的梯度，以及沿 \(\mathbf{u}=(0.6,\,0.8)^{\top}\) 方向的方向导数，并验证结论 2.1。</p>
+  <p><strong>解</strong>　前面已算过偏导数：\(\partial f/\partial x_1=2x_1x_2\)，\(\partial f/\partial x_2=x_1^2+1\)。代入 \((2,1)\)：
+  \[ \frac{\partial f}{\partial x_1}(2,1)=2\times 2\times 1=4,\qquad \frac{\partial f}{\partial x_2}(2,1)=2^2+1=5,\qquad \nabla f(2,1)=\begin{bmatrix}4\\5\end{bmatrix}. \]
+  先检查 \(\mathbf{u}\) 是不是单位向量（方向导数的定义要求 \(\|\mathbf{u}\|=1\)）：\(\sqrt{0.6^2+0.8^2}=\sqrt{0.36+0.64}=\sqrt{1}=1\)，✓。再用式 (2.4)：
+  \[ D_{\mathbf{u}}f(2,1)=\begin{bmatrix}4&5\end{bmatrix}\begin{bmatrix}0.6\\0.8\end{bmatrix}=4\times 0.6+5\times 0.8=2.4+4.0=6.4. \]
+  验证结论 2.1：\(\|\nabla f\|=\sqrt{4^2+5^2}=\sqrt{41}\approx 6.4031\)。确实有 \(6.4\le 6.4031\)，且 \(6.4\) 已经很接近最大值——因为 \((0.6,0.8)\) 与梯度方向 \((4,5)\) 归一化后的 \((0.6247,0.7809)\) 很接近。任何方向的导数都不可能超过 \(\sqrt{41}\)。（已用 python3 验算：grad = (4, 5)，D_u = 6.4，范数 = 6.403124…。）</p></div>
+
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：（1）用「平均变化率 → 缩小 \(h\) → 逼近极限」说出导数的含义，而不是只会背公式；（2）对二元函数求偏导——把另一个变量当常数；（3）把偏导排成列向量得到梯度，并说出它的几何意义；（4）用 \(\nabla f^{\top}\mathbf{u}\) 算任意方向的方向导数；（5）解释为什么梯度下降要减梯度而不是加梯度。</p></div>
+
+  <h3 id="tb02-s3"><span class="h3-num">2.3</span> 链式法则：传话游戏（本章灵魂）</h3>
+  <p>到这里为止，我们只会算「直接函数」的导数。可神经网络是几十层函数的<strong>复合</strong>：输入经过一层变成中间结果，中间结果经过下一层再变……最后才变成损失。复合函数怎么求导？答案就是本节的主角，也是全章唯一真正的「定理」。</p>
+
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>链式法则 = 连锁反应 = 传话游戏。</strong>想象一排人传话：\(x\) 悄悄告诉 \(y\)，\(y\) 再告诉 \(\mathcal{L}\)。现在问：「\(x\) 动一点，\(\mathcal{L}\) 最终动多少？」答案分两段看：\(x\) 动一点，\(y\) 跟着动「\(x\) 的变化 × \(y\) 对 \(x\) 的敏感程度」；\(y\) 动的那点，又让 \(\mathcal{L}\) 动「\(y\) 的变化 × \(\mathcal{L}\) 对 \(y\) 的敏感程度」。两段乘起来，就是 \(x\) 对 \(\mathcal{L}\) 的总影响——<strong>放大倍率沿链条相乘</strong>。如果 \(x\) 同时通过好几条路径影响 \(\mathcal{L}\)（比如 \(y_1\)、\(y_2\) 都听 \(x\) 的），那就<strong>把各条路径的影响加起来</strong>。一句话：<strong>沿链相乘，分叉相加</strong>。这八个字就是反向传播的全部直觉。</p></div>
+
+  <div class="thm"><span class="box-tag">结论 2.2</span><p><strong>一元链式法则。</strong>设 \(y=g(x)\)、\(z=f(y)\) 都可导，则复合函数 \(z=f(g(x))\) 的导数
+  \[ \frac{dz}{dx}=f'\bigl(g(x)\bigr)\,g'(x). \tag{2.7} \]</p></div>
+  <div class="derive"><span class="box-tag">推导 · 一步步来</span><p>工具只有一件：<strong>线性近似</strong>——可导函数在一点附近可以被它的切线近似，\(g(x+h)\approx g(x)+g'(x)h\)，误差是比 \(h\) 更快趋于 0 的小量，记作 \(o(h)\)。分四步：
+  <strong>第一步</strong>，让 \(x\) 动一小步 \(h\)，看 \(y\) 怎么动。由线性近似：
+  \[ g(x+h)=g(x)+\underbrace{g'(x)\,h+o(h)}_{\text{记为}\ \Delta}. \]
+  为什么写成这样？因为线性近似说「变化量 ≈ 导数 × 步长」，多出来的误差收进 \(o(h)\)。
+  <strong>第二步</strong>，\(y\) 动了 \(\Delta\)，再看 \(z\) 怎么动。对 \(f\) 在点 \(g(x)\) 处同样用线性近似（这次步长是 \(\Delta\)）：
+  \[ f\bigl(g(x)+\Delta\bigr)=f\bigl(g(x)\bigr)+f'\bigl(g(x)\bigr)\Delta+o(\Delta). \]
+  注意 \(f'\) 的取值点是 \(g(x)\)——导数永远在「当前所在的位置」取值，这是初学者最容易写错的地方。
+  <strong>第三步</strong>，把 \(\Delta=g'(x)h+o(h)\) 代入第二步：
+  \[ f\bigl(g(x+h)\bigr)=f\bigl(g(x)\bigr)+f'\bigl(g(x)\bigr)g'(x)\,h+o(h). \]
+  为什么 \(o(\Delta)\) 也归并进 \(o(h)\)？因为 \(\Delta\) 本身是 \(h\) 的常数倍量级，比 \(\Delta\) 高阶的小量自然也比 \(h\) 高阶。
+  <strong>第四步</strong>，两边减去 \(f(g(x))\)、除以 \(h\)、令 \(h\to 0\)：左边正是式 (2.1) 定义的 \(\frac{d}{dx}f(g(x))\)，右边的 \(f'(g(x))g'(x)\) 与 \(h\) 无关保持不变，\(o(h)/h\to 0\)。于是得到式 (2.7)。一句话总结：<strong>两个放大倍率相乘</strong>，与直觉框的传话游戏完全对应。</p></div>
+
+  <p><strong>数值检验（两条路算同一题）。</strong>求 \(\dfrac{d}{dx}(3x-1)^2\) 在 \(x=1\) 处的值。路径一，链式法则：外层 \(u^2\) 的导数是 \(2u\)，内层 \(3x-1\) 的导数是 \(3\)，相乘得 \(2(3x-1)\times 3=6(3x-1)\)，代入 \(x=1\) 得 \(12\)。路径二，先展开再求导：\((3x-1)^2=9x^2-6x+1\)，导数是 \(18x-6\)，代入 \(x=1\) 也是 \(12\)。两条路结果一致 ✓（python3 复核：12 == 12）。链式法则不是「额外技巧」，它就是复合函数求导的正确答案。</p>
+
+  <p><strong>多元情形：全导数公式。</strong>设 \(z=f(x,y)\)，而 \(x=x(t)\)、\(y=y(t)\) 都依赖同一个 \(t\)。问 \(t\) 动一点，\(z\) 动多少？</p>
+  <div class="derive"><span class="box-tag">推导 · 一步步来</span><p><strong>第一步（对 \(f\) 用多元线性近似）</strong>，同 2.2 节用过的「总变化 ≈ 各方向变化之和」：
+  \[ \Delta z\approx \frac{\partial f}{\partial x}\,\Delta x+\frac{\partial f}{\partial y}\,\Delta y. \]
+  <strong>第二步（对 \(x(t)\)、\(y(t)\) 各用一元线性近似）</strong>：\(\Delta x\approx \dfrac{dx}{dt}\Delta t\)，\(\Delta y\approx \dfrac{dy}{dt}\Delta t\)。为什么可以？因为 \(x\)、\(y\) 各自都是 \(t\) 的一元函数，直接套一元近似。
+  <strong>第三步（代入合并）</strong>：
+  \[ \Delta z\approx \left(\frac{\partial f}{\partial x}\frac{dx}{dt}+\frac{\partial f}{\partial y}\frac{dy}{dt}\right)\Delta t. \]
+  <strong>第四步（除以 \(\Delta t\)、取极限）</strong>，近似号变等号：
+  \[ \frac{dz}{dt}=\frac{\partial f}{\partial x}\frac{dx}{dt}+\frac{\partial f}{\partial y}\frac{dy}{dt}. \tag{2.8} \]
+  读法：\(t\) 通过<strong>两条路径</strong>（\(t\to x\to z\) 与 \(t\to y\to z\)）影响 \(z\)，每条路径贡献「两个变化率的乘积」，总影响是两条路径之和——这正是直觉框说的「沿链相乘，分叉相加」。这条「路径相加」原则，等下在计算图里会变成「梯度累加」。</p></div>
+
+  <div class="example"><span class="box-tag">例 2.4 · 动手算（沿链相乘，分叉相加）</span><p><strong>题目</strong>　设 \(z=x\,y\)，而 \(x=2t\)、\(y=t+1\)。用全导数公式式 (2.8) 求 \(\dfrac{dz}{dt}\) 在 \(t=2\) 处的值，再用「先代入消元、再一元求导」复核。</p>
+  <p><strong>解</strong>　先数路径：\(t\) 动一点，通过 \(t\to x\to z\) 与 \(t\to y\to z\) <strong>两条路径</strong>影响 \(z\)，式 (2.8) 说总影响是两路相加。<strong>第一步（备齐四个局部导数）</strong>：\(\dfrac{\partial z}{\partial x}=y\)（把 \(y\) 钉成常数，对 \(x\) 用幂法则），\(\dfrac{\partial z}{\partial y}=x\)，\(\dfrac{dx}{dt}=2\)，\(\dfrac{dy}{dt}=1\)。<strong>第二步（代入 \(t=2\)）</strong>：此时 \(x=2\times 2=4\)，\(y=2+1=3\)。<strong>第三步（沿链相乘，分叉相加）</strong>：
+  \[ \frac{dz}{dt}=\frac{\partial z}{\partial x}\frac{dx}{dt}+\frac{\partial z}{\partial y}\frac{dy}{dt}=y\times 2+x\times 1=3\times 2+4\times 1=10. \]
+  <strong>复核</strong>：先消元，\(z=2t(t+1)=2t^{2}+2t\)，一元求导得 \(\dfrac{dz}{dt}=4t+2\)，代入 \(t=2\) 也是 \(10\) ✓。<strong>反例（「分叉相加」为什么不可省）</strong>：只算 \(t\to x\to z\) 一条路得 \(6\)，只算 \(t\to y\to z\) 得 \(4\)，都不是 \(10\)——\(t\) 一动两路同时动，漏掉哪条都错。（已用 python3 验算：链式法则得 10，消元求导得 10，数值差分得 10.0。）</p></div>
+
+  <p><strong>向量情形：本章最重要的一行。</strong>现在把 \(t\) 换成向量 \(\mathbf{x}\in\mathbb{R}^{n}\)，中间量换成向量 \(\mathbf{y}=\mathbf{g}(\mathbf{x})\in\mathbb{R}^{m}\)，最终输出是标量损失 \(\mathcal{L}=f(\mathbf{y})\in\mathbb{R}\)（损失永远是一个数）。问：\(\mathcal{L}\) 对某个分量 \(x_j\) 的偏导是多少？</p>
+  <div class="derive"><span class="box-tag">推导 · 一步步来</span><p><strong>第一步（数路径）</strong>：\(x_j\) 影响每一个中间分量 \(y_1,\dots,y_m\)，每个 \(y_i\) 再影响 \(\mathcal{L}\)——共 \(m\) 条路径。
+  <strong>第二步（用式 (2.8) 的路径相加原则，从 2 条推广到 \(m\) 条）</strong>：
+  \[ \frac{\partial \mathcal{L}}{\partial x_j}=\sum_{i=1}^{m}\frac{\partial \mathcal{L}}{\partial y_i}\,\frac{\partial y_i}{\partial x_j}. \]
+  为什么可以直接推广？因为每条路径的贡献互不干扰地叠加，这与式 (2.8) 的两路径情形同理。
+  <strong>第三步（把 \(n\) 个分量拼成向量）</strong>：对 \(j=1,\dots,n\) 都有上式。回忆第一章：矩阵第 \(i\) 行第 \(j\) 列元素为 \(A_{ij}\) 的矩阵记作 \((A_{ij})\)。把 \(\partial y_i/\partial x_j\) 排成「输出 × 输入」的矩阵，就是雅可比矩阵
+  \[ \mathbf{J}_{\mathbf{g}}=\frac{\partial \mathbf{y}}{\partial \mathbf{x}}\in\mathbb{R}^{m\times n},\qquad (\mathbf{J}_{\mathbf{g}})_{ij}=\frac{\partial y_i}{\partial x_j}. \]
+  <strong>第四步（认出矩阵乘法）</strong>：我们要把 \(\sum_{i=1}^{m}(\mathbf{J}_{\mathbf{g}})_{ij}\,\dfrac{\partial\mathcal{L}}{\partial y_i}\) 写成矩阵乘向量。矩阵乘法的定义是 \((\mathbf{A}\mathbf{v})_j=\sum_i A_{ji}v_i\)，即「结果的第 \(j\) 个分量 = \(\mathbf{A}\) 的第 \(j\) 行与 \(\mathbf{v}\) 点积」。我们的求和下标是 \(i\)、结果的序号是 \(j\)，而 \(\mathbf{J}_{\mathbf{g}}\) 里 \(i\) 是行、\(j\) 是列——正好相反，所以要取转置：\((\mathbf{J}_{\mathbf{g}}^{\top})_{ji}=(\mathbf{J}_{\mathbf{g}})_{ij}\)。于是
+  \[ \sum_{i=1}^{m}\frac{\partial \mathcal{L}}{\partial y_i}\,\frac{\partial y_i}{\partial x_j}=\bigl(\mathbf{J}_{\mathbf{g}}^{\top}\,\nabla_{\mathbf{y}}\mathcal{L}\bigr)_j, \]
+  对全部 \(j\) 成立，即
+  \[ \nabla_{\mathbf{x}}\mathcal{L}=\mathbf{J}_{\mathbf{g}}^{\top}\,\nabla_{\mathbf{y}}\mathcal{L}. \tag{2.9} \]
+  <strong>第五步（维度检查，养成习惯）</strong>：\(\mathbf{J}_{\mathbf{g}}\) 是 \(m\times n\)，转置后是 \(n\times m\)；\(\nabla_{\mathbf{y}}\mathcal{L}\) 是 \(m\times 1\)；乘积是 \(n\times 1\)，与 \(\mathbf{x}\) 同形 ✓。口诀：<strong>上游梯度左乘雅可比的转置</strong>。式 (2.9) 就是反向传播的全部数学，后面所有公式都是它的特例。</p></div>
+
+  <aside class="mn">记忆钩子：雅可比是「输出 × 输入」排成的 \(m\times n\)；梯度要和输入同形，必须转置回来。维度对不上，十有八九是少了转置。</aside>
+
+  <div class="thm"><span class="box-tag">结论 2.3</span><p><strong>线性层的反向公式。</strong>神经网络里最常见的运算是线性层 \(\mathbf{y}=\mathbf{W}\mathbf{x}+\mathbf{b}\)，\(\mathbf{W}\in\mathbb{R}^{m\times n}\)。记上游传下来的梯度 \(\bar{\mathbf{y}}=\nabla_{\mathbf{y}}\mathcal{L}\in\mathbb{R}^{m}\)，则三个梯度分别是
+  \[ \nabla_{\mathbf{x}}\mathcal{L}=\mathbf{W}^{\top}\bar{\mathbf{y}},\qquad \nabla_{\mathbf{W}}\mathcal{L}=\bar{\mathbf{y}}\,\mathbf{x}^{\top},\qquad \nabla_{\mathbf{b}}\mathcal{L}=\bar{\mathbf{y}}. \tag{2.10} \]</p></div>
+  <div class="derive"><span class="box-tag">推导 · 一步步来</span><p><strong>第一式（对输入的梯度）</strong>：先求局部雅可比。线性函数 \(\mathbf{g}(\mathbf{x})=\mathbf{W}\mathbf{x}+\mathbf{b}\) 的第 \(i\) 个输出是 \(y_i=\sum_{k}W_{ik}x_k+b_i\)，对 \(x_j\) 求偏导：求和里只有含 \(x_j\) 的那项（\(W_{ij}x_j\)）有贡献，得 \(W_{ij}\)。所以 \((\mathbf{J}_{\mathbf{g}})_{ij}=W_{ij}\)，即 \(\mathbf{J}_{\mathbf{g}}=\mathbf{W}\)——<strong>线性函数的导数就是它的矩阵本身</strong>。代入式 (2.9) 得 \(\nabla_{\mathbf{x}}\mathcal{L}=\mathbf{W}^{\top}\bar{\mathbf{y}}\)。
+  <strong>第二式（对权重的梯度）</strong>：换个视角，把 \(\mathbf{W}\) 的元素 \(W_{ij}\) 当作变量。问 \(W_{ij}\) 通过哪些路径影响 \(\mathcal{L}\)？它只出现在 \(y_i=\sum_k W_{ik}x_k+b_i\) 里，所以只有一条路径：\(W_{ij}\to y_i\to\mathcal{L}\)。由「沿链相乘」：
+  \[ \frac{\partial\mathcal{L}}{\partial W_{ij}}=\frac{\partial\mathcal{L}}{\partial y_i}\cdot\frac{\partial y_i}{\partial W_{ij}}=\bar{y}_i\,x_j. \]
+  其中 \(\partial y_i/\partial W_{ij}=x_j\)，因为 \(y_i\) 对 \(W_{ij}\) 求偏导时其余项都是常数。把 \(\bar{y}_i x_j\) 排成 \(m\times n\) 矩阵，正是外积 \(\bar{\mathbf{y}}\mathbf{x}^{\top}\)（\(m\times 1\) 乘 \(1\times n\) 得 \(m\times n\)）。
+  <strong>第三式（对偏置的梯度）</strong>：\(b_i\) 也只出现在 \(y_i\) 里，且 \(\partial y_i/\partial b_i=1\)，所以 \(\partial\mathcal{L}/\partial b_i=\bar{y}_i\)，即 \(\nabla_{\mathbf{b}}\mathcal{L}=\bar{\mathbf{y}}\)。
+  <strong>最后统一维度检查</strong>：\(\mathbf{W}^{\top}\bar{\mathbf{y}}\) 是 \((n\times m)(m\times 1)=n\times 1\)，同形于 \(\mathbf{x}\) ✓；\(\bar{\mathbf{y}}\mathbf{x}^{\top}\) 是 \(m\times n\)，同形于 \(\mathbf{W}\) ✓；\(\bar{\mathbf{y}}\) 同形于 \(\mathbf{b}\) ✓。</p></div>
+
+  <div class="warn"><span class="box-tag">常见坑</span><p><strong>把 \(\partial\mathcal{L}/\partial\mathbf{W}\) 的形状写错。</strong>新手常顺手写成 \(\mathbf{x}\,\bar{\mathbf{y}}^{\top}\)——那是 \(n\times m\)，是 \(\mathbf{W}^{\top}\) 的形状，恰好写反。铁律：<strong>任何参数的梯度，形状必须和参数本身一模一样</strong>（因为你要做 \(\mathbf{W}\leftarrow\mathbf{W}-\eta\,\nabla_{\mathbf{W}}\mathcal{L}\)，形状不同根本减不了）。形状不对时，轻则框架广播报错，重则静默算错、loss 缓慢漂移却查不出原因。写完反向公式先做维度检查，再动手写代码。</p></div>
+
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：（1）用「传话游戏」解释链式法则，说出「沿链相乘、分叉相加」；（2）用线性近似独立推出式 (2.7) 和式 (2.8)；（3）写出向量链式法则式 (2.9) 并做维度检查；（4）默写线性层的三个反向公式式 (2.10) 并说出每个的形状；（5）检查一个反向实现的第一个动作是核对梯度形状。</p></div>
+
+  <h3 id="tb02-s4"><span class="h3-num">2.4</span> 计算图与反向传播：把链式法则落到图上</h3>
+  <p>式 (2.9) 是数学，工程上还需要一个执行机制：一次真实的前向计算包含成百上千个运算，链式法则要按什么顺序、对谁用？答案是<span class="kt">计算图</span>。</p>
+
+  <div class="def"><span class="box-tag">定义 2.5</span><p><span class="kt">计算图</span>（computational graph）：把一次计算拆成一张有向无环图——<strong>节点是基本运算</strong>（加法、乘法、矩阵乘、\(\sigma\)……），<strong>边是流动的张量</strong>。每个节点只要知道两件小事：怎么从输入算出自己的输出（前向规则）；自己的局部雅可比是什么（反向规则）。整张图的求导就分解成了每个节点的「局部求导 + 传递」。</p></div>
+
+  <p>反向传播（backpropagation）就是在这张图上做两遍遍历：</p>
+  <p><strong>前向</strong>：按依赖顺序（拓扑序）逐个节点求值，并<strong>缓存每个节点的输出</strong>。为什么要缓存？因为反向规则里要用前向的数值——比如下面马上会看到，sigmoid 门的反向需要 \(h=\sigma(z)\) 的值来算 \(\sigma'(z)=h(1-h)\)。不缓存，反向时就得重算一遍。</p>
+  <p><strong>反向</strong>：从损失节点出发，逆着依赖顺序往回走。每个节点收到「从输出边传来的上游梯度」后，按式 (2.9) 把它左乘自己局部雅可比的转置，把结果<strong>累加</strong>到各输入边上。三种最常用的局部规则，逐个推给你看：</p>
+  <p><strong>加法门</strong> \(c=a+b\)：\(\partial c/\partial a=1\)，\(\partial c/\partial b=1\)，所以梯度原样分流：
+  \[ \bar{a}\ \text{+=}\ \bar{c},\qquad \bar{b}\ \text{+=}\ \bar{c}. \]
+  <strong>乘法门</strong> \(c=a\odot b\)（逐元素乘）：\(\partial c/\partial a=b\)（把 \(b\) 当常数），\(\partial c/\partial b=a\)，所以梯度「交换」对方：
+  \[ \bar{a}\ \text{+=}\ \mathbf{b}\odot\bar{c},\qquad \bar{b}\ \text{+=}\ \mathbf{a}\odot\bar{c}. \]
+  <strong>sigmoid 门</strong> \(h=\sigma(z)\)，\(\sigma(z)=\dfrac{1}{1+e^{-z}}\)。它的局部导数值得亲自推一遍——正好是一次链式法则的热身。</p>
+  <div class="derive"><span class="box-tag">推导 · 一步步来</span><p><strong>第一步（拆复合）</strong>：令 \(u=1+e^{-z}\)，则 \(\sigma=u^{-1}\)。<strong>第二步（各自求导）</strong>：外层由幂法则 \(\frac{d\sigma}{du}=-u^{-2}\)；内层 \(\frac{du}{dz}=-e^{-z}\)（常数 1 的导数为 0；\(e^{-z}\) 的导数由指数法则与链式法则得 \(-e^{-z}\)）。<strong>第三步（用式 (2.7) 相乘）</strong>：
+  \[ \sigma'(z)=(-u^{-2})(-e^{-z})=\frac{e^{-z}}{(1+e^{-z})^2}. \]
+  <strong>第四步（改写成 \(\sigma\) 的函数，方便工程）</strong>：注意
+  \[ \sigma(z)\bigl(1-\sigma(z)\bigr)=\frac{1}{1+e^{-z}}\cdot\left(1-\frac{1}{1+e^{-z}}\right)=\frac{1}{1+e^{-z}}\cdot\frac{e^{-z}}{1+e^{-z}}=\frac{e^{-z}}{(1+e^{-z})^2}, \]
+  与第三步结果一模一样。所以
+  \[ \sigma'(z)=\sigma(z)\bigl(1-\sigma(z)\bigr),\qquad \bar{z}=\bar{h}\;\sigma(z)\bigl(1-\sigma(z)\bigr). \tag{2.11} \]
+  工程意义：反向时只要查前向缓存的 \(h=\sigma(z)\)，算 \(h(1-h)\) 乘以上游梯度即可，不必再碰指数函数——这就是前向要缓存的原因。矩阵乘法门的反向规则就是结论 2.3 的式 (2.10)。</p></div>
+
+  <p><strong>共享张量要累加梯度。</strong>若张量 \(v\) 被多个下游节点消费（残差连接里天天发生：同一份 \(\mathbf{x}\) 既走主路又走捷径），由式 (2.8) 的「分叉相加」原则，每条下游路径都贡献一份梯度，全部相加：
+  \[ \bar{v}=\sum_{w\,\in\,\mathrm{children}(v)}\left(\frac{\partial w}{\partial v}\right)^{\!\top}\bar{w}. \tag{2.12} \]
+  式 (2.12) 就是反向传播的递归式：从最右端 \(\bar{\mathcal{L}}=1\) 出发（损失对自身的导数是 1，这是整条链的种子），对每个节点应用一次式 (2.12)，一路走到参数节点，全部参数的梯度就收齐了。</p>
+
+  <div class="example"><span class="box-tag">例 2.5 · 动手算（迷你计算图的三条门规则）</span><p><strong>题目</strong>　一张小计算图：乘法节点 \(s=a\,b\)，加法节点 \(\mathcal{L}=s+a\)。取 \(a=1\)、\(b=2\)。前向求 \(s\) 与 \(\mathcal{L}\)，再反向求 \(\dfrac{\partial\mathcal{L}}{\partial a}\) 与 \(\dfrac{\partial\mathcal{L}}{\partial b}\)。</p>
+  <p><strong>解</strong>　<strong>前向</strong>：\(s=1\times 2=2\)；\(\mathcal{L}=2+1=3\)。<strong>反向，从种子 \(\bar{\mathcal{L}}=1\) 出发。第一扇门（加法门 \(\mathcal{L}=s+a\)）</strong>：梯度原样分流，\(\bar{s}\) 加上 \(1\)，\(\bar{a}\) 加上 \(1\)——这是 \(a\) 的第一份梯度，来自直通边。<strong>第二扇门（乘法门 \(s=ab\)）</strong>：梯度「交换」对方，\(\bar{a}\) 加上 \(\bar{s}\,b=1\times 2=2\)（\(a\) 的第二份），\(\bar{b}\) 加上 \(\bar{s}\,a=1\times 1=1\)。<strong>汇总（共享张量要累加，式 (2.12)）</strong>：\(a\) 被加法门与乘法门两个下游消费，两份梯度相加，\(\bar{a}=1+2=3\)；而 \(\bar{b}=1\)。<strong>解析复核</strong>：\(\mathcal{L}=ab+a\)，直接求偏导 \(\dfrac{\partial\mathcal{L}}{\partial a}=b+1=3\) ✓，\(\dfrac{\partial\mathcal{L}}{\partial b}=a=1\) ✓。<strong>反例（「累加」为什么不可省）</strong>：若 \(a\) 只记直通边得 \(1\)、只记乘法门得 \(2\)，两个答案都错，只有相加才对。残差连接里每份张量有几十条下游路径，漏一条梯度就错一截。（已用 python3 验算：手推 \(3,\,1\)，数值差分 \(3.0,\ 1.0\)。）</p></div>
+
+  <p><strong>为什么偏偏是「反向」？成本对比。</strong>自动微分还有一种「正向模式」：给某个输入方向撒一粒种子，一次前向得到梯度在该方向上的投影；想拿全部 \(n\) 个参数的梯度，就要撒 \(n\) 次种子，成本约 \(n\) 次前向。反向模式则反过来：从唯一的标量损失出发倒着走一遍，一次前向加一次反向就得到损失对<strong>全部</strong>输入的梯度，而且每个节点只做一次「左乘 \(\mathbf{J}^{\top}\)」，总成本满足
+  \[ \mathrm{cost}(\text{反向模式})\approx c\cdot\mathrm{cost}(\text{前向}),\qquad c\ \text{是}\ 2\sim 3\ \text{的小常数}, \tag{2.13} \]
+  与参数量无关。对照表：</p>
+  <table class="tbl">
+    <thead><tr><th>模式</th><th>一次遍历得到</th><th>拿全部 \(\nabla_{\boldsymbol{\theta}}\mathcal{L}\) 的代价</th><th>适用场景</th></tr></thead>
+    <tbody>
+      <tr><td>正向模式</td><td>梯度在一个方向上的投影</td><td>\(\approx n\) 次前向</td><td>输入少、输出多的函数</td></tr>
+      <tr><td>反向模式</td><td>标量输出对全部输入的梯度</td><td>\(\approx 1\) 次（常数倍，式 (2.13)）</td><td>参数多、输出少——损失函数正是</td></tr>
+    </tbody>
+  </table>
+  <p>代入大模型的数字感受一下：\(10^{9}\) 个参数、1 个标量损失，正向模式要跑约 \(10^{9}\) 次前向，反向模式只要约 3 次前向的时间。这就是「反向传播为什么存在」——它不是众多求导方法之一，而是「多参数、单输出」场景下唯一负担得起的那种。</p>
+  <aside class="mn">正向模式是「对每个输入问一次它影响了谁」；反向模式是「从唯一的输出倒着问每个节点该负多少责」。参数上亿时，只有后者问得起。</aside>
+  <p>反向模式的代价是显存：反向要用前向缓存的每个中间值，激活显存与「层数 × batch 大小」成正比。大模型训练常用激活重计算（activation checkpointing）——只存少数检查点，反向时把缺掉的中间值重新算一遍——用约三分之一的额外算力换数倍显存，这是把长序列、大 batch 塞进显卡的关键手段。</p>
+
+  <h3 id="tb02-s5"><span class="h3-num">2.5</span> 例题：手推一个 2-2-1 网络的反向传播</h3>
+  <p>光说不练假把式。下面这个小网络小到可以全部手算，又完整到包含全部要素：矩阵乘法门、sigmoid 门、损失门。我们将前向算出每个中间量，反向逐个参数推出梯度，<strong>每一步都标明用的是链式法则的哪一环</strong>。</p>
+
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>这是类比：手推反向传播像会计查账。损失是总账上的赤字，从它倒着往回查，每过一道工序就问「这笔赤字你担多少」，按该工序的放大倍率把责任摊回上游；一个零件供了几道工序，就把各处责任相加。这个类比省掉了什么：「责任能相乘相加」其实来自线性近似，好在光滑函数在无穷小尺度下精确满足，查出的是精确梯度而非估计。</p></div>
+
+  <div class="example"><span class="box-tag">例 2.3 · 动手算</span>
+  <p><strong>题目</strong>　一个小型 MLP：输入 \(\mathbf{x}=(1,-1)^{\top}\)；第一层 2 个 sigmoid 神经元，权重矩阵 \(\mathbf{W}_1=\begin{bmatrix}0.5&-0.5\\-0.5&0.5\end{bmatrix}\)；第二层 1 个 sigmoid 神经元，权重 \(\mathbf{w}_2=(0.5,\,0.5)\)；为简洁省略偏置。损失 \(\mathcal{L}=\tfrac{1}{2}(\hat{y}-y)^{2}\)，目标 \(y=1\)。前向计算为
+  \[ \mathbf{z}=\mathbf{W}_1\mathbf{x},\quad \mathbf{h}=\sigma(\mathbf{z}),\quad z_3=\mathbf{w}_2\mathbf{h},\quad \hat{y}=\sigma(z_3). \]
+  求前向每个中间量，以及全部 6 个权重参数的梯度。</p>
+  <p><strong>第一步：前向，逐节点算。</strong></p>
+  <p>节点 \(z_1\)（矩阵乘法门的第一行）：\(z_1=W_{11}x_1+W_{12}x_2=0.5\times 1+(-0.5)\times(-1)=0.5+0.5=1.0\)。</p>
+  <p>节点 \(z_2\)：\(z_2=W_{21}x_1+W_{22}x_2=(-0.5)\times 1+0.5\times(-1)=-0.5-0.5=-1.0\)。</p>
+  <p>节点 \(h_1\)（sigmoid 门）：\(h_1=\sigma(1.0)=\dfrac{1}{1+e^{-1}}\)。\(e^{-1}\approx 0.3679\)，所以 \(h_1\approx\dfrac{1}{1.3679}\approx 0.7311\)。</p>
+  <p>节点 \(h_2\)：\(h_2=\sigma(-1.0)=\dfrac{1}{1+e^{1}}=\dfrac{1}{1+2.7183}\approx 0.2689\)。（顺带发现一个后面要用的巧合：\(\sigma(1)+\sigma(-1)=0.7311+0.2689=1\)，这不是偶然，\(\sigma(z)+\sigma(-z)=1\) 对一切 \(z\) 成立。）</p>
+  <p>节点 \(z_3\)（矩阵乘法门，此处是向量点积）：\(z_3=v_1h_1+v_2h_2=0.5\times 0.7311+0.5\times 0.2689=0.5\times(0.7311+0.2689)=0.5\times 1=0.5000\)——恰好等于 0.5，全靠上面那个巧合。</p>
+  <p>节点 \(\hat{y}\)：\(\hat{y}=\sigma(0.5)=\dfrac{1}{1+e^{-0.5}}\approx\dfrac{1}{1.6065}\approx 0.6225\)。</p>
+  <p>节点 \(\mathcal{L}\)：\(\mathcal{L}=\tfrac{1}{2}(0.6225-1)^2=\tfrac{1}{2}\times(-0.3775)^2=\tfrac{1}{2}\times 0.1425\approx 0.0713\)。</p>
+  <p>把这些数标到计算图上：</p>
+  <figure class="fig">
+    <svg viewBox="0 0 800 370" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="2-2-1 网络的计算图">
+      <defs>
+        <marker id="arr-tb02" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="var(--line)"></path>
+        </marker>
+      </defs>
+      <text x="20" y="22" font-size="11" fill="var(--ink)">节点内＝前向数值</text>
+      <text x="200" y="22" font-size="11" fill="var(--accent2)">节点下方＝反向梯度</text>
+      <text x="420" y="22" font-size="11" fill="var(--accent)">边上＝权重 / 运算</text>
+      <line x1="112" y1="80" x2="148" y2="80" stroke="var(--line)" stroke-width="1.5" marker-end="url(#arr-tb02)"></line>
+      <line x1="112" y1="250" x2="148" y2="84" stroke="var(--line)" stroke-width="1.5" marker-end="url(#arr-tb02)"></line>
+      <line x1="112" y1="80" x2="148" y2="220" stroke="var(--line)" stroke-width="1.5" marker-end="url(#arr-tb02)"></line>
+      <line x1="112" y1="250" x2="148" y2="250" stroke="var(--line)" stroke-width="1.5" marker-end="url(#arr-tb02)"></line>
+      <text x="118" y="70" font-size="10" fill="var(--accent)">w₁₁=0.5</text>
+      <text x="114" y="212" font-size="10" fill="var(--accent)">w₂₁=−0.5</text>
+      <text x="114" y="122" font-size="10" fill="var(--accent)">w₁₂=−0.5</text>
+      <text x="118" y="242" font-size="10" fill="var(--accent)">w₂₂=0.5</text>
+      <line x1="252" y1="80" x2="288" y2="80" stroke="var(--line)" stroke-width="1.5" marker-end="url(#arr-tb02)"></line>
+      <line x1="252" y1="250" x2="288" y2="250" stroke="var(--line)" stroke-width="1.5" marker-end="url(#arr-tb02)"></line>
+      <text x="264" y="72" font-size="10" fill="var(--accent)">σ</text>
+      <text x="264" y="242" font-size="10" fill="var(--accent)">σ</text>
+      <line x1="392" y1="82" x2="428" y2="152" stroke="var(--line)" stroke-width="1.5" marker-end="url(#arr-tb02)"></line>
+      <line x1="392" y1="248" x2="428" y2="178" stroke="var(--line)" stroke-width="1.5" marker-end="url(#arr-tb02)"></line>
+      <text x="400" y="108" font-size="10" fill="var(--accent)">v₁=0.5</text>
+      <text x="400" y="228" font-size="10" fill="var(--accent)">v₂=0.5</text>
+      <line x1="532" y1="165" x2="548" y2="165" stroke="var(--line)" stroke-width="1.5" marker-end="url(#arr-tb02)"></line>
+      <text x="533" y="156" font-size="10" fill="var(--accent)">σ</text>
+      <line x1="652" y1="165" x2="668" y2="165" stroke="var(--line)" stroke-width="1.5" marker-end="url(#arr-tb02)"></line>
+      <line x1="640" y1="272" x2="700" y2="193" stroke="var(--line)" stroke-width="1.5" marker-end="url(#arr-tb02)"></line>
+      <rect x="8" y="54" width="104" height="52" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.2"></rect>
+      <text x="60" y="74" font-size="11" text-anchor="middle" fill="var(--ink)">输入 x₁</text>
+      <text x="60" y="92" font-size="12" text-anchor="middle" fill="var(--ink)">= 1.0</text>
+      <rect x="8" y="224" width="104" height="52" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.2"></rect>
+      <text x="60" y="244" font-size="11" text-anchor="middle" fill="var(--ink)">输入 x₂</text>
+      <text x="60" y="262" font-size="12" text-anchor="middle" fill="var(--ink)">= −1.0</text>
+      <rect x="148" y="54" width="104" height="52" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.2"></rect>
+      <text x="200" y="74" font-size="11" text-anchor="middle" fill="var(--ink)">z₁</text>
+      <text x="200" y="92" font-size="12" text-anchor="middle" fill="var(--ink)">= 1.0</text>
+      <text x="200" y="122" font-size="10" text-anchor="middle" fill="var(--accent2)">δ₁ = −0.0087</text>
+      <rect x="148" y="224" width="104" height="52" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.2"></rect>
+      <text x="200" y="244" font-size="11" text-anchor="middle" fill="var(--ink)">z₂</text>
+      <text x="200" y="262" font-size="12" text-anchor="middle" fill="var(--ink)">= −1.0</text>
+      <text x="200" y="292" font-size="10" text-anchor="middle" fill="var(--accent2)">δ₂ = −0.0087</text>
+      <rect x="288" y="54" width="104" height="52" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.2"></rect>
+      <text x="340" y="74" font-size="11" text-anchor="middle" fill="var(--ink)">h₁ = σ(z₁)</text>
+      <text x="340" y="92" font-size="12" text-anchor="middle" fill="var(--ink)">= 0.7311</text>
+      <text x="340" y="122" font-size="10" text-anchor="middle" fill="var(--accent2)">∂L/∂h₁ = −0.0444</text>
+      <rect x="288" y="224" width="104" height="52" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.2"></rect>
+      <text x="340" y="244" font-size="11" text-anchor="middle" fill="var(--ink)">h₂ = σ(z₂)</text>
+      <text x="340" y="262" font-size="12" text-anchor="middle" fill="var(--ink)">= 0.2689</text>
+      <text x="340" y="292" font-size="10" text-anchor="middle" fill="var(--accent2)">∂L/∂h₂ = −0.0444</text>
+      <rect x="428" y="139" width="104" height="52" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.2"></rect>
+      <text x="480" y="159" font-size="11" text-anchor="middle" fill="var(--ink)">z₃</text>
+      <text x="480" y="177" font-size="12" text-anchor="middle" fill="var(--ink)">= 0.5</text>
+      <text x="480" y="207" font-size="10" text-anchor="middle" fill="var(--accent2)">δ₃ = −0.0887</text>
+      <rect x="548" y="139" width="104" height="52" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.2"></rect>
+      <text x="600" y="159" font-size="11" text-anchor="middle" fill="var(--ink)">ŷ = σ(z₃)</text>
+      <text x="600" y="177" font-size="12" text-anchor="middle" fill="var(--ink)">= 0.6225</text>
+      <text x="600" y="207" font-size="10" text-anchor="middle" fill="var(--accent2)">∂L/∂ŷ = −0.3775</text>
+      <rect x="548" y="246" width="104" height="52" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.2"></rect>
+      <text x="600" y="266" font-size="11" text-anchor="middle" fill="var(--ink)">目标 y</text>
+      <text x="600" y="284" font-size="12" text-anchor="middle" fill="var(--ink)">= 1</text>
+      <rect x="668" y="139" width="104" height="52" rx="8" fill="none" stroke="var(--ink)" stroke-width="1.2"></rect>
+      <text x="720" y="159" font-size="11" text-anchor="middle" fill="var(--ink)">损失 L = ½(ŷ−y)²</text>
+      <text x="720" y="177" font-size="12" text-anchor="middle" fill="var(--ink)">= 0.0713</text>
+    </svg>
+    <figcaption>图 2.1　例 2.3 的计算图：节点是运算、边是张量。节点内为前向数值，节点下方为反向传回的梯度，边上标权重与运算。</figcaption>
+  </figure>
+  <p><strong>第二步：反向，从种子 \(\partial\mathcal{L}/\partial\mathcal{L}=1\) 出发。</strong></p>
+  <p>环 1，过损失门 \(\mathcal{L}=\tfrac{1}{2}(\hat{y}-y)^2\)。这本身又是一个小复合：令 \(e=\hat{y}-y\)，则 \(\mathcal{L}=\tfrac{1}{2}e^2\)。用链式法则式 (2.7)：外层导数 \(\frac{d\mathcal{L}}{de}=e\)（幂法则：\(\tfrac12 e^2\) 的导数是 \(e\)），内层导数 \(\frac{de}{d\hat{y}}=1\)，相乘得
+  \[ \frac{\partial \mathcal{L}}{\partial \hat{y}}=(\hat{y}-y)\times 1=0.6225-1=-0.3775. \]
+  读一下符号：梯度为负，说明「增大 \(\hat{y}\) 会减小损失」——确实 \(\hat{y}=0.6225\) 离目标 1 还差得远，该往上抬 ✓。</p>
+  <p>环 2，过 sigmoid 门 \(\hat{y}=\sigma(z_3)\)。局部导数用式 (2.11) 与前向缓存的 \(\hat{y}\)：
+  \[ \sigma'(z_3)=\hat{y}(1-\hat{y})=0.6225\times 0.3775\approx 0.2350. \]
+  记误差信号 \(\delta_3\equiv \partial\mathcal{L}/\partial z_3\)，由「沿链相乘」：
+  \[ \delta_3=\frac{\partial \mathcal{L}}{\partial \hat{y}}\,\sigma'(z_3)=(-0.3775)\times 0.2350\approx -0.0887. \]
+  <strong>这一步用的是链式法则式 (2.9) 的标量版</strong>：上游梯度 × 局部导数。</p>
+  <p>环 3，过矩阵乘法门 \(z_3=\mathbf{w}_2\mathbf{h}\)。这里要分头算两种梯度。<strong>对权重</strong>：用式 (2.10) 第二式「权重梯度 = 上游梯度 × 输入」，
+  \[ \frac{\partial \mathcal{L}}{\partial v_1}=\delta_3\,h_1\approx -0.0887\times 0.7311\approx -0.0649,\qquad \frac{\partial \mathcal{L}}{\partial v_2}=\delta_3\,h_2\approx -0.0887\times 0.2689\approx -0.0239. \]
+  <strong>对输入</strong>（还要继续往上传）：用式 (2.10) 第一式「输入梯度 = 权重转置 × 上游梯度」，此处权重是行向量 \((0.5,0.5)\)，转置后是列向量，
+  \[ \frac{\partial \mathcal{L}}{\partial h_1}=\delta_3\,v_1\approx -0.0887\times 0.5\approx -0.0444,\qquad \frac{\partial \mathcal{L}}{\partial h_2}=\delta_3\,v_2\approx -0.0887\times 0.5\approx -0.0444. \]
+  注意 \(h_1\) 与 \(h_2\) 拿到的梯度相同——因为 \(\mathbf{w}_2\) 的两个分量相等，「责任」平分。</p>
+  <p>环 4，过第一层两个 sigmoid 门。先算局部导数（还是用前向缓存）：\(\sigma'(z_1)=h_1(1-h_1)\approx 0.7311\times 0.2689\approx 0.1966\)；而 \(\sigma'(z_2)=h_2(1-h_2)\approx 0.2689\times 0.7311\approx 0.1966\)，两者相等——因为 \(\sigma'(z)=\sigma'(-z)\)，而 \(z_1=1=-z_2\)。于是
+  \[ \delta_1=\frac{\partial \mathcal{L}}{\partial h_1}\,\sigma'(z_1)\approx -0.0444\times 0.1966\approx -0.0087,\qquad \delta_2=\frac{\partial \mathcal{L}}{\partial h_2}\,\sigma'(z_2)\approx -0.0087. \]
+  观察：误差信号从 \(-0.0887\) 缩到 \(-0.0087\)，被 sigmoid 的局部导数 \(0.1966\) 压缩了将近一个数量级——这就是 2.6 节「梯度消失」的微观现场。</p>
+  <p>环 5，第一层权重，再用一次「权重梯度 = 上游梯度 × 输入」（式 (2.10) 第二式）：
+  \[ \frac{\partial \mathcal{L}}{\partial w_{11}}=\delta_1\,x_1\approx -0.0087\times 1=-0.0087,\qquad \frac{\partial \mathcal{L}}{\partial w_{12}}=\delta_1\,x_2\approx -0.0087\times(-1)=+0.0087, \]
+  \[ \frac{\partial \mathcal{L}}{\partial w_{21}}=\delta_2\,x_1\approx -0.0087,\qquad \frac{\partial \mathcal{L}}{\partial w_{22}}=\delta_2\,x_2\approx +0.0087. \]
+  为什么 \(w_{12}\)、\(w_{22}\) 的梯度翻了正号？因为乘了 \(x_2=-1\)——参数梯度连着输入的符号，✓ 合理。</p>
+  <p><strong>结果汇总</strong>（保留 4 位小数；手算用四舍五入的中间值，末位可能与精确值差 1）：</p>
+  <table class="tbl">
+    <thead><tr><th>参数</th><th>当前值</th><th>梯度 \(\partial\mathcal{L}/\partial(\cdot)\)</th><th>含义</th></tr></thead>
+    <tbody>
+      <tr><td>\(v_1\)</td><td>0.5</td><td>−0.0649</td><td rowspan="2">输出层：梯度为负，增大 \(v\) 使 \(\hat{y}\) 靠近 1</td></tr>
+      <tr><td>\(v_2\)</td><td>0.5</td><td>−0.0239</td></tr>
+      <tr><td>\(w_{11}\)</td><td>0.5</td><td>−0.0087</td><td rowspan="4">隐藏层：梯度被 \(\sigma'(z)\approx 0.1966\) 压缩了一档</td></tr>
+      <tr><td>\(w_{21}\)</td><td>−0.5</td><td>−0.0087</td></tr>
+      <tr><td>\(w_{12}\)</td><td>−0.5</td><td>+0.0087</td></tr>
+      <tr><td>\(w_{22}\)</td><td>0.5</td><td>+0.0087</td></tr>
+    </tbody>
+  </table>
+  <p>若有偏置 \(b\)，由式 (2.10) 第三式，\(\partial\mathcal{L}/\partial b=\delta\)——偏置的梯度就是误差信号本身，本例从略。下面这段纯 python3 把同一张计算图复算了一遍，每个数与手推一致：</p>
+  <pre><code>import math
+sig = lambda z: 1.0 / (1.0 + math.exp(-z))
+x = (1.0, -1.0); W1 = ((0.5, -0.5), (-0.5, 0.5)); w2 = (0.5, 0.5)
+z1 = W1[0][0]*x[0] + W1[0][1]*x[1]; z2 = W1[1][0]*x[0] + W1[1][1]*x[1]
+h1, h2 = sig(z1), sig(z2); z3 = w2[0]*h1 + w2[1]*h2; yh = sig(z3)
+d3 = (yh - 1.0) * yh * (1.0 - yh)      # δ3 = ∂L/∂z3
+d1 = d3 * w2[0] * h1 * (1.0 - h1)      # δ1 = ∂L/∂z1
+d2 = d3 * w2[1] * h2 * (1.0 - h2)      # δ2 = ∂L/∂z2
+print('fwd:', z1, z2, h1, h2, z3, yh, 0.5*(yh-1.0)**2)
+print('grads v1,v2:', d3*h1, d3*h2)
+print('grads w11,w12,w21,w22:', d1*x[0], d1*x[1], d2*x[0], d2*x[1])</code></pre>
+  <pre><code>fwd: 1.0 -1.0 0.7310585786300049 0.2689414213699951 0.5 0.6224593312018546 0.07126847829827546
+grads v1,v2: -0.06486204558981801 -0.02386141308481886
+grads w11,w12,w21,w22: -0.00872204536694554 0.00872204536694554 -0.00872204536694554 0.00872204536694554</code></pre>
+  <p>逐项对照：\(0.7311, 0.2689, 0.5, 0.6225, 0.0713\) ✓；\(-0.0649, -0.0239\) ✓；\(\pm 0.0087\) ✓。手推与机器完全一致——你已经亲手执行了一次反向传播。</p>
+  </div>
+
+  <div class="warn"><span class="box-tag">常见坑</span><p><strong>链式法则漏乘中间那一项。</strong>最常见的错误是写 \(\partial\mathcal{L}/\partial z_1=\partial\mathcal{L}/\partial h_1\)，把 sigmoid 门的局部导数 \(\sigma'(z_1)\) 丢掉了。手推时数值只差 \(0.1966\) 倍，不易察觉；但深网络里每丢一项，梯度就错一个因子，几十层下来面目全非。养成习惯：每过一道门，问自己一次「这道门的局部雅可比是什么？乘上了吗？」</p></div>
+
+  <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：（1）给定小网络的全部权重，独立走一遍前向，写出每个中间量；（2）从 \(\bar{\mathcal{L}}=1\) 出发逐门反向，说清每步用的是式 (2.10)/(2.11)/(2.12) 的哪一条；（3）解释为什么隐藏层梯度比输出层小一个数量级；（4）用 10 行以内的 python3 复核自己的手推；（5）改一个权重（比如把 \(v_1\) 改成 0.8）后能重算全图。</p></div>
+
+  <h3 id="tb02-s6"><span class="h3-num">2.6</span> 梯度累积、消失与爆炸</h3>
+  <p>例 2.3 只用了一条样本。真实训练集有几十亿条样本，每次更新都算全量梯度是不可能的。实际做法是用<span class="kt">小批量</span>（mini-batch）做无偏估计：随机抽 \(B\) 条样本，
+  \[ \nabla_{\boldsymbol{\theta}}\mathcal{L}\approx \mathbf{g}_{B}=\frac{1}{B}\sum_{i=1}^{B}\nabla_{\boldsymbol{\theta}}\ell\bigl(\boldsymbol{\theta};\mathbf{x}_i,y_i\bigr),\qquad \mathbb{E}[\mathbf{g}_{B}]=\nabla_{\boldsymbol{\theta}}\mathcal{L}. \tag{2.14} \]
+  为什么叫无偏？因为每条样本是随机抽的，期望意义下 \(\mathbf{g}_B\) 的平均就是全量梯度——噪声有正有负、相互抵消，方向大体正确。\(B\) 越大估计越准，但一次前向反向的显存也越大。</p>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>这是类比：深层网络的梯度像一笔钱连过一串收费站，每层被按比例抽一次：每层抽走一半，\(30\) 层后只剩约十亿分之一，这就是消失；每层反倒贴一倍，\(30\) 层后胀到约十亿，这就是爆炸。这个类比省掉了什么：真实每层的抽成是矩阵，对不同方向抽得不一样，标量连乘只勾勒轮廓；但倍率稍偏离 \(1\) 就连乘失控，这结论不含糊。</p></div>
+  <div class="def"><span class="box-tag">定义 2.6</span><p><span class="kt">梯度累积</span>（gradient accumulation）：想要大 batch 的梯度质量、显存又装不下大 batch 时，把大小为 \(B\) 的 batch 切成 \(k\) 个大小为 \(b\) 的 micro-batch，逐个前向反向，把梯度<strong>加</strong>起来（不更新参数），攒够 \(k\) 步再更新一次，并取均值：
+  \[ \mathbf{g}=\frac{1}{k}\sum_{j=1}^{k}\mathbf{g}_{j},\qquad \mathbf{g}_{j}=\frac{1}{b}\sum_{i=1}^{b}\nabla_{\boldsymbol{\theta}}\ell\bigl(\boldsymbol{\theta};\mathbf{x}_i^{(j)},y_i^{(j)}\bigr). \tag{2.15} \]
+  为什么与大 batch 等价？因为「求和、取均值」都是线性运算：先把 \(k\,b\) 条样本分成 \(k\) 组各取均值再取均值，与一次性对全部 \(B_{\mathrm{eff}}=k\,b\) 条取均值，结果完全相同。代价只是：同样的显存，分 \(k\) 次跑，时间上多花 \(k\) 倍的前向反向（本来也省不掉）。</p></div>
+  <p>大模型训练里这是常规操作：LLM 的全局 batch 经常有几百万 token，单卡放不下，于是「micro-batch 占满单卡显存 × 累积 \(k\) 步 × 数据并行 \(N\) 卡」三者一起凑出目标 batch。</p>
+  <div class="warn"><span class="box-tag">常见坑</span><p><strong>梯度累积完忘了除 \(k\)。</strong>框架里每个 micro-batch 的 loss 默认对该 micro-batch 取均值，累积 \(k\) 步得到的是 \(k\) 个均值的<strong>和</strong>，比目标梯度大 \(k\) 倍——等于学习率被悄悄放大 \(k\) 倍，loss 曲线怎么调都和论文对不上。改法二选一：每步用 \(\texttt{loss}/k\) 再 backward，或更新前把累积梯度除以 \(k\)。</p></div>
+
+  <p><strong>梯度消失与爆炸：连乘的威力。</strong>把式 (2.12) 在一个 \(L\) 层的链式网络上展开：设第 \(l\) 层的局部雅可比为 \(\mathbf{J}_l\)，则第一层拿到的梯度是
+  \[ \nabla_{\mathbf{h}^{(1)}}\mathcal{L}=\bigl(\mathbf{J}_{L-1}\cdots\mathbf{J}_2\,\mathbf{J}_1\bigr)^{\top}\nabla_{\mathbf{h}^{(L)}}\mathcal{L}. \tag{2.16} \]
+  梯度是 \(L-1\) 个矩阵的<strong>连乘</strong>。用标量版体会连乘：若每层的放大倍率都是 \(a\)，30 层之后梯度被乘上 \(a^{30}\)：
+  \[ 0.5^{30}\approx 9.3\times 10^{-10},\qquad 2^{30}\approx 1.1\times 10^{9}. \]
+  每层略小于 1，梯度传到浅层只剩十亿分之一，几乎等于零——<span class="kt">梯度消失</span>（vanishing gradient），浅层参数收不到训练信号；每层略大于 1，梯度指数膨胀直到上溢成 NaN——<span class="kt">梯度爆炸</span>（exploding gradient）。（python3 复核：0.5**30 ≈ 9.31e-10，2**30 ≈ 1.07e9。）</p>
+  <p>sigmoid 让消失雪上加霜。它的导数有一个硬性上限：</p>
+  <div class="derive"><span class="box-tag">推导 · 一步步来</span><p>由式 (2.11)，\(\sigma'(z)=\sigma(z)(1-\sigma(z))\)。令 \(p=\sigma(z)\)，则 \(p\in(0,1)\)，要研究 \(p(1-p)\) 的最大值。这是一个关于 \(p\) 的二次函数 \(p-p^2\)，开口向下；求最大值用本章工具：导数 \(1-2p\)，令其为 0 得 \(p=\tfrac12\)，代入得最大值 \(\tfrac12\times\tfrac12=\tfrac14\)。所以
+  \[ \sigma'(z)=\sigma(z)\bigl(1-\sigma(z)\bigr)\le \frac{1}{4},\qquad \text{最大值在}\ z=0\ \text{处取得}. \tag{2.17} \]
+  而且一旦 \(|z|\) 变大（进入饱和区），\(\sigma'(z)\) 会指数级趋近 0——比如 \(z=4\) 时 \(\sigma'(4)\approx 0.0177\)（python3 复核）。即使每层都恰好停在最大斜率点，每层梯度也要再打 \(\tfrac14\) 的折扣，30 层就是 \((1/4)^{30}\approx 8.7\times 10^{-19}\)。这就是为什么深层网络早已抛弃 sigmoid/tanh 作为隐层激活（现代 LLM 用 GELU、SwiGLU 这类在正区间斜率接近 1 的激活），sigmoid 只留在需要概率输出的地方。</p></div>
+  <aside class="mn">连乘 30 个 0.99 还剩 0.74；连乘 30 个 0.5 只剩十亿分之一。深度网络怕的不是「小」，是「连乘」。（python3 复核：0.99**30 ≈ 0.7397。）</aside>
+  <p>工程上对付爆炸有止血药：<span class="kt">梯度裁剪</span>（gradient clipping）——更新前若梯度范数超过阈值 \(\tau\)，就整体缩回范数 \(\tau\)，方向保持不变：
+  \[ \mathbf{g}\leftarrow \mathbf{g}\cdot\min\!\left(1,\ \frac{\tau}{\|\mathbf{g}\|}\right). \tag{2.18} \]
+  LLM 训练几乎无一例外地开着它（典型 \(\tau=1.0\)），用来吃掉偶发的梯度尖峰，防止一个坏 batch 把模型炸飞。而消失的「根治」靠结构本身：<strong>初始化</strong>（Xavier、He 初始化让各层雅可比的奇异值保持在 1 附近）、<strong>残差连接</strong>（局部雅可比变成 \(\mathbf{I}+\partial F/\partial\mathbf{x}\)，恒等项给梯度一条不衰减的高速公路）、<strong>归一化</strong>（把每层激活拉回合适尺度）——残差连接与归一化在第六章展开（式 6.8、式 6.9），Xavier、He 初始化这里点到为止，不再单设小节。</p>
+
+  <h3 id="tb02-s7"><span class="h3-num">2.7</span> autograd：让机器替你推</h3>
+  <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>这是类比：autograd 像行车记录仪加倒带。前向每跑一行，记录仪把这步运算和输入输出录上磁带；喊一声 backward，引擎倒带，每到一站按登记好的反向规则算梯度，记进参数的账。这个类比省掉了什么：记账的显存开销，以及规则由人事先写好——机器不发明法则，只把 2.4 节的门规则执行得又快又不错。</p></div>
+  <p>手推一遍是为了理解，工程上没人每天手推。PyTorch 的 autograd 引擎，本质就是「动态计算图 + 式 (2.12) 的自动执行」。两个关键词：</p>
+  <p><strong>define-by-run</strong>（动态图）：图不是先声明再运行的，而是你的前向代码每跑一行，引擎就当场把对应节点记到一条「磁带」（tape）上——记录每个 op 的类型和输入输出引用。所以 if、for、变长序列随便写，每一步迭代图都可以长得不一样。调用 \(\texttt{loss.backward()}\) 时，引擎沿磁带<strong>倒带</strong>，对每个节点应用它注册的反向规则（就是 2.4 节那些门规则），把梯度累加进每个叶子参数的 \(\texttt{.grad}\)。</p>
+  <p>例 2.3 的手推结果，用 autograd 复算只需 8 行：</p>
+  <pre><code>import torch
+x  = torch.tensor([1.0, -1.0])
+W1 = torch.tensor([[0.5, -0.5], [-0.5, 0.5]], requires_grad=True)
+w2 = torch.tensor([0.5, 0.5], requires_grad=True)
+h  = torch.sigmoid(W1 @ x)        # [0.7311, 0.2689]
+yhat = torch.sigmoid(w2 @ h)      # 0.6225
+L  = 0.5 * (yhat - 1.0) ** 2      # 0.0713
+L.backward()  # W1.grad=[[-0.0087,0.0087],[-0.0087,0.0087]]; w2.grad=[-0.0649,-0.0239]</code></pre>
+  <p>输出的 6 个数与 2.5 节手推完全一致（本章已用等价纯 python3 逐数复核）。三个工程细节：其一，\(\texttt{.grad}\) 是<strong>累加</strong>的，再调一次 \(\texttt{backward()}\) 会加在旧值上，所以每个 step 开头要 \(\texttt{optimizer.zero\_grad()}\)——「默认累加」恰好就是 2.6 节梯度累积的实现基础：调 \(k\) 次 backward 再调一次 step，引擎零改动。其二，只有 \(\texttt{requires\_grad=True}\) 的张量才被记录，省显存。其三，反向一遍的成本约为前向的 2–3 倍，正是式 (2.13) 在工程里的样子。另外提醒：评估或推理时要用 \(\texttt{with torch.no\_grad():}\) 关掉建图，否则前向照样缓存全部中间激活，显存白白翻倍；\(\texttt{model.eval()}\) 只切换 dropout 等层的推理行为，并不停止建图，两者要一起用。</p>
+
+  <div class="example"><span class="box-tag">例 2.6 · 动手算（梯度为什么默认累加）</span><p><strong>题目</strong>　\(f(x)=x^{2}\)，取 \(x=3\)。模拟 autograd 的三步操作：第一次 \(\texttt{backward()}\) 后 \(\texttt{.grad}\) 是多少？不清零、再跑一遍同样的前向加 \(\texttt{backward()}\)，\(\texttt{.grad}\) 变成多少？调用 \(\texttt{zero\_grad()}\) 后再 \(\texttt{backward()}\) 呢？</p>
+  <p><strong>解</strong>　局部导数 \(f'(x)=2x\)，在 \(x=3\) 处为 \(6\)。<strong>第一次反向</strong>：引擎把 \(6\) 写入 \(\texttt{.grad}\)，得 \(6\)。<strong>第二次反向（未清零）</strong>：\(\texttt{.grad}\) 是累加而非覆盖，得 \(6+6=12\)。<strong>清零后再反向</strong>：回到 \(6\)。<strong>工程含义（反例）</strong>：训练循环里忘写 \(\texttt{zero\_grad()}\)，每步的梯度都叠在旧值上，等于学习率被一步步暗中放大，loss 行为完全走样——这与 2.6 节「梯度累积忘除 \(k\)」是同一类事故；反过来，故意调 \(k\) 次 \(\texttt{backward()}\) 再统一更新，正是梯度累积的实现方式。（已用 python3 验算：\(2\times 3=6\)，\(6+6=12\)。）</p></div>
+
+  <h3 id="tb02-ai"><span class="h3-num">2.8</span> 在 AI 中的位置</h3>
+  <table class="tbl">
+    <thead><tr><th>本章结论</th><th>用在哪个 AI 组件 / 机制</th><th>缺了它会出什么故障</th></tr></thead>
+    <tbody>
+      <tr><td>向量链式法则，式 (2.9)</td><td>PyTorch / JAX autograd 引擎里每一条 VJP 规则；自定义算子（如新的注意力变体）的反向实现</td><td>VJP 写错时梯度静默出错：loss 不降或缓慢漂移，没有任何报错可追</td></tr>
+      <tr><td>反向模式成本，式 (2.13)</td><td>一切参数规模在 \(10^{9}\)–\(10^{12}\) 的模型训练：autograd = 动态计算图 + 链式法则，一次反向 ≈ 2–3 倍前向</td><td>若只有正向模式，一次梯度 = 参数量次前向，LLM 训练在时间上根本不可能</td></tr>
+      <tr><td>前向缓存中间激活（2.4 节）</td><td>训练显存预算；激活重计算换显存跑长序列、大 batch</td><td>不算这笔账就盲目堆 batch / 上下文长度，直接 OOM</td></tr>
+      <tr><td>梯度累积，式 (2.15)</td><td>LLM 预训练标配：全局 batch 数百万 token = micro-batch × 累积步数 × 数据并行卡数</td><td>忘除 \(k\) → 有效学习率暗中放大 \(k\) 倍，训练曲线与论文复现值对不上</td></tr>
+      <tr><td>连乘直觉，式 (2.16)；\(\sigma'\le 1/4\)，式 (2.17)</td><td>Xavier / He 初始化、残差连接、LayerNorm（残差与 LN 见第六章）；隐层激活选 GELU / SwiGLU 而非 sigmoid</td><td>深层 Transformer 要么梯度消失训不动浅层，要么爆炸成 NaN；用 sigmoid 堆深直接死亡</td></tr>
+      <tr><td>最速方向与梯度下降，式 (2.5)、(2.6)</td><td>SGD、Adam、AdamW 等一切优化器的骨架；学习率调度</td><td>不理解负梯度的几何意义，调学习率、读 loss 曲线都成玄学</td></tr>
+    </tbody>
+  </table>
+  <p>一句话总结：训练大模型 = 在动态计算图上用反向模式执行链式法则，按小批量加梯度累积凑出大 batch，再靠初始化、残差、归一化和裁剪把连乘的梯度控制在可用范围。本章的每一行，明天都会在训练日志里见到。</p>
+
+  <div class="quiz"><span class="box-tag">自测题</span>
+  <p><strong>题 1（手推小链式法则）</strong>　设 \(y=2x+1\)，\(\mathcal{L}=y^2\)。用链式法则求 \(x=3\) 时 \(\dfrac{d\mathcal{L}}{dx}\)，写出链条的每一环。</p>
+  <details><summary>看答案</summary><p>链条是 \(x\to y\to\mathcal{L}\)。第一环：\(\frac{dy}{dx}=2\)。第二环：\(\frac{d\mathcal{L}}{dy}=2y\)。在 \(x=3\) 处 \(y=2\times3+1=7\)，所以 \(\frac{d\mathcal{L}}{dy}=14\)。由式 (2.7) 相乘：\(\frac{d\mathcal{L}}{dx}=14\times 2=28\)。python3 验算：解析式 \(2(2x+1)\cdot 2\big|_{x=3}=28\)；数值差分 \((((2(3+h)+1)^2-(2\cdot3+1)^2)/h\)（\(h=10^{-6}\)）得 \(28.000004\)，一致 ✓。</p></details>
+  <p><strong>题 2（判断梯度维度）</strong>　设 \(\mathbf{W}\in\mathbb{R}^{4\times 3}\)，\(\mathbf{x}\in\mathbb{R}^{3}\)，\(\mathbf{y}=\mathbf{W}\mathbf{x}+\mathbf{b}\)，上游梯度 \(\bar{\mathbf{y}}=\nabla_{\mathbf{y}}\mathcal{L}\in\mathbb{R}^{4}\)。分别写出 \(\nabla_{\mathbf{W}}\mathcal{L}\)、\(\nabla_{\mathbf{x}}\mathcal{L}\)、\(\nabla_{\mathbf{b}}\mathcal{L}\) 的公式与形状。</p>
+  <details><summary>看答案</summary><p>由式 (2.10)：\(\nabla_{\mathbf{W}}\mathcal{L}=\bar{\mathbf{y}}\mathbf{x}^{\top}\)，形状 \((4\times1)(1\times3)=4\times3\)，与 \(\mathbf{W}\) 同形 ✓；\(\nabla_{\mathbf{x}}\mathcal{L}=\mathbf{W}^{\top}\bar{\mathbf{y}}\)，形状 \((3\times4)(4\times1)=3\)，与 \(\mathbf{x}\) 同形 ✓；\(\nabla_{\mathbf{b}}\mathcal{L}=\bar{\mathbf{y}}\)，形状 4，与 \(\mathbf{b}\) 同形 ✓。python3 验算：随机生成该尺寸的矩阵与向量，外积得 \(4\times3\)、转置乘得长度 3 的向量，形状全部吻合。</p></details>
+  <p><strong>题 3（sigmoid 导数数值）</strong>　不用指数函数，只用 \(\sigma'(z)=\sigma(z)(1-\sigma(z))\) 与已知值 \(\sigma(0)=0.5\)、\(\sigma(4)\approx 0.9820\)，求 \(\sigma'(0)\) 与 \(\sigma'(4)\)。</p>
+  <details><summary>看答案</summary><p>\(\sigma'(0)=0.5\times(1-0.5)=0.25\)（这正是式 (2.17) 的最大值点）。\(\sigma'(4)\approx 0.9820\times(1-0.9820)=0.9820\times 0.0180\approx 0.0177\)。python3 复核：0.25 与 0.017663…，一致 ✓。结论：输入稍一饱和（\(|z|=4\) 不算极端），局部导数已从 0.25 跌到 0.018，梯度流过这道门就衰减约 14 倍。</p></details>
+  <p><strong>题 4（连乘直觉）</strong>　一个 10 层的 sigmoid 网络，假设每层都恰好停在最大斜率点（\(\sigma'=1/4\)）。损失传到第 1 层时，梯度最多还剩原来的多少？若每层的放大倍率是 2 呢？</p>
+  <details><summary>看答案</summary><p>每层乘 \(1/4\)，10 层连乘：\((1/4)^{10}\approx 9.5\times 10^{-7}\)——梯度只剩不到百万分之一，第 1 层几乎收不到训练信号（消失）。每层乘 2：\(2^{10}=1024\)，梯度放大一千倍（爆炸的开端；若是 30 层则是约 \(10^9\) 倍）。python3 复核：0.25**10 = 9.5367e-07，2**10 = 1024 ✓。这就是「初始化 + 残差 + 归一化」要把每层放大倍率钉在 1 附近的原因。</p></details>
+  </div>
+</section>

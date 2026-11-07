@@ -1,0 +1,85 @@
+<section class="chapter" id="ch07" data-num="07">
+  <header class="ch-open">
+    <p class="ch-kicker">第七章 · 据原文目录</p>
+    <h2 class="ch-title">数值计算与稳定性</h2>
+    <p class="ch-sub">BF16、梯度累积，为什么训练会炸</p>
+    <p class="ch-lede">数学上 softmax 永远良定义，计算机里 logits=1000 就直接溢出成 NaN。本章讲清有限精度浮点造成的三类事故——上溢、下溢、病态——以及工程上的标准解法：log-sum-exp 技巧、混合精度训练、损失缩放、梯度裁剪，最后给一份「训练炸了」的排查清单。学完你能看懂 nvidia-smi 之外的另一半真相：loss 曲线上的每个尖峰都有数值根源。</p>
+  </header>
+  <nav class="ch-toc" aria-label="章内目录">
+    <a href="#ch07-s1">7.1 浮点速成：FP32 / FP16 / BF16</a><a href="#ch07-s2">7.2 上溢与下溢：log-sum-exp 技巧</a><a href="#ch07-s3">7.3 混合精度训练与损失缩放</a><a href="#ch07-s4">7.4 梯度裁剪</a><a href="#ch07-s5">7.5 训练「会炸」的排查清单</a><a href="#ch07-s6">7.6 条件数：病态为什么让 GD 震荡</a><a href="#ch07-s7">7.7 常见误用</a><a href="#ch07-ai">7.8 在 AI 中的位置</a>
+  </nav>
+
+  <h3 id="ch07-s1"><span class="h3-num">7.1</span> 浮点速成：FP32 / FP16 / BF16</h3>
+  <p>IEEE 浮点数把实数近似表示为三部分：1 位符号 \(s\)、若干位指数 \(e\)、若干位尾数 \(f\)，</p>
+  \[ x=(-1)^{s}\times 2^{\,e-\mathrm{bias}}\times 1.f \tag{7.1} \]
+  <p>指数位数决定<strong>表示范围</strong>（能表示多大、多小的数），尾数位数决定<strong>精度</strong>（相邻两个可表示数的间隔）。三种格式对照：</p>
+  <table class="tbl"><thead><tr><th>格式</th><th>总位数（符号/指数/尾数）</th><th>最大正数</th><th>相对精度</th><th>深度学习中的角色</th></tr></thead><tbody>
+  <tr><td>FP32</td><td>32（1/8/23）</td><td>\(\approx 3.4\times10^{38}\)</td><td>\(2^{-24}\approx 6\times10^{-8}\)</td><td>主权重、优化器状态、累加器</td></tr>
+  <tr><td>FP16</td><td>16（1/5/10）</td><td>\(65504\)</td><td>\(2^{-11}\approx 5\times10^{-4}\)</td><td>早期混合精度训练、推理</td></tr>
+  <tr><td>BF16</td><td>16（1/8/7）</td><td>\(\approx 3.4\times10^{38}\)</td><td>\(2^{-8}\approx 4\times10^{-3}\)</td><td>LLM 训练前向/反向的默认格式</td></tr>
+  </tbody></table>
+  <p>BF16（bfloat16，由 Google 为 TPU 提出）的设计是一次有意识的取舍：砍掉尾数到 7 位、保留与 FP32 相同的 8 位指数。于是它的表示范围与 FP32 一样宽——激活值、中间结果几乎不会溢出；代价是每个数只有约 2–3 位十进制有效数字。这个取舍恰好匹配深度学习的误差结构：前向传播和梯度对逐元素舍入噪声不敏感（误差在平均中抵消），但对溢出零容忍。这也是为什么 BF16 训练通常不需要 FP16 那套损失缩放（见 7.3）。</p>
+  <aside class="mn">一句话对照：FP16 精但窄，BF16 糙但宽。训练怕「炸」不怕「糙」，所以 BF16 胜出；推理量化到 INT8 时「糙」开始咬人，那是第十三章的事。</aside>
+
+  <h3 id="ch07-s2"><span class="h3-num">7.2</span> 上溢与下溢：log-sum-exp 技巧</h3>
+  <p>softmax 把 logits \(\mathbf{z}\in\mathbb{R}^{V}\)（\(V\) 为词表大小）变成概率分布：</p>
+  \[ \operatorname{softmax}(z_{i})=\frac{e^{z_{i}}}{\sum_{j=1}^{V}e^{z_{j}}} \tag{7.2} \]
+  <div class="example"><span class="box-tag">例 7.1</span><p><strong>题目</strong>　某步输出层对三个候选 token 的 logits 为 \(\mathbf{z}=(1000,\,1001,\,1002)\)。直接按式 (7.2) 计算 softmax，看会发生什么；再用 log-sum-exp 技巧重算。</p>
+  <p><strong>解</strong>　直算：需要 \(e^{1000}\)。双精度浮点能表示的最大数约 \(1.8\times10^{308}\)，而 \(e^{710}\) 就已越界（FP32 更早，logits 超过约 \(88.7\) 即溢出）。python3 中 <code>math.exp(1000)</code> 直接抛 OverflowError，numpy 里得到 inf，inf 除以 inf 得 <strong>NaN</strong>——三个 token 的概率全变成 NaN，loss 变成 NaN，反向传播把 NaN 传遍所有参数。这就是一次典型的「训练炸了」。</p>
+  <p>技巧：式 (7.2) 对 logits 整体平移不变。令 \(m=\max_j z_j\)，分子分母同乘 \(e^{-m}\)，</p>
+  \[ \operatorname{softmax}(z_{i})=\frac{e^{z_{i}}\cdot e^{-m}}{\sum_{j}e^{z_{j}}\cdot e^{-m}}=\frac{e^{z_{i}-m}}{\sum_{j}e^{z_{j}-m}} \tag{7.3} \]
+  <p>平移后最大 logit 变成 \(0\)，指数最大为 \(e^{0}=1\)，绝不溢出；其余项 \(\le 1\)，求和安全。这就是 <span class="kt">log-sum-exp 技巧</span>。代入重算：\(m=1002\)，平移后 logits 为 \((-2,-1,0)\)，</p>
+  <p>\(e^{-2}\approx0.1353\)，\(e^{-1}\approx0.3679\)，\(e^{0}=1\)，分母 \(\approx1.5032\)，</p>
+  <p>softmax \(\approx(0.0900,\;0.2447,\;0.6652)\)（python3 验算：\(0.090031,\,0.244728,\,0.665241\)）。同一组 logits，加一个减法就从 NaN 救回正常分布。</p></div>
+  <p>交叉熵训练时还可以更进一步：不要先算 softmax 再取 log，而是把两步合并成稳定版</p>
+  \[ \log p(y)=z_{y}-m-\log\Bigl(\sum_{j}e^{\,z_{j}-m}\Bigr) \tag{7.4} \]
+  <p>式 (7.4) 全程没有单独的 \(e^{z}\) 与「先除后取对数」，同时防上溢和下溢。所有主流框架的 cross_entropy 算子内部都是这个实现，自己手写「softmax 后接 log」等于绕开保护。</p>
+  <aside class="mn">下溢是反方向的事故：\(e^{-1000}\) 直接变成 0，多个 0 相乘的概率乘积也是 0，再取 log 就是 \(-\infty\)。推理时对长序列求 token 概率连乘，必须改成对数概率累加。</aside>
+
+  <h3 id="ch07-s3"><span class="h3-num">7.3</span> 混合精度训练与损失缩放</h3>
+  <p>现代 LLM 预训练的标准姿势是<span class="kt">混合精度</span>（mixed precision）：前向与反向的计算用 BF16（吃满 GPU Tensor Core 的吞吐），同时保留一份 FP32 <span class="kt">主权重</span>（master weights）；优化器读 BF16 梯度，在 FP32 主权重上执行式 (5.11) 的更新，再把结果舍回 BF16 供下一步前向使用。FP32 主权重是必须的：Adam 单步更新量常为权重的 \(10^{-3}\) 量级，而 BF16 相邻可表示数的间隔就有 \(4\times10^{-3}\) 相对精度——直接在 BF16 权重上更新，小更新会被舍入直接吞掉，模型「假装在训练」。</p>
+  <p>用 FP16（而非 BF16）做混合精度时，还要处理下溢：FP16 最小正规数约 \(6.1\times10^{-5}\)，而深度网络很多梯度分量在 \(10^{-6}\) 以下，直接被舍成 0。解法是<span class="kt">损失缩放</span>（loss scaling）：前向结束后把损失乘以常数 \(S\)（如 \(2^{10}\)），</p>
+  \[ \mathcal{L}_{\mathrm{scaled}}=S\cdot\mathcal{L}\;\;\Rightarrow\;\;\nabla\mathcal{L}_{\mathrm{scaled}}=S\cdot\nabla\mathcal{L},\qquad \mathbf{g}=\frac{1}{S}\nabla\mathcal{L}_{\mathrm{scaled}}\ (\text{更新前还原}) \tag{7.5} \]
+  <p>链式法则保证梯度整体放大 \(S\) 倍：例如一个 \(10^{-8}\) 的梯度在 FP16 里会下溢成 0，乘以 \(S=1024\) 后变成 \(1.024\times10^{-5}\)，落在可表示范围内（python3 验算：FP16 最小次正规数约 \(6\times10^{-8}\)，\(10^{-8}\) 直接归 0；缩放后 \(1.024\times10^{-5}\) 可表示）。更新前再除以 \(S\) 还原，数学上与未缩放等价。BF16 因指数位与 FP32 相同，通常不需要这一步。</p>
+  <p>与混合精度常一起出现的另一件省显存工具是<span class="kt">梯度累积</span>（gradient accumulation）：把一个逻辑大 batch 切成 \(k\) 个 micro-batch 逐个前向反向、梯度累加，\(k\) 步后才执行一次优化器更新（记号同第二章式 (2.16)，全书用 \(k\) 表累积步数）。注意数学身份：累加的是「和」，而 SGD 的无偏估计式 (5.6) 是「均值」，因此要么每个 micro-batch 的 loss 先除以 \(k\)，要么更新前把累积梯度除以 \(k\)——漏掉这一步，等效于把学习率偷偷放大 \(k\) 倍（见 7.7）。</p>
+
+  <h3 id="ch07-s4"><span class="h3-num">7.4</span> 梯度裁剪</h3>
+  <p>即使学习率正确，个别 batch（异常样本、罕见模式、训练早期）也会让梯度范数突然冲大，一步坏更新把参数推飞。<span class="kt">梯度裁剪</span>（gradient clipping）按全局范数整体缩放：设所有参数的梯度拼成向量 \(\mathbf{g}\in\mathbb{R}^{d}\)，</p>
+  \[ \lVert\mathbf{g}\rVert=\sqrt{\sum_{i=1}^{d}g_{i}^{2}},\qquad \mathbf{g}\leftarrow\mathbf{g}\cdot\min\!\left(1,\;\frac{\tau}{\lVert\mathbf{g}\rVert}\right) \tag{7.6} \]
+  <p>范数不超阈值 \(\tau\) 时不动；超过时整体缩到 \(\tau\)，方向不变。LLM 训练惯例取 \(\tau=1.0\)。</p>
+  <div class="example"><span class="box-tag">例 7.2</span><p><strong>题目</strong>　某步全部梯度拼成向量 \(\mathbf{g}=(3,4)\)（示意），阈值 \(\tau=2\)。求裁剪后的梯度。</p>
+  <p><strong>解</strong>　全局范数 \(\lVert\mathbf{g}\rVert=\sqrt{9+16}=5>2\)，缩放因子 \(\tau/\lVert\mathbf{g}\rVert=0.4\)，裁剪后 \(\mathbf{g}'=(1.2,\,1.6)\)，范数恰为 \(2\)（python3 验算）。方向 \((0.6,0.8)\) 不变，只有步长被按住。</p></div>
+  <p>何时触发：训练日志里的 grad norm 平时稳定在个位数，某一步突然跳到几十几百——裁剪把它压回 1.0 量级，这一步更新「不痛不痒」，训练继续。若 spike 持续出现，则是 7.5 的排查问题了。注意裁剪在更新前、作用在（已还原缩放的）真实梯度上，与 Adam 的二阶矩统计同源，不要把裁剪后的统计口径搞混。</p>
+
+  <h3 id="ch07-s5"><span class="h3-num">7.5</span> 训练「会炸」的排查清单</h3>
+  <p>loss 变 NaN 时按这五个来源逐一排除：</p>
+  <table class="tbl"><thead><tr><th>来源</th><th>机理</th><th>对策</th></tr></thead><tbody>
+  <tr><td>① 学习率过大</td><td>违反式 (5.4) 型稳定条件，参数震荡放大直至溢出</td><td>降峰值 lr；加长 warmup；检查调度配置是否单位写错（步 vs token）</td></tr>
+  <tr><td>② 指数上溢</td><td>softmax/注意力分数未减最大值，\(e^{z}\) 变 inf</td><td>用框架的 log_softmax/融合算子；自实现 kernel 必须做式 (7.3) 的平移</td></tr>
+  <tr><td>③ \(\log 0\)</td><td>概率下溢成 0 后取对数，得 \(-\infty\) 再传播成 NaN</td><td>用式 (7.4) 的合并实现；不可避免处加 \(\varepsilon\)（如 \(\log(x+10^{-9})\)）</td></tr>
+  <tr><td>④ 除零</td><td>归一化分母为 0（空序列、方差为 0 的层、0/0）</td><td>分母加 \(\varepsilon\)；检查数据里是否有全零/定值样本；Adam 的 \(\varepsilon\) 同理</td></tr>
+  <tr><td>⑤ 坏数据</td><td>语料中混入 NaN/inf 或极端值样本，前向即产毒</td><td>数据侧过滤；训练侧检测非有限 loss 时跳过该 batch 并记录</td></tr>
+  </tbody></table>
+  <p>比 NaN 更常见的是 <strong>loss spike</strong>：损失曲线突然上冲再回落（或不回落）。标准处置流程：回滚到 spike 之前的 checkpoint；临时降低学习率或延长 warmup 再续训；若可定位到具体数据批次，剔除后重放。多数 LLM 训练框架内建了 spike 自动跳过与回滚逻辑——本质上都是本章数值工具的组合应用。</p>
+
+  <h3 id="ch07-s6"><span class="h3-num">7.6</span> 条件数：病态为什么让 GD 震荡</h3>
+  <p>对对称正定矩阵 \(\mathbf{A}\in\mathbb{R}^{d\times d}\)（例如二次型问题的 Hessian），定义<span class="kt">条件数</span></p>
+  \[ \kappa(\mathbf{A})=\frac{\lambda_{\max}(\mathbf{A})}{\lambda_{\min}(\mathbf{A})} \tag{7.7} \]
+  <p>\(\kappa\) 衡量最陡方向与最平方向的曲率悬殊。回到例 5.1 的推广结论：GD 稳定要求 \(\eta<2/\lambda_{\max}\)，即学习率被<strong>最陡</strong>方向卡住；而在<strong>最平</strong>方向上，每步只走相对误差 \(\eta\lambda_{\min}\) 的进度。两方向进度比就是 \(\kappa\)：\(\kappa=100\) 意味着把陡方向按住的 lr，在平方向上慢 100 倍。几何图景正是第五章图 5.1 的峡谷：等高线是长宽比为 \(\sqrt{\kappa}\) 的椭圆，GD 在两侧壁之间之字形弹跳。</p>
+  <p>这给出 Adam 的另一层解读：式 (5.11) 中的 \(1/\sqrt{\hat{\mathbf{v}}_{t}}\) 近似于对角预条件子，把各坐标的有效曲率拉平，相当于把峡谷「捏圆」，是工程上对高条件数问题的实用回应（真正的二阶方法求 \(\mathbf{A}^{-1}\) 在千亿参数上不可行）。</p>
+  <aside class="mn">易混点：条件数是问题的属性（损失面多扁），学习率是算法的旋钮。lr 治不了病态，只能让它不炸；治病态要靠预条件/自适应方法。</aside>
+
+  <h3 id="ch07-s7"><span class="h3-num">7.7</span> 常见误用</h3>
+  <div class="warn"><span class="box-tag">常见误用</span><p><strong>在低精度里直接算 softmax。</strong>手写 CUDA kernel 或推理代码时，直接在 FP16/BF16 里算 \(e^{z}\)：FP16 下 logits 超过约 11（\(\ln 65504\)）就溢出成 inf，BF16 虽然范围宽但 7 位尾数让相邻概率的相对误差达千分之几，分布尾部直接失真。改法：softmax、log_softmax、交叉熵、层归一化的统计量，一律转成 FP32 计算后再舍回——主流 kernel（如 FlashAttention 的在线 softmax）内部正是这样做的。</p></div>
+  <div class="warn"><span class="box-tag">常见误用</span><p><strong>梯度累积后忘记等比缩放。</strong>两种翻法：micro-batch 的 loss 没除以累积步数 \(k\)，梯度实际是均值的 \(k\) 倍，等效学习率偷偷放大 \(k\) 倍，轻则 loss 偏高重则直接炸；或者改了累积步数（等效 batch 变了 \(k\) 倍）却沿用旧 lr。改法：loss 除以 \(k\) 或更新前梯度除以 \(k\)，二选一并在代码里写死注释；有效 batch（micro-batch × 累积步数 × 数据并行度）变动时，按同一比例（或平方根规则）调整 lr，并保持 warmup 步数占有效总步数的比例不变。</p></div>
+
+  <h3 id="ch07-ai"><span class="h3-num">7.8</span> 在 AI 中的位置</h3>
+  <table class="tbl"><thead><tr><th>本章结论</th><th>具体 AI 组件 / 机制</th><th>缺了会怎样</th></tr></thead><tbody>
+  <tr><td>log-sum-exp 平移（式 7.3）</td><td>注意力 softmax、输出层分布、交叉熵的每一次计算；FlashAttention 在线 softmax 的内核</td><td>logits 稍大即 inf/NaN，一次前向就毒化全部参数</td></tr>
+  <tr><td>BF16 范围同 FP32（式 7.1 表格）</td><td>LLM 训练默认姿势：前向/反向 BF16 + FP32 主权重</td><td>纯 FP32 训练显存与算力成本翻 2–3 倍；直接在 BF16 权重上更新则小更新被舍入吞掉</td></tr>
+  <tr><td>损失缩放（式 7.5）</td><td>FP16 混合精度训练（旧卡、部分推理芯片）</td><td>小梯度下溢成 0，大量参数停止学习，loss 卡住不降</td></tr>
+  <tr><td>全局范数梯度裁剪（式 7.6）</td><td>几乎所有 LLM 训练配置里的 grad_clip=1.0</td><td>个别坏 batch 的一步大更新把训练推飞，loss spike 或 NaN</td></tr>
+  <tr><td>条件数与病态（式 7.7）</td><td>解释 Adam \(1/\sqrt{\hat v}\) 为何有效；优化器选择的理论线索</td><td>把病态造成的震荡误当发散，乱降 lr 拖慢训练</td></tr>
+  <tr><td>下溢与对数概率</td><td>推理时对长序列用 logprob 累加而非概率连乘；KV cache 量化（INT8/FP8）的误差正是低精度舍入噪声（接第十三章）</td><td>概率连乘下溢成 0，长文本似然计算直接报废；量化误差无估算依据</td></tr>
+  </tbody></table>
+</section>

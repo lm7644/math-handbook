@@ -1,0 +1,98 @@
+<section class="chapter" id="ch04" data-num="04">
+  <header class="ch-open">
+    <p class="ch-kicker">第四章 · 据原文目录</p>
+    <h2 class="ch-title">信息论基础</h2>
+    <p class="ch-sub">熵与交叉熵，为什么损失函数长这样</p>
+    <p class="ch-lede">训练大模型为什么用交叉熵而不是别的损失？本章给出信息论的回答：从自信息量与熵出发，定义交叉熵与 KL 散度，严格推出「最小化交叉熵 ⇔ 极大似然」，再讲困惑度怎么从损失算出来、互信息是什么。学完你能解释损失函数的形状、手算一个序列的困惑度、说清 KL 为什么不对称。</p>
+  </header>
+  <nav class="ch-toc" aria-label="章内目录">
+    <a href="#ch04-s1">4.1 自信息量与熵</a>
+    <a href="#ch04-s2">4.2 交叉熵：为什么损失函数长这样</a>
+    <a href="#ch04-s3">4.3 KL 散度</a>
+    <a href="#ch04-s4">4.4 困惑度</a>
+    <a href="#ch04-s5">4.5 互信息</a>
+    <a href="#ch04-ai">4.6 在 AI 中的位置</a>
+  </nav>
+
+  <h3 id="ch04-s1"><span class="h3-num">4.1</span> 自信息量与熵</h3>
+  <div class="def"><span class="box-tag">定义 4.1</span><p>事件 \(x\) 的<span class="kt">自信息量</span>（self-information）度量它发生带来的「惊讶程度」：</p>
+  \[ I(x)=-\log p(x) \tag{4.1} \]
+  <p>越不可能的事件信息量越大；必然事件（\(p=1\)）信息量为 0。对数的底决定单位：底 2 时为 <span class="kt">bit</span>，底 \(e\) 时为 <span class="kt">nat</span>。换算关系：\(1\ \text{bit}=\ln 2\approx0.693\ \text{nat}\)。例：均匀 8 选 1（如 8 个等可能 token），\(I=-\log_2(1/8)=3\) bit。</p></div>
+  <div class="def"><span class="box-tag">定义 4.2</span><p>分布 \(p\) 的<span class="kt">熵</span>（entropy）是自信息量的期望，即「平均惊讶程度」：</p>
+  \[ H(p)=-\sum_x p(x)\log p(x)=\mathbb{E}_{x\sim p}[I(x)] \tag{4.2} \]
+  <p>约定 \(0\log 0=0\)（这与极限 \(\lim_{t\to0^{+}}t\ln t=0\) 一致）。</p></div>
+  <div class="thm"><span class="box-tag">结论 4.1</span><p>在 \(K\) 个取值的离散分布中，均匀分布的熵最大，最大值为 \(\log K\)。直觉：最不确定的时刻就是「什么都一样可能」。数字对比：\(K=4\) 的均匀分布 \(H=\log_2 4=2\) bit；而不均匀分布 \(p=(0.7,0.2,0.1)\) 的熵为 \(-(0.7\log_2 0.7+0.2\log_2 0.2+0.1\log_2 0.1)\approx1.157\) bit，明显更小——分布越集中，越「好猜」。</p></div>
+  <figure class="fig"><svg viewBox="0 0 480 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="二值熵函数曲线">
+    <line x1="40" y1="20" x2="40" y2="200" stroke="var(--line)" stroke-width="1.2"/>
+    <line x1="40" y1="200" x2="445" y2="200" stroke="var(--line)" stroke-width="1.2"/>
+    <polyline fill="none" stroke="var(--ink)" stroke-width="2" points="40.0,199.7 45.0,182.4 50.0,169.6 55.0,158.4 60.0,148.4 65.0,139.2 70.0,130.8 75.0,122.9 80.0,115.5 85.0,108.6 90.0,102.1 95.0,96.0 100.0,90.2 105.0,84.7 110.0,79.6 115.0,74.7 120.0,70.0 125.0,65.7 130.0,61.5 135.0,57.6 140.0,54.0 145.0,50.5 150.0,47.3 155.0,44.2 160.0,41.4 165.0,38.7 170.0,36.2 175.0,34.0 180.0,31.9 185.0,29.9 190.0,28.2 195.0,26.6 200.0,25.2 205.0,24.0 210.0,22.9 215.0,22.0 220.0,21.3 225.0,20.7 230.0,20.3 235.0,20.1 240.0,20.0 245.0,20.1 250.0,20.3 255.0,20.7 260.0,21.3 265.0,22.0 270.0,22.9 275.0,24.0 280.0,25.2 285.0,26.6 290.0,28.2 295.0,29.9 300.0,31.9 305.0,34.0 310.0,36.2 315.0,38.7 320.0,41.4 325.0,44.2 330.0,47.3 335.0,50.5 340.0,54.0 345.0,57.6 350.0,61.5 355.0,65.7 360.0,70.0 365.0,74.7 370.0,79.6 375.0,84.7 380.0,90.2 385.0,96.0 390.0,102.1 395.0,108.6 400.0,115.5 405.0,122.9 410.0,130.8 415.0,139.2 420.0,148.4 425.0,158.4 430.0,169.6 435.0,182.4 440.0,199.7"/>
+    <line x1="240" y1="20" x2="240" y2="200" stroke="var(--accent)" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <line x1="40" y1="20" x2="240" y2="20" stroke="var(--accent)" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <circle cx="240" cy="20" r="3.5" fill="var(--accent)"/>
+    <text x="252" y="26" fill="var(--ink)" font-size="11">最大值 1 bit，p = 0.5</text>
+    <text x="34" y="216" fill="var(--ink)" font-size="11">0</text>
+    <text x="228" y="216" fill="var(--ink)" font-size="11">0.5</text>
+    <text x="438" y="216" fill="var(--ink)" font-size="11">1</text>
+    <text x="452" y="204" fill="var(--ink)" font-size="11">p</text>
+    <text x="8" y="30" fill="var(--ink)" font-size="11">H(p)</text>
+  </svg><figcaption>图 4.1　二值熵 \(H(p)=-p\log_2 p-(1-p)\log_2(1-p)\)：在 \(p=0.5\)（最不确定）处取最大值 1 bit，两端（结果确定）处为 0。</figcaption></figure>
+  <aside class="mn">熵 = 平均惊讶程度。硬币确定出正面时熵为 0（毫无悬念），均匀硬币熵最大（最难猜）。</aside>
+  <div class="warn"><span class="box-tag">常见误用</span><p>bit 与 nat 混用。同一分布的熵，用 bit 算是用 nat 算的 \(1/\ln2\approx1.443\) 倍（反过来 1 bit = 0.693 nat）。PyTorch 等框架的交叉熵损失用 nat（\(\ln\)），不少论文报 bit。比较两个来源的数值前先查底数，差出 44% 往往就是这个原因。</p></div>
+
+  <h3 id="ch04-s2"><span class="h3-num">4.2</span> 交叉熵：为什么损失函数长这样</h3>
+  <div class="def"><span class="box-tag">定义 4.3</span><p>分布 \(p\) 与 \(q\) 之间的<span class="kt">交叉熵</span>（cross-entropy）：</p>
+  \[ H(p,q)=-\sum_x p(x)\log q(x) \tag{4.3} \]
+  <p>直觉：真实来源按 \(p\) 分布，但你按 \(q\) 分配「惊讶度」，平均每个样本付出 \(H(p,q)\) 的代价。编码理论里说这是「用为 \(q\) 优化的编码方案去编码来自 \(p\) 的数据」所需的平均码长（详见 Cover &amp; Thomas《Elements of Information Theory》）。</p></div>
+  <div class="thm"><span class="box-tag">结论 4.2</span><p>交叉熵分解为「不可避免的熵」加「用错分布的代价」：</p>
+  \[ H(p,q)=H(p)+\operatorname{KL}(p\,\|\,q) \tag{4.4} \]
+  <p>其中 \(\operatorname{KL}(p\|q)\) 是 §4.3 定义的 KL 散度，恒非负。数字验证：取 \(p=(0.7,0.2,0.1)\)，\(q=(0.5,0.3,0.2)\)，直接算 \(H(p,q)=-(0.7\log_2 0.5+0.2\log_2 0.3+0.1\log_2 0.2)\approx0.7+0.3474+0.2322=1.2796\) bit；而 \(H(p)\approx1.1568\) bit、\(\operatorname{KL}(p\|q)\approx0.1228\) bit，恰有 \(1.1568+0.1228=1.2796\)。</p></div>
+  <p>现在可以回答副标题的问题。先记下一个直接推论：KL 散度恒非负（§4.3 的 Gibbs 不等式），结合式 (4.4) 有 \(H(p,q)\ge H(p)\)，等号仅当 \(q=p\)。也就是说交叉熵损失存在由数据自身熵给定的下界——自然语言本身有不可消除的不确定性，训练损失降不到 0，PPL 也永远大于 1。设训练集为 \(y_1,\dots,y_N\)（每个 \(y_i\) 是正确 token 的编号），模型在词表上输出分布 \(q_\theta\)。第三章式 (3.11) 的极大似然等价于：</p>
+  \[ \hat{\theta}=\arg\max_\theta\ \sum_{i=1}^{N}\ln q_\theta(y_i)=\arg\min_\theta\ \left(-\dfrac{1}{N}\sum_{i=1}^{N}\ln q_\theta(y_i)\right) \tag{4.5} \]
+  <p>把求和按词表归并：每个类别 \(k\) 在训练集中出现 \(N_k\) 次，记<span class="kt">经验分布</span>（empirical distribution）\(\hat{p}_k=N_k/N\)，则</p>
+  \[ -\dfrac{1}{N}\sum_{i=1}^{N}\ln q_\theta(y_i)=-\sum_{k=1}^{V}\hat{p}_k\ln q_\theta(k)=H(\hat{p},q_\theta) \tag{4.6} \]
+  <p>右边正是数据经验分布与模型分布的交叉熵。再用式 (4.4)：\(H(\hat{p},q_\theta)=H(\hat{p})+\operatorname{KL}(\hat{p}\|q_\theta)\)，其中 \(H(\hat{p})\) 只由数据决定、与 \(\theta\) 无关，于是三件事完全等价：</p>
+  \[ \arg\max_\theta\ \sum_{i=1}^{N}\ln q_\theta(y_i)\ \Longleftrightarrow\ \arg\min_\theta\ H(\hat{p},q_\theta)\ \Longleftrightarrow\ \arg\min_\theta\ \operatorname{KL}(\hat{p}\,\|\,q_\theta) \tag{4.7} \]
+  <p>这就是答案：<strong>损失函数长成 \(-\ln q_\theta(y_i)\) 的样子，因为最小化交叉熵就是在做极大似然，也就是在让模型分布向数据分布做 KL 投影</strong>。one-hot 标签情形下，每个样本的交叉熵 \(-\sum_k y_k\ln q_k\) 退化为单一项 \(-\ln q_\theta(y_i)\)，即该 token 的负对数似然（NLL）。</p>
+  <aside class="mn">推导链只有三步：取负号（max 变 min）、除以 \(N\)（归并出经验分布）、减掉常数 \(H(\hat{p})\)（露出 KL）。损失函数的形状是被 MLE 唯一钉死的。</aside>
+
+  <h3 id="ch04-s3"><span class="h3-num">4.3</span> KL 散度</h3>
+  <div class="def"><span class="box-tag">定义 4.4</span><p><span class="kt">KL 散度</span>（Kullback–Leibler divergence，相对熵）度量用 \(q\) 代替 \(p\) 的额外代价：</p>
+  \[ \operatorname{KL}(p\,\|\,q)=\sum_x p(x)\log\dfrac{p(x)}{q(x)} \tag{4.8} \]
+  <p>读法：「从 \(p\) 的角度看 \(q\) 有多不像」。由式 (4.4) 与 \(H(p,q)\ge H(p)\) 可知它恒非负。</p></div>
+  <div class="thm"><span class="box-tag">结论 4.3</span><p><strong>Gibbs 不等式</strong>：\(\operatorname{KL}(p\|q)\ge0\)，等号成立当且仅当 \(p=q\)（几乎处处）。直觉（不证）：按真实分布 \(p\) 设计的编码已经最优，换成任何 \(q\ne p\) 平均只会更费，多费的部分就是 KL 散度，不可能为负。</p></div>
+  <p>但 KL 散度<strong>不对称</strong>：\(\operatorname{KL}(p\|q)\ne\operatorname{KL}(q\|p)\) 是常态。算一对就清楚了。</p>
+  <div class="example"><span class="box-tag">例 4.1</span><p><strong>题目</strong>　取 \(p=(0.9,0.1)\)，\(q=(0.5,0.5)\)（均以 bit 为单位）。两个方向各算一次 KL 散度。</p>
+  <p><strong>解</strong>　（1）正向：\(\operatorname{KL}(p\|q)=0.9\log_2\dfrac{0.9}{0.5}+0.1\log_2\dfrac{0.1}{0.5}=0.9\times0.8480+0.1\times(-2.3219)\approx0.7632-0.2322=0.5310\) bit。（2）反向：\(\operatorname{KL}(q\|p)=0.5\log_2\dfrac{0.5}{0.9}+0.5\log_2\dfrac{0.5}{0.1}=0.5\times(-0.8480)+0.5\times2.3219\approx-0.4240+1.1610=0.7370\) bit。同一对分布，两个方向相差近 39%。</p></div>
+  <p>不对称带来两种行为模式。<strong>前向 KL</strong> \(\operatorname{KL}(p\|q)\)：\(p\) 有质量的地方 \(q\) 必须给质量，否则 \(\log(p/q)\) 爆掉，故 \(q\) 倾向于「全覆盖」 \(p\) 的众态（mode-covering）。<strong>反向 KL</strong> \(\operatorname{KL}(q\|p)\)：\(q\) 会躲开 \(p\) 为零的区域、宁可收缩到 \(p\) 的某个众态上（mode-seeking）。RLHF / PPO 里约束策略用的是 \(\operatorname{KL}(\pi_\theta\|\pi_{\mathrm{ref}})\)，即以新策略为第一个参数的反向 KL——惩罚新策略在参考模型不看好的地方乱长质量，具体作用留到第十一章。</p>
+  <div class="warn"><span class="box-tag">常见误用</span><p>把 KL 散度当「距离」。它不满足对称性（例 4.1），也不满足三角不等式，数学上不是距离。写论文或报告时不要用 \(d(p,q)\) 之类的记号暗示对称；需要真距离可考虑其对称化版本（如 JS 散度）。比方向更重要的纪律是：写下 KL 时永远标清谁是 \(p\)、谁是 \(q\)，方向反了结论就反。</p></div>
+  <aside class="mn">口诀：KL(p‖q) 是「真相 p 在前」。前向怕漏（全覆盖），反向怕错（收缩求稳）。</aside>
+
+  <h3 id="ch04-s4"><span class="h3-num">4.4</span> 困惑度</h3>
+  <div class="def"><span class="box-tag">定义 4.5</span><p>语言模型在测试序列上的<span class="kt">困惑度</span>（perplexity，PPL）是平均负对数似然的指数：</p>
+  \[ \mathrm{PPL}=\exp\!\left(-\dfrac{1}{N}\sum_{i=1}^{N}\ln q(y_i)\right) \tag{4.9} \]
+  <p>其中 \(q(y_i)\) 是模型赋给第 \(i\) 个正确 token 的概率。指数内的量就是式 (4.5) 里被最小化的平均损失，所以 PPL 与训练损失严格单调对应：损失降，PPL 必降。底数不影响结果——\(2^{\text{mean}\log_2}\) 与 \(e^{\text{mean}\ln}\) 给出同一个 PPL。</p></div>
+  <div class="example"><span class="box-tag">例 4.2</span><p><strong>题目</strong>　一个 4 token 的测试序列，模型在各步赋给正确 token 的概率依次为 0.8、0.5、0.4、0.25。求困惑度。</p>
+  <p><strong>解</strong>　（1）各 token 的 NLL（nat）：\(-\ln0.8\approx0.2231\)，\(-\ln0.5\approx0.6931\)，\(-\ln0.4\approx0.9163\)，\(-\ln0.25\approx1.3863\)。（2）平均：\((0.2231+0.6931+0.9163+1.3863)/4=3.2188/4\approx0.8047\) nat。（3）代入式 (4.9)：\(\mathrm{PPL}=e^{0.8047}\approx2.24\)。读法：这个模型在该序列上每一步的「有效分支数」约为 2.24——相当于每步都在 2.24 个等可能候选里猜。（换 bit 验证：平均 NLL 为 1.1610 bit，\(2^{1.1610}\approx2.24\)，一致。）</p></div>
+  <aside class="mn">PPL = 等效候选数。PPL 为 1 是完美预测；PPL 等于词表大小 \(V\) 则与瞎猜无异。</aside>
+  <p>PPL 成为语言模型的标准指标有两个原因：它与损失函数单调对应（式 (4.9) 的指数是单调变换，不引入新信息，只换可读刻度），且「等效候选数」的直觉跨任务通用。Kaplan et al. 2020（arXiv:2001.08361）观察到测试损失随模型规模、数据量、算力呈幂律下降，PPL 因此成为追踪规模效应的通用刻度。但要守住一条纪律：PPL 依赖分词器与测试集，只在同一分词方案、同一语料上才可横向比较。</p>
+
+  <h3 id="ch04-s5"><span class="h3-num">4.5</span> 互信息</h3>
+  <p>先补一个零件。<span class="kt">条件熵</span>（conditional entropy）是「已知 \(Y\) 后 \(X\) 还剩的平均不确定度」，定义为对每个 \(y\) 求条件分布的熵再按 \(p(y)\) 平均：</p>
+  \[ H(X\mid Y)=\sum_y p(y)\,H(X\mid Y=y)=-\sum_{x,y}p(x,y)\log p(x\mid y) \]
+  <p>信息论里恒有 \(H(X\mid Y)\le H(X)\)：知道别的变量不会让不确定度平均变大（对单个 \(y\) 可能变大，平均不会）。</p>
+  <div class="def"><span class="box-tag">定义 4.6</span><p><span class="kt">互信息</span>（mutual information）度量知道 \(Y\) 后 \(X\) 的不确定性减少了多少：</p>
+  \[ I(X;Y)=H(X)-H(X\mid Y)=\sum_{x,y}p(x,y)\log\dfrac{p(x,y)}{p(x)\,p(y)} \tag{4.10} \]
+  <p>第二等号说明互信息就是联合分布对「独立假设」的 KL 散度 \(\operatorname{KL}(p(x,y)\,\|\,p(x)p(y))\)。它对称：\(I(X;Y)=I(Y;X)\)；它为 0 当且仅当 \(X\) 与 \(Y\) 独立。</p></div>
+  <p>接第三章例 3.2 的联合分布：代入式 (4.10) 得 \(I(X;Y)\approx0.0058\) bit——几乎为 0，与该例「协方差接近 0 但不严格独立」的读法互补：协方差只查线性，互信息查一切依赖。AI 里互信息用于度量表征中还保留多少输入信息（表示分析、信息瓶颈），点到为止。</p>
+
+  <h3 id="ch04-ai"><span class="h3-num">4.6</span> 在 AI 中的位置</h3>
+  <table class="tbl"><thead><tr><th>本章结论</th><th>用在哪个具体组件 / 机制</th><th>缺了会怎样</th></tr></thead><tbody>
+  <tr><td>交叉熵 ⇔ MLE，式 (4.5)–(4.7)</td><td>预训练与 SFT 的损失函数</td><td>不知道损失为何长这样，设计或改动训练目标时没有依据</td></tr>
+  <tr><td>困惑度，式 (4.9)</td><td>语言模型的标准评估指标</td><td>跨分词器、跨测试集乱比 PPL，得出错误结论</td></tr>
+  <tr><td>KL 散度，式 (4.8)</td><td>RLHF / PPO 的策略约束 \(\operatorname{KL}(\pi_\theta\|\pi_{\mathrm{ref}})\)（第十一章）</td><td>惩罚方向写反或漏掉 KL 项，策略崩溃或模式塌缩</td></tr>
+  <tr><td>熵，式 (4.2)</td><td>采样多样性监控、RL 中策略熵正则</td><td>策略熵塌缩（探索死亡）时没有监控手段，模型越训越死板</td></tr>
+  <tr><td>自信息量 / NLL，式 (4.1)</td><td>token 级损失分析、bad case 定位</td><td>只能看平均损失，定位不到模型在序列哪一步出错</td></tr>
+  <tr><td>互信息，式 (4.10)</td><td>表示分析、信息瓶颈</td><td>用相关系数冒充依赖度量，漏掉非线性依赖</td></tr>
+  </tbody></table>
+  <p>一句话收束：交叉熵是「用模型分布编码真实数据的代价」，训练大模型就是把这份代价压向数据自身的熵；困惑度把这份代价换算成「等效候选数」；KL 散度量出模型分布离目标还有多远——RLHF 里的 KL 约束从这里来，第十一章继续。</p>
+</section>
