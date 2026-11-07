@@ -6,6 +6,14 @@
     <p class="ch-lede">「训一个 7B 模型要多少钱、多少天、几张卡？」——这个问题听起来像玄学，其实只需要三支笔的账本。第一支算工程量：总 FLOPs ≈ 6ND，我们一步步推出那个 6 是怎么来的；第二支算配比：scaling law 告诉你模型多大、数据多少才不算浪费；第三支算显存：训练时桌面上同时摆着四叠文件，合计约 16N 字节。最后再看单卡放不下时，怎么把活分给一群卡，以及流水线为什么会「空转」。全部数字都用 python3 复核，学完你能看着任何一张训练配置表说出每个数字的来历。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>工程量（FLOPs）→ 配比（scaling law）→ 桌面（显存）→ 分工（并行）→ 自测</div>
   </header>
+  <div class="checkpoint"><span class="box-tag">进入本章</span>
+    <ul>
+      <li><strong>前置</strong>：第六章的 Transformer 结构与参数量总账（9.1 节估算注意力开销时直接引用）、第二章的反向传播（9.1 节「反向两份梯度」的来历）、第五章的 AdamW 与第七章的混合精度（9.3 节显存账的两根支柱）。不熟先回对应章节再回来。</li>
+      <li><strong>一句话直觉</strong>：训模型像盖楼报价——先数清一共砌多少块砖（FLOPs），再看一个工人一天砌多少块（算力）、几成时间在等料（MFU），三件事一乘一除，工期和预算就出来了。</li>
+      <li><strong>最常见误解</strong>：拿「7B 模型 = 14 GB」去规划训练。14 GB 只是推理时的一份权重；训练要同时摆开参数、梯度、优化器状态、激活四叠账，7B 全量训练实际要上百 GB（9.3 节细算）。</li>
+      <li><strong>读不懂回哪</strong>：9.1 节的盖楼类比。反向传播卡住回第二章 2.3–2.4 节，AdamW 卡住回第五章，BF16/FP32 之分卡住回第七章。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb09-s1">9.1 训练 FLOPs：C ≈ 6ND 怎么来的</a>
     <a href="#tb09-s2">9.2 scaling law：Kaplan 幂律与 Chinchilla 最优</a>
@@ -17,6 +25,7 @@
 
   <h3 id="tb09-s1"><span class="h3-num">9.1</span> 训练 FLOPs：C ≈ 6ND 怎么来的</h3>
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>估算训练成本，就是盖楼之前的工程量估算。</strong>包工头接活，先不问「这楼长什么样」，先问三件事：一共要砌多少块砖（总工程量）、一个工人一天砌多少块（单卡速度）、工人实际有几成时间在砌砖而不是等料（利用率）。三件事一乘一除，工期和报价就出来了。训练大模型一模一样：<strong>总工程量</strong>叫 FLOPs（浮点运算次数），可以把它想成「砖块数」——每做一次乘加就是砌一块砖；<strong>单卡速度</strong>是 GPU 的算力，比如 A100 每秒最多砌 \(3.12\times10^{14}\) 块砖；<strong>利用率</strong>叫 MFU，再好的工地也只有四五成。本节的目标就是把「砖块数」从一个参数 \(N\)、一个数据量 \(D\) 里推出来。</p></div>
+  <aside class="mn">背景｜FLOPs 从哪来：超算中心几十年前就用「每秒浮点运算次数」给机器排名（TOP500 榜单），大模型时代把它借来当「工程量」单位——「一次乘加算 2 次」的约定也来自当年的矩阵乘计时。这里需要它，是因为「训一个模型要多少钱、多少天」必须先换成「一共要做多少次运算」才估得下去。</aside>
   <p>先把单位说清楚。<span class="kt">FLOPs</span>（floating-point operations）是「浮点运算次数」这个<strong>总量</strong>单位；<span class="kt">FLOPS</span>（大写 S 结尾，也常写 FLOP/s）是「每秒浮点运算次数」这个<strong>速度</strong>单位——一个是砖块总数，一个是砌砖速度，别搞混。还有一个约定俗成的规矩：<strong>一次乘加算 2 次运算</strong>。比如 \(y=w_1x_1+w_2x_2\) 里有 2 次乘、1 次加，按「乘法次数 + 加法次数」约等于 4 次运算，即乘加对数的 2 倍。这个约定的来历是矩阵乘：\(m\times n\) 矩阵乘 \(n\times p\) 矩阵，每个输出元素是 \(n\) 次乘加，总量约 \(2mnp\)。</p>
   <p>现在推出本章头号公式。记号：模型有 \(N\) 个参数，训练数据一共 \(D\) 个 token。我们要回答：<strong>每处理一个 token，要做多少次运算？</strong>答案分前向、反向两笔账。</p>
   <div class="derive"><span class="box-tag">推导 · 一步步来</span><p><strong>第 1 步（前向：为什么每个参数恰好砌一块砖）。</strong>模型的计算大头是线性层 \(\mathbf{y}=\mathbf{W}\mathbf{x}\)，\(\mathbf{W}\in\mathbb{R}^{m\times n}\)。写出分量形式 \(y_i=\sum_{j}W_{ij}x_j\)：注意<strong>每个 \(W_{ij}\) 恰好出现在一个乘积里</strong>——\(W_{11}\) 只乘 \(x_1\) 贡献给 \(y_1\)，别处再也不用。所以一层 \(mn\) 个参数，对应 \(mn\) 次乘法、约 \(mn\) 次加法，合计 \(2mn\) 次运算，也就是「参数个数 × 2」。把全模型的线性层加起来，每个参数都被恰好用了一次乘加，故
@@ -29,6 +38,7 @@
   <p><strong>第 3 步（乘上 token 总数）。</strong>每个 token 都要走一遍前向加反向，\(D\) 个 token 就是：</p>
   \[C\approx 6ND \tag{9.1}\]
   <p>这就是训练估算的头号公式：参数量 × 数据量 × 6。记法：\(N\) 用「个」（如 \(7\times10^{9}\)），\(D\) 用「个 token」（如 \(10^{12}\)），\(C\) 的单位是 FLOPs。</p></div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这段推导</span><p>刚才三步干了什么：前向看清「每个参数恰好被用一次乘加」得 2N，反向数出两份梯度（给输入一份、给权重一份）得 4N，最后乘上 token 总数 D 得式 (9.1)。结论意味着：训练工程量只由「模型多大、数据多少」两个数决定——后面估工期（例 9.1）、定配比（9.2 节）全靠这个 6ND 打底。</p></div>
   <p>式 (9.1) 是<strong>量级估计</strong>，不是精确账单，这一点要时刻记着。它只数了线性层的矩阵乘，漏掉了几块：注意力分数 \(\mathbf{Q}\mathbf{K}^{\top}\) 与 \(\mathbf{P}\mathbf{V}\) 的运算（随序列长 \(s\) 增长）、LayerNorm 与激活函数这类逐元素操作、以及开了激活重算后的额外前向（§9.3 会讲）。漏掉的注意力那块有多大？以 7B 档配置（\(L=32\) 层、\(d_{\text{model}}=4096\)，故 \(N\approx12Ld_{\text{model}}^2\approx6.4\times10^{9}\)，这个 \(12\) 来自每层注意力 \(4d^2\) 加 FFN \(8d^2\)，见第六章参数总账）粗算：注意力分数每 token 前向运算量约为 \(4Ld_{\text{model}}s\)，训练口径（前向加反向；反向约两倍前向，矩阵乘整体的经验口径）约为 \(12Ld_{\text{model}}s\)，与 \(6N\) 之比是</p>
   \[\frac{12Ld_{\text{model}}s}{6N}=\frac{s}{6\,d_{\text{model}}}\]
   <p>\(s=2048\) 时这个比值是 \(2048/(6\times4096)\approx8.3\%\)（python3 验算：\(2048/(6\times4096)=0.0833\)）——短序列下 6ND 确实拿住了大头；但 \(s\) 拉到 128k 时比值涨到约 \(131072/(6\times4096)\approx5.3\)，注意力项远超权重矩阵乘。结论：<strong>短序列放心用 6ND，长序列要自己把 \(s\) 相关项补回去</strong>。</p>
@@ -46,6 +56,7 @@
 
   <h3 id="tb09-s2"><span class="h3-num">9.2</span> scaling law：Kaplan 幂律与 Chinchilla 最优</h3>
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>规模越大越好，但好得越来越慢。</strong>背英语单词：词汇量从 1000 涨到 2000，阅读水平明显跳一截；从 20000 涨到 21000，几乎感觉不出来。训练大模型也是如此：loss 随模型规模、数据量的增长遵循<span class="kt">幂律</span>（power law）——每翻 10 倍投入，loss 下降一个固定的<strong>相对</strong>比例，绝对收益越往后越小。幂律在普通坐标纸上是一条越来越平的曲线；但在 log-log 坐标（横轴纵轴都取对数）下，它恰好是一条<strong>直线</strong>。这一点极其实用：在小规模上测几个点、连成直线，就能外推出 100 倍预算下的 loss——先算命，再烧钱。</p></div>
+  <aside class="mn">背景｜scaling law 从哪来：2020 年前，「模型该多大、数据该多少」全靠经验拍脑袋。OpenAI 的 Kaplan 团队把几十次不同规模的训练跑分画到 log-log 纸上，发现 loss 落成直线——「投入翻十倍、收益按比例来」的幂律第一次有了定量形状，预算规划从此从玄学变成外推题。下面式 (9.3)、(9.4) 就是他们拟合出的直线斜率。</aside>
   <p>Kaplan et al. 2020（arXiv:2001.08361）在大量不同规模的训练跑分上拟合出了这个规律：当另一种资源不构成瓶颈时，测试 loss 对参数量、数据量各自是幂律：</p>
   \[L(N)=\left(\frac{N_c}{N}\right)^{\alpha_N},\qquad \alpha_N\approx 0.076 \tag{9.3}\]
   \[L(D)=\left(\frac{D_c}{D}\right)^{\alpha_D},\qquad \alpha_D\approx 0.095 \tag{9.4}\]
@@ -77,6 +88,7 @@
   <div class="derive"><span class="box-tag">推导 · 一步步来</span><p>把前三本静态账加起来——<strong>第 1 步</strong>：BF16 权重 \(2N\) 字节。<strong>第 2 步</strong>：FP32 主权重 \(4N\)。<strong>第 3 步</strong>：BF16 梯度 \(2N\)。<strong>第 4 步</strong>：Adam 的 \(m\) 与 \(v\) 各 \(4N\)，合 \(8N\)。<strong>第 5 步</strong>，求和：</p>
   \[M_{\text{静态}}\approx 2N+4N+2N+4N+4N=16N\ \text{字节} \tag{9.6}\]
   <p>口径说明两句：梯度若按 FP32 存，总数是 \(18N\)；纯推理只需 BF16 权重一份，即 \(2N\)。所以<strong>「能推理」和「能全量训练」差约 8 倍</strong>——这就是为什么 7B 模型 14 GB 能跑推理，训练却要上百 GB。</p></div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这段推导</span><p>刚才五步干了什么：把 BF16 权重、FP32 主权重、BF16 梯度、Adam 的 m 与 v 五笔逐本相加，得静态显存 16N。结论意味着：「能推理」（2N）与「能全量训练」（16N）差约 8 倍——例 9.3 马上用它判断 7B 上单卡 80G 放不放得下，9.4 节的 ZeRO 砍的也是这几本账。</p></div>
   <div class="example"><span class="box-tag">例 9.3 · 动手算</span><p><strong>题目</strong>　7B 模型全量微调（AdamW、混合精度），估算静态显存；判断单卡 80G（A100/H100）放不放得下。</p>
   <p><strong>解</strong>　<strong>第 1 步，代式 (9.6)：</strong>
   \[M_{\text{静态}}=16\times7\times10^{9}=1.12\times10^{11}\ \text{字节}=112\ \text{GB}\]
@@ -96,10 +108,12 @@
   <tr><td><span class="kt">流水线并行</span>（PP）</td><td>层维：不同卡放不同层</td><td>只在 stage 边界传激活（每边界 \(b\times s\times d_{\text{model}}\) 个元素），总量最小</td><td>可跨机，但有气泡</td></tr>
   </tbody></table>
   <p>把表里 DP 那行落到实处。「每步一次、每卡约 2 倍梯度大小」是怎么来的？ring all-reduce 把 \(G\) 张卡排成环，分「scatter-reduce + all-gather」两圈，每卡收发总量约 \(2\times\frac{G-1}{G}\) 倍梯度大小，大 \(G\) 时就是「约 2 倍」。7B 的 BF16 梯度是 14 GB，故每步每卡约 28 GB 通信——量不小，但每步只有这一趟，跨机网络（IB/以太）能把它藏在计算背后。TP 正相反：7B 有 32 层、每层多处 all-reduce，每步通信上百趟，单次延迟直接暴露在关键路径上，跨机必死，只能待在 NVLink 域内。工程口诀由此而来：<strong>机内 TP、机间 DP/PP</strong>。</p>
+  <aside class="mn">背景｜流水线并行从哪来：2018 年 Google 的 GPipe 为把超大模型摊到多卡而提出——一层太大一卡装不下，就按层切开、各卡管一段，batch 再切成 micro-batch 流水灌进去。它替代了「整模型塞一卡」的朴素做法，代价就是下面要推的「气泡」：接力赛里总有队员在等棒。</aside>
   <p>气泡是 PP 的固有代价，值得从头推一遍。把 batch 切成 \(m\) 个 micro-batch，像 \(m\) 块料依次灌进 \(p\) 级流水线：</p>
   <div class="derive"><span class="box-tag">推导 · 一步步来</span><p><strong>第 1 步（总时长）。</strong>看最后一块料：它要等前 \(m-1\) 块先进管，自己再流过 \(p\) 级，故从第 1 块进管到第 \(m\) 块出管，一共 \(m+p-1\) 个时间槽（每槽 = 一级处理一块料的时间）。<strong>第 2 步（每级真正干活的时间）。</strong>每一级都要处理全部 \(m\) 块料，即计算 \(m\) 个槽。<strong>第 3 步（空转 = 气泡）。</strong>对每一级而言，总跨度 \(m+p-1\) 个槽里只有 \(m\) 个在算，其余 \(p-1\) 个在等——开工初期等上游送料，收尾阶段等下游腾手。<strong>第 4 步（比例）。</strong>所有级的空转槽数相同，故整体气泡比例：</p>
   \[\text{气泡比例}=\frac{p-1}{m+p-1} \tag{9.8}\]
   <p>其中 \(p\) 是流水线级数，\(m\) 是 micro-batch 数。图 9.1 画的是前向；反向同构，合计比例相同。读法：气泡只由「级数」与「料数」的相对大小决定——级数固定时，料灌得越足，空转占比越小。</p></div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这段推导</span><p>刚才四步干了什么：盯住最后一块料算出总跨度 m+p−1 个时间槽，再算每级真正干活只有 m 槽、空转 p−1 槽，两者相除得式 (9.8)。结论意味着：气泡只取决于级数与料数的相对大小——级数 p 定了，就把 micro-batch 数 m 灌大（例 9.4 会看到 m 从 8 到 32，气泡从 27% 压到 9%）。</p></div>
   <figure class="fig">
     <svg viewBox="0 0 620 216" role="img" aria-label="流水线并行气泡示意图，p=4，m=8">
       <defs>
@@ -163,6 +177,7 @@
   <p><strong>第 4 步，通信量。</strong>§9.4 说过：ring all-reduce 每卡收发约 \(2\times\frac{G-1}{G}\) 倍梯度大小。7B 的 BF16 梯度为 \(2N=14\) GB，故每卡每步约
   \[2\times\frac{G-1}{G}\times14=2\times\frac{7}{8}\times14=24.5\ \text{GB}\]
   （python3 验算：<code>2*7/8*14 = 24.5</code>。）每步只此一趟，且可藏在反向计算背后——这正是「DP 敢跨机、TP 不敢」的数字版本。</p></div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这道例题</span><p>刚才四步干了什么：先回忆 ZeRO-1 只切优化器状态，列出每卡公式 \(2N+4N+2N+8N/G\)，代入 7B 与 8 卡得 58.7 GiB、判定放得下，最后补算每卡每步约 24.5 GB 的通信量。结论意味着：配置表上的「几卡、什么档位、通信多少」，全能回溯到式 (9.6) 与 §9.4 的两笔账——这就是读配置表的方法。</p></div>
   <p>一句话收束：训练预算用 \(6ND\) 估，配比用 \(D\approx20N\) 定，显存按 \(16N\) 算，并行按「切哪个维度、通信多少、气泡多大」三问选型——训练配置表里的每个数字，都能回溯到本章的某一条式子。</p>
 
   <div class="quiz"><span class="box-tag">自测题</span>
@@ -174,5 +189,15 @@
   <details><summary>看答案</summary><p>（a）\(16\times70\times10^{9}=1.12\times10^{12}\) 字节 \(=1120\) GB \(=1120\times10^{9}/2^{30}\approx1043\) GiB（python3 验算：<code>1.12e12/2**30 = 1043.08</code> ✓）。（b）\(1043/80\approx13.04\)，至少 <strong>14 张</strong> 80 GiB 卡，且这还只是静态账，激活与通信缓冲另计——所以 70B 全量微调通常要 16 张起步。（c）纯推理 \(2N=140\) GB \(\approx130.4\) GiB，2 张 80 GiB 卡就够。训练与推理的 8 倍差在这里变成「14 张 vs 2 张」的直观对比。</p></details>
   <p><strong>题 4（流水线气泡）</strong>　\(p=8\) 级流水线。（a）\(m=32\) 时气泡比例多少？（b）想把气泡压到 10% 以下，\(m\) 至少多少？（c）为什么实际不把 \(m\) 开到无穷大？</p>
   <details><summary>看答案</summary><p>（a）\(\frac{8-1}{32+8-1}=\frac{7}{39}\approx17.9\%\)。（b）令 \(\frac{7}{m+7}\) 小于 \(0.1\)：即 \(m+7>70\)，取 \(m\geq64\)（验：\(\frac{7}{71}\approx9.86\%\) ✓，python3 验算 <code>7/39 = 0.1795</code>、<code>7/71 = 0.0986</code>）。（c）两个代价：其一，\(m\) 变大在 batch 固定的前提下意味着每块料更小，micro-batch 太小 kernel 利用率下降；其二，未做激活重算时，「在飞」的激活份数随 \(m\) 线性增长，第四本显存账先爆。所以工程上按 \(m\approx4p\) 起步、以显存上限收口，而不是追 \(m\) 的极限。</p></details>
+  </div>
+
+  <div class="checkpoint"><span class="box-tag">本章节奏自测（试点章）</span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：898 字（阈值 ≤1,200，位于 9.1 节训练 FLOPs；次长 856 字，位于 9.4 节三种并行）；</li>
+      <li><strong>每节例子数</strong>：动手算共 5 例（9.1–9.4 每节各 1 例，9.6 节例 9.5 为综合读表），检查点 5 处；</li>
+      <li><strong>单步推导最大跨度</strong>：≤2 个等号（抽检：式 (9.1) 前向反向求和、式 (9.6) 五本账求和、式 (9.8) 气泡比例）；</li>
+      <li><strong>长推导回头看</strong>：4 处（9.1 节式 (9.1)、9.3 节式 (9.6)、9.4 节式 (9.8)、9.6 节例 9.5）；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（FLOPs / scaling law / 流水线并行）、回头看 4 处、数字预热 0 段（唯一的定义 9.1 之前已有例 9.1 与 Chinchilla 的 70B/1.4T 数字算例），原文未删改一字。</li>
+    </ul>
   </div>
 </section>

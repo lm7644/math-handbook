@@ -6,6 +6,14 @@
     <p class="ch-lede">走到这里，你已经攒了七章的公式和符号——它们散在各章里，用的时候翻不到等于没学。本章不教任何新数学，只做三件「收纳」工作：把全书符号收进一张总表，把最高频的公式收进一张速查表，再给一份每条都注明「为什么读、读到哪」的书单，和一张 30 天打卡表。它的正确用法是「查」而不是「读」：面试前翻速查表，读论文时对符号表，安排学习时看节奏表。</p>
     <div class="ch-map"><span class="map-tag">本章路线</span>符号总表 → 公式速查 → 书单 → 30 天节奏 → 自测</div>
   </header>
+  <div class="checkpoint"><span class="box-tag">进入本章</span>
+    <ul>
+      <li><strong>前置</strong>：第零章到第七章至少通读一遍（允许半生不熟）；本章不教新数学，读它是为了把前七章收成能查的工具。</li>
+      <li><strong>一句话直觉</strong>：本章是工具房的收纳格——符号、公式、书单、节奏各归各位，用的时候十秒找到，找不到等于没学。</li>
+      <li><strong>最常见误解</strong>：把速查表当知识本身，只背结论不推来历。被追问一句「为什么」就卡壳——每条公式都要能回跳出处。</li>
+      <li><strong>读不懂回哪</strong>：符号陌生按 8.1 表「首见章」列回跳；场景不明看 8.5 节的处境索引；推导要重温直接回第十五章对应例题。</li>
+    </ul>
+  </div>
   <nav class="ch-toc" aria-label="章内目录">
     <a href="#tb08-s1">8.1 全书符号总表</a>
     <a href="#tb08-s2">8.2 关键公式速查</a>
@@ -18,6 +26,8 @@
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p><strong>这本手册（本章）有三招用法，按你的处境选。</strong>第一招，<strong>顺序通读</strong>：时间完整、想系统补课的人，正文章节按依赖排好，本章留到最后当「中场整理」，把速查表抄成自己的一页纸。第二招，<strong>按需查</strong>：工作中撞到具体机制——LoRA、温度采样、KV cache——先翻符号表定位它属于哪一章，直接回跳那一章，读完回来干活。第三招，<strong>面试冲刺</strong>：时间紧就只吃两样——本章的速查表加第十五章的十二道推导题，前者管「记得结论」，后者管「推得出来」，两样齐了才扛得住面试官的追问。</p></div>
 
   <h3 id="tb08-s1"><span class="h3-num">8.1</span> 全书符号总表</h3>
+  <p>先看符号不约定会出多大的错。论文 A 里的 \(d\) 指 4096（整个模型的宽度），论文 B 里的 \(d\) 指 64（单个注意力头的宽度）——同一个字母差出 64 倍，照抄着估参数，结果直接错一个数量级。所以本章第一件事不是给表，而是先立「谁用什么字体」的规矩。</p>
+  <aside class="mn">背景｜符号约定从哪来：向量、矩阵用粗体的记法，是二十世纪线性代数教材为区分「一列数」与「一个数」立下的排版传统；机器学习论文沿用至今，各家细节却互不统一。这张总表把全书用过的记号收进一处，替代「翻回原文找定义」的老办法——读论文撞见生符号，先来这里对号入座。</aside>
   <p>先立约定，再上表。全书约定：向量用粗体小写（\(\mathbf{x}\)，默认列向量），矩阵用粗体大写（\(\mathbf{W}\)），标量用斜体（\(x\)），集合用双线体（\(\mathbb{R}^{n}\)），损失用花体 \(\mathcal{L}\)，函数类算子用正体（\(\operatorname{softmax}\)）。下表按主题分组，「首见」指该符号第一次出现的章——忘了含义就按这一列回跳。</p>
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>查这张表的固定顺序：先在「符号」列找到它，再读「含义」，最后盯住「首见章」——那一列是回跳地址，忘了来龙去脉就跳回去。不必全背，先混熟高频行：\(\operatorname{softmax}\)、\(\mathbf{q},\mathbf{k},\mathbf{v}\)、\(d_{\text{model}}\) 与 \(d_k\)、\(T\)、\(\mathrm{PPL}\)。遇到一词多义（如 \(\beta\)），看表下方那段「记号纪律」。</p></div>
   <table class="tbl">
@@ -57,6 +67,7 @@
   <p><strong>解</strong>　逐个对表。<strong>\(\operatorname{KL}(p\,\|\,q)\)</strong>：表中「含义」列为 KL 散度，式 (4.9)，用途注明「RLHF 的策略约束项」，首见第四章——与博客这句话的场景完全对上。<strong>\(\mathrm{PPL}\)</strong>：困惑度，「平均负对数似然的指数」，式 (4.10)，首见第四章。<strong>\(\mathbf{m}_t\)</strong>：句中没直接出现，但「用 Adam 更新」就有它——表中它是 Adam 的一阶动量状态，式 (5.8)(5.9)，首见第五章。<strong>\(\beta\) 的隐患</strong>：表下方「记号纪律」段写明，\(\beta\) 在第五章是 Adam 的衰减率，在第十一章是 KL 惩罚系数；这句博客恰好两个含义都可能沾上（既有 Adam 又有 KL），单凭这句话无法断定 0.04 指哪一个，必须回原文看上下文——这正是「先对符号表再读公式」的现实版。</p></div>
 
   <h3 id="tb08-s2"><span class="h3-num">8.2</span> 关键公式速查</h3>
+  <aside class="mn">背景｜速查表从哪来：工程界的老传统——机械手册、积分表、化学手册都把最高频的公式抽成几页放在手边，查得到就不必每次重推。本节照此办理：把前七章最高频的二十条公式收成一表，每条标注出生式号；它是索引不是替身，要懂「为什么」，按式号回跳对应章。</aside>
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>速查表是索引，不是知识本身：「用途 / 来源」列里的原始式号，是每条公式的出生证明。查法有两种——知道名字就按「公式名」列直接找；只记得场景（如「梯度尖峰怎么办」）就扫「用途」列找对策。找到后只代入、不推导；要懂为什么，按式号回跳对应章。</p></div>
   <p>下表汇总全书最高频的公式，写法与各章逐字一致，「用途 / 来源」列给出原始式号——速查表只做索引，推导请回跳对应章。全书的中心公式值得单独再写一遍（式 (0.1)、(6.3)，注意力的统一写法）：</p>
   \[\operatorname{Attention}(\mathbf{Q},\mathbf{K},\mathbf{V})=\operatorname{softmax}\!\left(\dfrac{\mathbf{Q}\mathbf{K}^{\top}}{\sqrt{d_k}}\right)\mathbf{V},\qquad \mathbf{Q}\in\mathbb{R}^{n\times d_k},\ \mathbf{K}\in\mathbb{R}^{m\times d_k},\ \mathbf{V}\in\mathbb{R}^{m\times d_v} \tag{8.1}\]
@@ -92,6 +103,7 @@
   <p><strong>第二块，KV cache。</strong>注意力每步要用到全部历史 token 的 K、V（第十三章会细讲），每 token 每层存 K、V 各一份，共 \(2\cdot L\cdot d_{\text{model}}\) 个元素，乘 2 字节：</p>
   \[2\times32\times4096\times2=524288\ \text{B}=0.5\ \text{MiB/token}\ \Rightarrow\ 4096\ \text{token}\times0.5\ \text{MiB}=2\ \text{GiB} \tag{8.3}\]
   <p>合计约 \(13.0+2.0=15.0\,\text{GiB}\)，一张 24 GB 的显卡放得下。这就是速查表的典型用法：不推导，只代入（KV cache 的完整推导见第十三章式 (13.4) 与第十五章例 15.7）。python3 验算：\(2\cdot32\cdot4096\cdot2=524288\)，\(524288\times4096=2^{31}=2\,\text{GiB}\)，\(1.4\times10^{10}/2^{30}\approx13.04\)，全部吻合。</p></div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这道例题</span><p>刚才干了什么：把显存拆成权重与 KV cache 两块 → 权重按「参数量 × 2 字节」代入 → KV cache 按「每 token \(2Ld_{\text{model}}\) 个元素」代入 → 相加后对照显卡容量。结论意味着：不推导、只代入，也能把 7B 模型的部署账算到 GB 级——第十三章式 (13.4) 会给出 KV cache 的完整推导，这里先练查表的手感。</p></div>
   <div class="example"><span class="box-tag">例 8.3 · 动手算</span><p><strong>题目</strong>　模型输出 logits \(\mathbf{z}=(2.0,\,1.0,\,0.1)\)。只用速查表里的温度采样公式，算 \(T=2\) 时的采样概率。</p>
   <p><strong>解</strong>　查表得温度采样公式 \(p_i^{(T)}=p_i^{\,1/T}/\sum_j p_j^{\,1/T}\)，它等价于把 logits 除以 \(T\) 再做 softmax（第三章式 (3.15)）。分三小步代入。第一步除温度：\(\mathbf{z}/T=(1.0,\ 0.5,\ 0.05)\)。第二步取指数：\(e^{1.0}\approx2.718\)、\(e^{0.5}\approx1.649\)、\(e^{0.05}\approx1.051\)，求和 \(Z\approx5.418\)。第三步归一化：</p>
   \[\mathbf{p}^{(T=2)}\approx\left(\dfrac{2.718}{5.418},\ \dfrac{1.649}{5.418},\ \dfrac{1.051}{5.418}\right)=(0.502,\ 0.304,\ 0.194) \tag{8.4}\]
@@ -104,6 +116,7 @@
 
   <h3 id="tb08-s3"><span class="h3-num">8.3</span> 学习资源：读什么、读到哪</h3>
   <div class="intuition"><span class="box-tag">直觉 · 先建立感觉</span><p>这份清单的关键词是「配第几章」：先读本书对应章，再拿对应教材加深，顺序别反。每条都写死了「读到哪」，超出部分先放下，不用愧疚。论文按「先架构、后训练、再对齐与效率」的顺序读，每篇只抓 1–3 条核心公式，能复述每个符号就算读过。</p></div>
+  <aside class="mn">背景｜这份书单从哪来：每条都是各自领域经受住时间检验的标准读物——Strang 的线代教材配 MIT 公开课影响了几代工程师，Goodfellow 等人的《Deep Learning》是深度学习第一本系统教科书。清单刻意保持短：每条注明「配第几章、读到哪」，是为了按需截取，而不是从第一页啃到最后一页。</aside>
   <p>书单只收经得起检验的真实读物，每条注明「为什么读、读到哪」，不贪多。教材与本书章节的对应关系已标出，建议先读本书对应章，再拿教材做加深。</p>
   <ul>
     <li>3Blue1Brown 视频系列《线性代数的本质》《微积分的本质》——为什么读：零公式恐惧者的直觉起点，先把「矩阵即变换」「导数即变化率」的几何画面装进脑子；读到哪：在第一、二章之前各看一遍即可，不必做题。</li>
@@ -167,6 +180,7 @@
   <aside class="mn">节奏表的隐藏用法：某天卡住超过两天，别硬扛——把该章例题先抄一遍、再独立做一遍，然后继续往下走。卡壳点多半会在后面章节的应用里自动解开。</aside>
   <div class="example"><span class="box-tag">例 8.6 · 查表练习（按 30 天表，排自己的计划）</span><p><strong>题目</strong>　节奏表按每天 1.5–2 小时设计，而你每天只有 1 小时；并且第 13–15 天的第五章（梯度下降、动量与 Adam、warmup 与 AdamW）是你的弱项，想各多花一天做题。怎么把这张 30 天表改成自己的表？总跨度多少天？中场整理落在第几天前后？</p>
   <p><strong>解</strong>　用「拆半法」：你每天 1 小时约为表上半天量，把表上每一天的内容拆成两天，\(30\times2=60\) 天打底，内容、顺序、「当天目标」一字不动。第五章弱项：原第 13、14、15 天各再加 1 天做题，\(60+3=63\) 天。中场整理：表上第 21 天是第八章（本附录），拆半后落在第 41–42 天，再叠上第五章多出的 3 天，顺移到第 44–45 天前后。python3 验算：<code>30*2 = 60</code>，<code>60+3 = 63</code>，<code>21*2 = 42</code>，<code>42+3 = 45</code>，吻合。改完照样按表旁批注的对策执行：卡住超过两天，例题先抄一遍、再独立做一遍，然后继续走。</p></div>
+  <div class="intuition"><span class="box-tag">回头看 · 复盘这道例题</span><p>刚才干了什么：认清「每天 1 小时约等于表上半天」→ 用拆半法把 30 天变 60 天 → 给第五章弱项各加 1 天 → 顺移算出中场整理落在第 44–45 天。结论意味着：节奏表是活的模板——总量按你的时间伸缩，弱项按你的情况加厚，只有「卡住两天就抄例题再走」这条对策不许改。</p></div>
   <div class="checkpoint"><span class="box-tag">检查点 ✓</span><p>你现在应该能：</p>
     <ul>
       <li>看到 \(\mathbf{q},\mathbf{k},\mathbf{v}\)、\(d_k\)、\(d_{\text{model}}\)、\(h\)、\(L\)、\(\eta\)、\(T\)、\(\mathrm{PPL}\) 中的任何一个，立刻说出含义与首见章；</li>
@@ -217,4 +231,14 @@
 <tr><td>第13章</td><td><a class="xref" href="#tb13-s1">自回归</a><span class="ti-sec">(13.1)</span>；<a class="xref" href="#tb13-s1">算术强度</a><span class="ti-sec">(13.1)</span>；<a class="xref" href="#tb13-s1">访存瓶颈</a><span class="ti-sec">(13.1)</span>；<a class="xref" href="#tb13-s2">分组查询注意力</a><span class="ti-sec">(13.2)</span>；<a class="xref" href="#tb13-s2">多查询注意力</a><span class="ti-sec">(13.2)</span>；<a class="xref" href="#tb13-s3">对称量化</a><span class="ti-sec">(13.3)</span>；<a class="xref" href="#tb13-s3">非对称量化</a><span class="ti-sec">(13.3)</span>；<a class="xref" href="#tb13-s3">零点</a><span class="ti-sec">(13.3)</span>；<a class="xref" href="#tb13-s4">All-Reduce</a><span class="ti-sec">(13.4)</span>；<a class="xref" href="#tb13-s5">连续批处理</a><span class="ti-sec">(13.5)</span></td></tr>
 <tr><td>第14章</td><td><a class="xref" href="#tb14-s1">上下文学习</a><span class="ti-sec">(14.1)</span>；<a class="xref" href="#tb14-s1">zero-shot</a><span class="ti-sec">(14.1)</span>；<a class="xref" href="#tb14-s1">few-shot</a><span class="ti-sec">(14.1)</span>；<a class="xref" href="#tb14-s2">后验预测分布</a><span class="ti-sec">(14.2)</span>；<a class="xref" href="#tb14-s4">归纳头</a><span class="ti-sec">(14.4)</span>；<a class="xref" href="#tb14-s5">涌现</a><span class="ti-sec">(14.5)</span></td></tr>
   </tbody></table>
+
+  <div class="checkpoint"><span class="box-tag">本章节奏自测（试点章）</span>
+    <ul>
+      <li><strong>最长无例孤段</strong>：876 字（阈值 ≤1,200，位于 8.3 节学习资源；次长 824 字，位于 8.4 节 30 天节奏表）；</li>
+      <li><strong>每节例子数</strong>：动手算共 6 例（8.1、8.3、8.4 各 1 例，8.2 共 3 例），检查点 2 处；</li>
+      <li><strong>单步推导最大跨度</strong>：本章为附录无推导块；代入类算例每步 ≤2 个等号（抽检：例 8.3 温度采样三步代入、例 8.4 损失缩放与裁剪两步合成）；</li>
+      <li><strong>长推导回头看</strong>：2 处（例 8.2 显存估算、例 8.6 节奏表改造），多步大例题后均有；</li>
+      <li><strong>本章入门化增量</strong>：章首锚点 1 处、背景块 3 处（符号约定 / 速查表 / 书单）、回头看 2 处、8.1 节数字预热 1 段，原文未删改一字。</li>
+    </ul>
+  </div>
 </section>
