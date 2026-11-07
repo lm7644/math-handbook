@@ -19,6 +19,9 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
+/* 关闭滚动锚定：MathJax 排版期版面振荡时，浏览器 scroll anchoring 会自动补偿 scrollY，
+   把锚点定位反复顶偏（与定点脚本打架）。关闭后滚动位置只由用户与显式脚本决定。 */
+html,body{overflow-anchor:none}
 body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16.5px;line-height:1.85;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 ::selection{background:var(--accent);color:#fff}
 a{color:inherit;text-decoration:none}
@@ -154,6 +157,21 @@ mjx-assistive-mml{max-width:1px !important;max-height:1px !important;width:1px !
 a.xref{color:inherit;text-decoration:none;border-bottom:1px dotted #B9AC96}
 a.xref:hover{color:var(--accent);border-bottom-color:var(--accent)}
 .ti-sec{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:2px}
+/* ---------- 速查表附录 ---------- */
+.cs-ghead{margin:30px 0 4px;padding-bottom:6px;border-bottom:1.5px solid var(--ink);display:flex;align-items:baseline;gap:12px}
+.cs-ghead .gn{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--accent)}
+.cs-ghead h3{font-size:17px;font-weight:800;margin:0}
+.cs-ghead .gsub{font-size:11px;color:var(--muted);margin-left:auto}
+.cs-entry{display:grid;grid-template-columns:180px minmax(0,1fr) 46px;gap:6px 16px;padding:10px 8px;border-bottom:1px solid var(--line)}
+.cs-entry:hover{background:var(--paper-2)}
+.cs-name{font-weight:700;font-size:14px;line-height:1.4}
+.cs-name .en{display:block;font-weight:400;font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:2px}
+.cs-formula{overflow-x:auto;padding:2px 0}
+.cs-note{font-size:12.5px;color:var(--ink-2);margin-top:3px;line-height:1.65}
+a.cs-tag{display:inline-block;font-family:var(--mono);font-size:9.5px;border:1px dashed var(--line-strong);padding:1px 6px;letter-spacing:.06em;height:fit-content;justify-self:end;color:var(--ink-2)}
+a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
+@media(max-width:680px){.cs-entry{grid-template-columns:1fr 46px}.cs-name{grid-column:1/-1}}
+@media print{.cs-entry{break-inside:avoid}.cs-ghead{break-after:avoid}}
 .anchor{display:inline-block;width:0;height:0;overflow:hidden;scroll-margin-top:100px}
 
 .footer{border-top:2px solid var(--ink)}
@@ -232,6 +250,8 @@ a.xref:hover{color:var(--accent);border-bottom-color:var(--accent)}
   #wrap-tb14{page:pgt14}
   @page pgt15{@top-center{content:"第十五章 · 高频面试题与推导实战";font-family:Menlo,monospace;font-size:8.5pt;color:#666;letter-spacing:.05em}}
   #wrap-tb15{page:pgt15}
+  @page pgtcs{@top-center{content:"附录 · 速查表";font-family:Menlo,monospace;font-size:8.5pt;color:#666;letter-spacing:.05em}}
+  #wrap-tbcs{page:pgtcs}
 }
 </style>
 </head>
@@ -274,13 +294,14 @@ a.xref:hover{color:var(--accent);border-bottom-color:var(--accent)}
 <li><a href="#tb13" data-nav="tb13"><span class="n">13</span><span class="nt">大模型推理与部署的数学</span><span class="ns">大模型推理与部署的数学</span></a></li>
 <li><a href="#tb14" data-nav="tb14"><span class="n">14</span><span class="nt">上下文学习与大模型行为的数学</span><span class="ns">上下文学习与大模型行为的数学</span></a></li>
 <li><a href="#tb15" data-nav="tb15"><span class="n">15</span><span class="nt">高频面试题与推导实战</span><span class="ns">高频面试题与推导实战</span></a></li>
+<li><a href="#cheatsheet" data-nav="cheatsheet"><span class="n">附</span><span class="nt">速查表：公式与判据</span><span class="ns">速查表</span></a></li>
     </ol>
     <div class="tools">
       <button onclick="window.print()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v7H6z"/></svg>打印成书</button>
     </div>
     <div class="ver-links">
-      <a href="index.html">→ 学术严谨版</a>
-      <a href="cheatsheet.html">→ 极简工具书版</a>
+      <a href="index.html">→ 学术严谨版（底版）</a>
+      <a href="#cheatsheet">→ 速查表（本页附录）</a>
     </div>
   </nav>
 
@@ -336,7 +357,8 @@ a.xref:hover{color:var(--accent);border-bottom-color:var(--accent)}
     <span class="toc-sub">为什么没训练也能学会新任务</span></span></a>
 <a class="toc-row" href="#tb15"><span class="toc-num">15</span>
     <span class="toc-body"><span class="toc-title">高频面试题与推导实战</span>
-    <span class="toc-sub">把最爱考的推导题一遍过掉</span></span></a></div>
+    <span class="toc-sub">把最爱考的推导题一遍过掉</span></span></a>
+<a class="toc-row" href="#cheatsheet"><span class="toc-num">附</span><span class="toc-body"><span class="toc-title">速查表：公式与判据</span><span class="toc-sub">附录 · 62 条公式按 12 组归类，带出处章回指</span></span></a></div>
     </section>
 <div class="chapter-wrap" id="wrap-tb00" data-running="第零章　认知篇：大模型到底吃哪几门数学（教科书版）">
 <section class="chapter" id="tb00" data-num="00">
@@ -3720,19 +3742,176 @@ a.xref:hover{color:var(--accent);border-bottom-color:var(--accent)}
 </section>
 
 </div>
+
+<div class="chapter-wrap" id="wrap-tbcs" data-running="附录　速查表（教科书版）">
+<section class="chapter" id="cheatsheet">
+  <header class="ch-open">
+    <p class="ch-kicker">附录 · 据全书 16 章提炼</p>
+    <h2 class="ch-title">速查表：公式与判据</h2>
+    <p class="ch-sub">62 条高频公式按 12 组归类；每条标注出处章，点 § 号跳回对应章节</p>
+    <p class="ch-lede">临阵查证用：先看「用在哪」备注，再回正文复核推导。符号约定在第 01 组。</p>
+  </header>
+<div class="cs-ghead" id="tbcs-g0"><span class="gn">符号</span><h3>符号</h3><span class="gsub">7 条</span></div>
+<div class="cs-entry"><div class="cs-name">实数向量空间<span class="en">vector space</span></div><div><div class="cs-formula">\[\mathbb{R}^{n}\]</div><div class="cs-note">向量 x 的活动范围；嵌入向量 x∈ℝ^d</div></div><a class="cs-tag xref" href="#tb01" title="回第01章">§01</a></div>
+<div class="cs-entry"><div class="cs-name">向量 / 矩阵<span class="en">vector / matrix</span></div><div><div class="cs-formula">\[\mathbf{x}\ (\text{粗小写}),\quad \mathbf{W}\ (\text{粗大写})\]</div><div class="cs-note">向量粗小写、矩阵粗大写、标量斜体——全书约定</div></div><a class="cs-tag xref" href="#tb01" title="回第01章">§01</a></div>
+<div class="cs-entry"><div class="cs-name">转置 / 逆<span class="en">transpose / inverse</span></div><div><div class="cs-formula">\[\mathbf{W}^{\top},\quad \mathbf{W}^{-1}\]</div><div class="cs-note">转置 ᵀ、逆 ⁻¹；(AB)ᵀ=BᵀAᵀ</div></div><a class="cs-tag xref" href="#tb01" title="回第01章">§01</a></div>
+<div class="cs-entry"><div class="cs-name">期望 / 概率<span class="en">expectation</span></div><div><div class="cs-formula">\[\mathbb{E}[\cdot],\quad p(\cdot)\]</div><div class="cs-note">期望 E、概率密度 p</div></div><a class="cs-tag xref" href="#tb03" title="回第03章">§03</a></div>
+<div class="cs-entry"><div class="cs-name">损失 / 梯度<span class="en">loss / gradient</span></div><div><div class="cs-formula">\[\mathcal{L},\quad \nabla_{\boldsymbol{\theta}}\mathcal{L}\]</div><div class="cs-note">花体 L 表损失，∇ 表梯度</div></div><a class="cs-tag xref" href="#tb02" title="回第02章">§02</a></div>
+<div class="cs-entry"><div class="cs-name">逐元素乘<span class="en">Hadamard</span></div><div><div class="cs-formula">\[\mathbf{a}\odot\mathbf{b}\]</div><div class="cs-note">对应位相乘，区别于矩阵乘；全书统一写 ⊙</div></div><a class="cs-tag xref" href="#tb02" title="回第02章">§02</a></div>
+<div class="cs-entry"><div class="cs-name">关键维度记号<span class="en">dims</span></div><div><div class="cs-formula">\[d_{\text{model}},\ d_k,\ h,\ V,\ L,\ s\]</div><div class="cs-note">d_model=隐维 d_k=头维 h=头数 V=词表 L=层数 s=序列长（s 见第九章）</div></div><a class="cs-tag xref" href="#tb06" title="回第06章">§06</a></div>
+<div class="cs-ghead" id="tbcs-g1"><span class="gn">线性代数</span><h3>线性代数</h3><span class="gsub">6 条</span></div>
+<div class="cs-entry"><div class="cs-name">嵌入查表<span class="en">embedding lookup</span></div><div><div class="cs-formula">\[\mathbf{e}_t=\mathbf{o}_t^{\top}\mathbf{E}\]</div><div class="cs-note">one-hot 乘嵌入矩阵 = 取第 t 行；LLM 第一步</div></div><a class="cs-tag xref" href="#tb01" title="回第01章">§01</a></div>
+<div class="cs-entry"><div class="cs-name">点积与余弦<span class="en">dot / cosine</span></div><div><div class="cs-formula">\[\operatorname{cos\_sim}=\dfrac{\mathbf{x}\cdot\mathbf{y}}{\|\mathbf{x}\|_2\|\mathbf{y}\|_2}\]</div><div class="cs-note">余弦相似度，检索与注意力打分的底</div></div><a class="cs-tag xref" href="#tb01" title="回第01章">§01</a></div>
+<div class="cs-entry"><div class="cs-name">线性层<span class="en">linear layer</span></div><div><div class="cs-formula">\[\mathbf{y}=\mathbf{W}\mathbf{x}+\mathbf{b}\]</div><div class="cs-note">W 形状 d_out×d_in；FFN 与投影的基本件</div></div><a class="cs-tag xref" href="#tb01" title="回第01章">§01</a></div>
+<div class="cs-entry"><div class="cs-name">矩阵乘法维度<span class="en">matmul dims</span></div><div><div class="cs-formula">\[\mathbb{R}^{n\times d_k}\times\mathbb{R}^{d_k\times m}\to\mathbb{R}^{n\times m}\]</div><div class="cs-note">每次矩阵乘先对齐内维</div></div><a class="cs-tag xref" href="#tb01" title="回第01章">§01</a></div>
+<div class="cs-entry"><div class="cs-name">低秩分解<span class="en">LoRA</span></div><div><div class="cs-formula">\[\Delta\mathbf{W}=\mathbf{B}\mathbf{A},\ \mathbf{B}\in\mathbb{R}^{d\times r},\ \mathbf{A}\in\mathbb{R}^{r\times d}\]</div><div class="cs-note">r≪d，参数量 d²→2dr；微调省参数</div></div><a class="cs-tag xref" href="#tb01" title="回第01章">§01</a></div>
+<div class="cs-entry"><div class="cs-name">特征值<span class="en">eigenvalue</span></div><div><div class="cs-formula">\[\mathbf{A}\mathbf{v}=\lambda\mathbf{v}\]</div><div class="cs-note">对称矩阵可正交对角化；协方差主方向</div></div><a class="cs-tag xref" href="#tb01" title="回第01章">§01</a></div>
+<div class="cs-ghead" id="tbcs-g2"><span class="gn">微积分与求导</span><h3>微积分与求导</h3><span class="gsub">7 条</span></div>
+<div class="cs-entry"><div class="cs-name">梯度<span class="en">gradient</span></div><div><div class="cs-formula">\[\nabla f(\mathbf{x})=\left[\tfrac{\partial f}{\partial x_1}\ \cdots\ \tfrac{\partial f}{\partial x_n}\right]^{\top}\]</div><div class="cs-note">偏导排成列向量；指向上升最快方向</div></div><a class="cs-tag xref" href="#tb02" title="回第02章">§02</a></div>
+<div class="cs-entry"><div class="cs-name">链式法则<span class="en">chain rule</span></div><div><div class="cs-formula">\[\frac{\partial\mathcal{L}}{\partial\mathbf{x}}=\left(\frac{\partial\mathbf{y}}{\partial\mathbf{x}}\right)^{\top}\nabla_{\mathbf{y}}\mathcal{L}\]</div><div class="cs-note">反向传播的数学本质；向量形式注意转置</div></div><a class="cs-tag xref" href="#tb02" title="回第02章">§02</a></div>
+<div class="cs-entry"><div class="cs-name">xᵀa 求导<span class="en">identity</span></div><div><div class="cs-formula">\[\dfrac{\partial(\mathbf{x}^{\top}\mathbf{a})}{\partial\mathbf{x}}=\mathbf{a}\]</div><div class="cs-note">分母布局；线性层 backward 基础</div></div><a class="cs-tag xref" href="#tb10" title="回第10章">§10</a></div>
+<div class="cs-entry"><div class="cs-name">xᵀAx 求导<span class="en">quadratic</span></div><div><div class="cs-formula">\[\dfrac{\partial(\mathbf{x}^{\top}\mathbf{A}\mathbf{x})}{\partial\mathbf{x}}=(\mathbf{A}+\mathbf{A}^{\top})\mathbf{x}\]</div><div class="cs-note">A 对称时=2Ax</div></div><a class="cs-tag xref" href="#tb10" title="回第10章">§10</a></div>
+<div class="cs-entry"><div class="cs-name">逆矩阵微分<span class="en">inverse diff</span></div><div><div class="cs-formula">\[d(\mathbf{X}^{-1})=-\mathbf{X}^{-1}(d\mathbf{X})\mathbf{X}^{-1}\]</div><div class="cs-note">注意逆在两边、负号在前</div></div><a class="cs-tag xref" href="#tb10" title="回第10章">§10</a></div>
+<div class="cs-entry"><div class="cs-name">tr 循环性<span class="en">trace cyclic</span></div><div><div class="cs-formula">\[\operatorname{tr}(\mathbf{A}\mathbf{B}\mathbf{C})=\operatorname{tr}(\mathbf{B}\mathbf{C}\mathbf{A})\]</div><div class="cs-note">矩阵微积分调换顺序的关键</div></div><a class="cs-tag xref" href="#tb10" title="回第10章">§10</a></div>
+<div class="cs-entry"><div class="cs-name">CE 对 logits 梯度<span class="en">softmax-CE grad</span></div><div><div class="cs-formula">\[\frac{\partial\mathcal{L}}{\partial\mathbf{z}}=\mathbf{p}-\mathbf{y}\]</div><div class="cs-note">softmax+交叉熵的合成梯度=预测减真值</div></div><a class="cs-tag xref" href="#tb15" title="回第15章">§15</a></div>
+<div class="cs-ghead" id="tbcs-g3"><span class="gn">概率与采样</span><h3>概率与采样</h3><span class="gsub">6 条</span></div>
+<div class="cs-entry"><div class="cs-name">自回归分解<span class="en">autoregressive</span></div><div><div class="cs-formula">\[P(x_1,\dots,x_T)=\prod_{t=1}^{T}P(x_t\mid x_1,\dots,x_{t-1})\]</div><div class="cs-note">LLM 的定义式：逐 token 条件概率</div></div><a class="cs-tag xref" href="#tb03" title="回第03章">§03</a></div>
+<div class="cs-entry"><div class="cs-name">类别分布<span class="en">categorical</span></div><div><div class="cs-formula">\[P(X=k)=p_k,\ \sum_k p_k=1\]</div><div class="cs-note">词表上的 next-token 分布</div></div><a class="cs-tag xref" href="#tb03" title="回第03章">§03</a></div>
+<div class="cs-entry"><div class="cs-name">高斯密度<span class="en">Gaussian</span></div><div><div class="cs-formula">\[f(x)=\dfrac{1}{\sqrt{2\pi}\sigma}\exp\!\left(-\tfrac{(x-\mu)^2}{2\sigma^2}\right)\]</div><div class="cs-note">初始化与噪声；Z=(X−μ)/σ 标准化</div></div><a class="cs-tag xref" href="#tb03" title="回第03章">§03</a></div>
+<div class="cs-entry"><div class="cs-name">贝叶斯<span class="en">Bayes</span></div><div><div class="cs-formula">\[P(A\mid B)=\dfrac{P(B\mid A)P(A)}{P(B)}\]</div><div class="cs-note">注意基础率；别把 P(A|B) 当 P(B|A)</div></div><a class="cs-tag xref" href="#tb03" title="回第03章">§03</a></div>
+<div class="cs-entry"><div class="cs-name">极大似然<span class="en">MLE</span></div><div><div class="cs-formula">\[\hat{\theta}=\arg\max_\theta\sum_i\ln q_\theta(y_i)\]</div><div class="cs-note">训练=MLE；与最小交叉熵等价</div></div><a class="cs-tag xref" href="#tb04" title="回第04章">§04</a></div>
+<div class="cs-entry"><div class="cs-name">温度采样<span class="en">temperature</span></div><div><div class="cs-formula">\[p_i\propto p_i^{1/T}\ \Leftrightarrow\ \operatorname{softmax}(z_i/T)\]</div><div class="cs-note">T<1 更尖锐（更确定），T>1 更平（更随机）</div></div><a class="cs-tag xref" href="#tb03" title="回第03章">§03</a></div>
+<div class="cs-ghead" id="tbcs-g4"><span class="gn">信息论与损失</span><h3>信息论与损失</h3><span class="gsub">4 条</span></div>
+<div class="cs-entry"><div class="cs-name">熵<span class="en">entropy</span></div><div><div class="cs-formula">\[H(p)=-\sum_x p(x)\log p(x)\]</div><div class="cs-note">不确定性的度量；bit 用 log2、nat 用 ln</div></div><a class="cs-tag xref" href="#tb04" title="回第04章">§04</a></div>
+<div class="cs-entry"><div class="cs-name">交叉熵<span class="en">cross-entropy</span></div><div><div class="cs-formula">\[H(p,q)=-\sum_x p(x)\log q(x)\]</div><div class="cs-note">LLM 训练损失；=H(p)+KL(p‖q)</div></div><a class="cs-tag xref" href="#tb04" title="回第04章">§04</a></div>
+<div class="cs-entry"><div class="cs-name">KL 散度<span class="en">KL divergence</span></div><div><div class="cs-formula">\[\operatorname{KL}(p\|q)=\sum_x p(x)\log\dfrac{p(x)}{q(x)}\]</div><div class="cs-note">≥0，不对称，不是距离；RLHF 用 KL(π_θ‖π_ref)</div></div><a class="cs-tag xref" href="#tb04" title="回第04章">§04</a></div>
+<div class="cs-entry"><div class="cs-name">困惑度<span class="en">perplexity</span></div><div><div class="cs-formula">\[\mathrm{PPL}=\exp\!\left(-\tfrac{1}{N}\textstyle\sum_i\ln q(y_i)\right)\]</div><div class="cs-note">LM 评估标准；与平均损失单调对应</div></div><a class="cs-tag xref" href="#tb04" title="回第04章">§04</a></div>
+<div class="cs-ghead" id="tbcs-g5"><span class="gn">优化器与调度</span><h3>优化器与调度</h3><span class="gsub">5 条</span></div>
+<div class="cs-entry"><div class="cs-name">梯度下降<span class="en">gradient descent</span></div><div><div class="cs-formula">\[\boldsymbol{\theta}_{t+1}=\boldsymbol{\theta}_t-\eta\,\nabla_{\boldsymbol{\theta}}\mathcal{L}\]</div><div class="cs-note">η=学习率；η>2/λmax 发散（=临界等幅震荡）</div></div><a class="cs-tag xref" href="#tb05" title="回第05章">§05</a></div>
+<div class="cs-entry"><div class="cs-name">动量<span class="en">momentum</span></div><div><div class="cs-formula">\[\mathbf{v}\leftarrow\beta\mathbf{v}+\nabla\mathcal{L},\quad \boldsymbol{\theta}\leftarrow\boldsymbol{\theta}-\eta\mathbf{v}\]</div><div class="cs-note">β≈0.9；抑制峡谷震荡</div></div><a class="cs-tag xref" href="#tb05" title="回第05章">§05</a></div>
+<div class="cs-entry"><div class="cs-name">Adam<span class="en">Adam</span></div><div><div class="cs-formula">\[\hat m_t=\tfrac{m_t}{1-\beta_1^t},\ \hat v_t=\tfrac{v_t}{1-\beta_2^t},\ \theta\leftarrow\theta-\eta\tfrac{\hat m_t}{\sqrt{\hat v_t}+\epsilon}\]</div><div class="cs-note">偏差修正不可省；LLM 训练常取 β2=0.95</div></div><a class="cs-tag xref" href="#tb05" title="回第05章">§05</a></div>
+<div class="cs-entry"><div class="cs-name">解耦权重衰减<span class="en">AdamW</span></div><div><div class="cs-formula">\[\theta\leftarrow\theta-\eta\,\lambda\,\theta\]</div><div class="cs-note">与 L2 不等价（Adam 下）；LLM 训练标配</div></div><a class="cs-tag xref" href="#tb05" title="回第05章">§05</a></div>
+<div class="cs-entry"><div class="cs-name">warmup<span class="en">lr warmup</span></div><div><div class="cs-formula">\[\eta_t=\eta_{\max}\cdot t/T_w\ (t\le T_w)\]</div><div class="cs-note">线性升温；Adam 二阶矩未稳时防炸</div></div><a class="cs-tag xref" href="#tb05" title="回第05章">§05</a></div>
+<div class="cs-ghead" id="tbcs-g6"><span class="gn">Transformer 组件</span><h3>Transformer 组件</h3><span class="gsub">6 条</span></div>
+<div class="cs-entry"><div class="cs-name">缩放点积注意力<span class="en">attention</span></div><div><div class="cs-formula">\[\operatorname{softmax}\!\left(\dfrac{\mathbf{Q}\mathbf{K}^{\top}}{\sqrt{d_k}}\right)\mathbf{V}\]</div><div class="cs-note">全书统一写法；除以 √d_k 防 softmax 饱和</div></div><a class="cs-tag xref" href="#tb06" title="回第06章">§06</a></div>
+<div class="cs-entry"><div class="cs-name">为什么除 √d_k<span class="en">scaling</span></div><div><div class="cs-formula">\[\operatorname{Var}(\mathbf{q}\cdot\mathbf{k})=d_k\ (\text{分量独立、零均值、单位方差})\]</div><div class="cs-note">d 大时分数尺度~√d_k，不除则饱和、梯度消失</div></div><a class="cs-tag xref" href="#tb06" title="回第06章">§06</a></div>
+<div class="cs-entry"><div class="cs-name">正弦位置编码<span class="en">sinusoidal PE</span></div><div><div class="cs-formula">\[PE_{(pos,2i)}=\sin\!\tfrac{pos}{10000^{2i/d}},\ PE_{(pos,2i+1)}=\cos\!\tfrac{pos}{10000^{2i/d}}\]</div><div class="cs-note">相对位置可线性表示；RoPE 的思想源头</div></div><a class="cs-tag xref" href="#tb06" title="回第06章">§06</a></div>
+<div class="cs-entry"><div class="cs-name">LayerNorm<span class="en">LayerNorm</span></div><div><div class="cs-formula">\[\hat x_i=\dfrac{x_i-\mu}{\sqrt{\sigma^2+\epsilon}},\ \ y_i=\gamma_i\hat x_i+\beta_i\]</div><div class="cs-note">按 token 内特征维归一；pre-norm 更稳</div></div><a class="cs-tag xref" href="#tb06" title="回第06章">§06</a></div>
+<div class="cs-entry"><div class="cs-name">残差连接<span class="en">residual</span></div><div><div class="cs-formula">\[\mathbf{y}=\mathbf{x}+F(\mathbf{x})\ \Rightarrow\ \tfrac{\partial\mathbf{y}}{\partial\mathbf{x}}=\mathbf{I}+\tfrac{\partial F}{\partial\mathbf{x}}\]</div><div class="cs-note">梯度高速路：+I 保证深层可训</div></div><a class="cs-tag xref" href="#tb06" title="回第06章">§06</a></div>
+<div class="cs-entry"><div class="cs-name">FFN<span class="en">feed-forward</span></div><div><div class="cs-formula">\[\operatorname{FFN}(\mathbf{x})=\varphi(\mathbf{x}\mathbf{W}_1+\mathbf{b}_1)\mathbf{W}_2+\mathbf{b}_2\]</div><div class="cs-note">d_model→4d_model→d_model；约占 2/3 参数</div></div><a class="cs-tag xref" href="#tb06" title="回第06章">§06</a></div>
+<div class="cs-ghead" id="tbcs-g7"><span class="gn">数值稳定</span><h3>数值稳定</h3><span class="gsub">5 条</span></div>
+<div class="cs-entry"><div class="cs-name">浮点格式<span class="en">float formats</span></div><div><div class="cs-formula">\[\text{FP32/TF32/FP16/BF16}\]</div><div class="cs-note">BF16 指数位同 FP32（范围大）、尾数 7 位（精度低）——深度学习够用</div></div><a class="cs-tag xref" href="#tb07" title="回第07章">§07</a></div>
+<div class="cs-entry"><div class="cs-name">log-sum-exp<span class="en">log-sum-exp</span></div><div><div class="cs-formula">\[\operatorname{softmax}(z_i)=\dfrac{e^{z_i-m}}{\sum_j e^{z_j-m}},\ m=\max_j z_j\]</div><div class="cs-note">减最大值防 exp 溢出；softmax/CE 必用</div></div><a class="cs-tag xref" href="#tb07" title="回第07章">§07</a></div>
+<div class="cs-entry"><div class="cs-name">稳定交叉熵<span class="en">stable CE</span></div><div><div class="cs-formula">\[\log p(y)=z_y-m-\log\Bigl(\textstyle\sum_j e^{z_j-m}\Bigr)\]</div><div class="cs-note">log_softmax 合并算，不先 exp 再取 log</div></div><a class="cs-tag xref" href="#tb07" title="回第07章">§07</a></div>
+<div class="cs-entry"><div class="cs-name">损失缩放<span class="en">loss scaling</span></div><div><div class="cs-formula">\[\mathcal{L}_{\text{scaled}}=S\cdot\mathcal{L},\ \ \nabla\leftarrow\nabla/S\]</div><div class="cs-note">混合精度下防梯度下溢成 0</div></div><a class="cs-tag xref" href="#tb07" title="回第07章">§07</a></div>
+<div class="cs-entry"><div class="cs-name">梯度裁剪<span class="en">grad clip</span></div><div><div class="cs-formula">\[\mathbf{g}\leftarrow\mathbf{g}\cdot\min\!\bigl(1,\ c/\lVert\mathbf{g}\rVert_2\bigr)\]</div><div class="cs-note">按全局范数裁剪；LLM 常用 c=1.0</div></div><a class="cs-tag xref" href="#tb07" title="回第07章">§07</a></div>
+<div class="cs-ghead" id="tbcs-g8"><span class="gn">训练估算</span><h3>训练估算</h3><span class="gsub">4 条</span></div>
+<div class="cs-entry"><div class="cs-name">训练 FLOPs<span class="en">C≈6ND</span></div><div><div class="cs-formula">\[C\approx 6ND\]</div><div class="cs-note">N=参数量 D=token 数；前向 2N 反向 4N（每 token）</div></div><a class="cs-tag xref" href="#tb09" title="回第09章">§09</a></div>
+<div class="cs-entry"><div class="cs-name">显存四本账<span class="en">memory</span></div><div><div class="cs-formula">\[\text{参数}+\text{梯度}+\text{Adam}(m,v)+\text{激活}\]</div><div class="cs-note">混合精度+AdamW 静态显存≈16N 字节</div></div><a class="cs-tag xref" href="#tb09" title="回第09章">§09</a></div>
+<div class="cs-entry"><div class="cs-name">Chinchilla 最优<span class="en">compute-optimal</span></div><div><div class="cs-formula">\[D^{*}\approx 20N\]</div><div class="cs-note">每个参数配约 20 token；小模型喂更多数据更划算</div></div><a class="cs-tag xref" href="#tb09" title="回第09章">§09</a></div>
+<div class="cs-entry"><div class="cs-name">流水线气泡<span class="en">pipeline bubble</span></div><div><div class="cs-formula">\[\text{气泡比}=\dfrac{p-1}{m+p-1}\]</div><div class="cs-note">p=流水线级数 m=micro-batch 数；m 越大气泡越小</div></div><a class="cs-tag xref" href="#tb09" title="回第09章">§09</a></div>
+<div class="cs-ghead" id="tbcs-g9"><span class="gn">部署推理</span><h3>部署推理</h3><span class="gsub">4 条</span></div>
+<div class="cs-entry"><div class="cs-name">KV cache 显存<span class="en">KV cache</span></div><div><div class="cs-formula">\[M_{\text{KV}}=2\cdot L\cdot d_{\text{model}}\cdot n_{\text{ctx}}\cdot B\cdot b\]</div><div class="cs-note">2=K和V；b=字节数(BF16=2)；7B×2048×bs1≈1 GiB</div></div><a class="cs-tag xref" href="#tb13" title="回第13章">§13</a></div>
+<div class="cs-entry"><div class="cs-name">GQA/MQA 省显存<span class="en">GQA</span></div><div><div class="cs-formula">\[M_{\text{KV}}\propto n_{\text{kv\_heads}}\]</div><div class="cs-note">分组查询注意力砍 KV 头数；GQA-8 省 4 倍</div></div><a class="cs-tag xref" href="#tb13" title="回第13章">§13</a></div>
+<div class="cs-entry"><div class="cs-name">对称量化<span class="en">quantization</span></div><div><div class="cs-formula">\[q=\operatorname{round}(x/s),\ \ \tilde x=s\,q,\ \ |\tilde x-x|\le s/2\]</div><div class="cs-note">INT8/INT4 显存与精度取舍；s=量化步长</div></div><a class="cs-tag xref" href="#tb13" title="回第13章">§13</a></div>
+<div class="cs-entry"><div class="cs-name">All-Reduce 通信<span class="en">all-reduce</span></div><div><div class="cs-formula">\[\text{通信量}=\dfrac{2(N-1)}{N}\,K\]</div><div class="cs-note">N 卡 K 元素；TP 要放单机 NVLink 内</div></div><a class="cs-tag xref" href="#tb13" title="回第13章">§13</a></div>
+<div class="cs-ghead" id="tbcs-g10"><span class="gn">RL 与对齐</span><h3>RL 与对齐</h3><span class="gsub">5 条</span></div>
+<div class="cs-entry"><div class="cs-name">策略梯度<span class="en">policy gradient</span></div><div><div class="cs-formula">\[\nabla_\theta J=\mathbb{E}\bigl[\textstyle\sum_t\nabla_\theta\log\pi_\theta(a_t|s_t)\,\hat A_t\bigr]\]</div><div class="cs-note">对数导数技巧；采样即可估梯度</div></div><a class="cs-tag xref" href="#tb11" title="回第11章">§11</a></div>
+<div class="cs-entry"><div class="cs-name">PPO 裁剪<span class="en">PPO clip</span></div><div><div class="cs-formula">\[\mathcal{L}^{\text{CLIP}}=\mathbb{E}_t\bigl[\min(r_t\hat A_t,\ \operatorname{clip}(r_t,1-\epsilon,1+\epsilon)\hat A_t)\bigr]\]</div><div class="cs-note">r_t=π_θ/π_old；信任区防大步跑偏</div></div><a class="cs-tag xref" href="#tb11" title="回第11章">§11</a></div>
+<div class="cs-entry"><div class="cs-name">KL 惩罚<span class="en">KL penalty</span></div><div><div class="cs-formula">\[\mathcal{L}=\mathbb{E}[r]-\beta\,\operatorname{KL}(\pi_\theta\|\pi_{\text{ref}})\]</div><div class="cs-note">防 reward hacking、保语言能力</div></div><a class="cs-tag xref" href="#tb11" title="回第11章">§11</a></div>
+<div class="cs-entry"><div class="cs-name">DPO 损失<span class="en">DPO</span></div><div><div class="cs-formula">\[\mathcal{L}_{\text{DPO}}=-\log\sigma\!\bigl(\beta\log\tfrac{\pi_\theta(y_w)}{\pi_{\text{ref}}(y_w)}-\beta\log\tfrac{\pi_\theta(y_l)}{\pi_{\text{ref}}(y_l)}\bigr)\]</div><div class="cs-note">无需奖励模型、离线；直接拉偏好对</div></div><a class="cs-tag xref" href="#tb11" title="回第11章">§11</a></div>
+<div class="cs-entry"><div class="cs-name">GRPO 优势<span class="en">GRPO</span></div><div><div class="cs-formula">\[\hat A_i=\dfrac{r_i-\operatorname{mean}(\{r\}_G)}{\operatorname{std}(\{r\}_G)}\]</div><div class="cs-note">同 prompt 采 G 条组内标准化；无价值网络</div></div><a class="cs-tag xref" href="#tb11" title="回第11章">§11</a></div>
+<div class="cs-ghead" id="tbcs-g11"><span class="gn">检索 RAG</span><h3>检索 RAG</h3><span class="gsub">3 条</span></div>
+<div class="cs-entry"><div class="cs-name">三种度量<span class="en">metrics</span></div><div><div class="cs-formula">\[\cos=\tfrac{q\cdot d}{\|q\|\|d\|},\ \ \text{dot}=q^{\top}d,\ \ d_2=\|q-d\|_2\]</div><div class="cs-note">归一化后 dot=cos、d₂²=2−2cos；别用未归一点积</div></div><a class="cs-tag xref" href="#tb12" title="回第12章">§12</a></div>
+<div class="cs-entry"><div class="cs-name">RAG 后验<span class="en">RAG posterior</span></div><div><div class="cs-formula">\[p(\text{doc}|\text{query})\approx\operatorname{softmax}(\text{score})\]</div><div class="cs-note">检索分数当近似后验；top-k 截断后重归一化</div></div><a class="cs-tag xref" href="#tb12" title="回第12章">§12</a></div>
+<div class="cs-entry"><div class="cs-name">暴力 vs ANN<span class="en">ANN</span></div><div><div class="cs-formula">\[\text{暴力 }O(Nd)\ \to\ \text{IVF/HNSW 亚线性}\]</div><div class="cs-note">召回率↔延迟取舍；nprobe/ef 调参</div></div><a class="cs-tag xref" href="#tb12" title="回第12章">§12</a></div>
+</section>
+</div>
   </main>
 </div>
 
 <footer class="footer"><div class="footer-inner">
   <span>《大模型数学·现代教科书版》<br>零基础自学 · 直觉先行 · 不跳步</span>
   <span>目录来源：公众号「AI智能研究站」2026.10.30 文章目录图<br>重写版，非原作者 PDF</span>
-  <span>三版并行：学术严谨 / 现代教科书 / 极简工具书<br>MathJax 本地 · 离线 · 2026.11.06</span>
+  <span>学术严谨版（底版）/ 教科书版（主入口，含速查表附录）<br>MathJax 本地 · 离线 · 2026.11.08</span>
 </div></footer>
 
 <script>
 window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],tags:'none',packages:{'[+]':['ams','boldsymbol','mathtools']}},svg:{fontCache:'global'},options:{enableMenu:false}};
 </script>
 <script src="vendor/tex-svg-full.js" id="MathJax-script"></script>
+<script>
+/* 锚点修正：MathJax 异步排版会改变页面高度，使浏览器在排版前执行的 hash 定位落空。
+   渲染完成后按当前 hash 重新定位一次；不拦截任何点击，原生锚点行为保持不变。 */
+(function(){
+  function jump(){
+    if(!location.hash) return;
+    var el=document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    /* 必须用 instant：全局 CSS 是 scroll-behavior:smooth，默认平滑滚动在超长页面（数百万像素）
+       上耗时数秒且会被渲染抖动/其他滚动请求中断，导致落点漂移或看似未跳。 */
+    if(el) el.scrollIntoView({behavior:'instant',block:'start'});
+  }
+  /* 三段定位：解析完先跳（近似落点），MathJax 渲染完再校正（精确落点），
+     前进后退/改 hash 时也跳。 */
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',function(){ setTimeout(jump,0); setTimeout(stabilize,120); });
+  }else{ setTimeout(jump,0); setTimeout(stabilize,120); }
+  /* 稳定器：版面在 MathJax 收尾期会涨缩振荡，定点跳一次会被之后的收缩甩掉。
+     每 450ms 检查一次落点，偏离就重跳，连续 2 次稳定或 14 次后停止；用户一滚动立即让位。 */
+  var _iv=null;
+  function stabilize(){
+    if(!location.hash) return;
+    var el=document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if(!el) return;
+    if(_iv) clearInterval(_iv);
+    var goal=parseFloat(getComputedStyle(el).scrollMarginTop)||76;
+    var tries=0;
+    /* 加载后约 18 秒内持续值守：版面在 MathJax 收尾期涨缩振荡，浏览器还可能在
+       load 完成时自行重放一次 fragment 滚动（落到漂移位置）。不设提前退出——
+       稳定期零操作（仅检测），任何 >150px 偏离立即重跳。用户滚动即让位。 */
+    _iv=setInterval(function(){
+      var top=el.getBoundingClientRect().top;
+      if(Math.abs(top-goal)>150){ el.scrollIntoView({behavior:'instant',block:'start'}); }
+      if(++tries>=80){clearInterval(_iv);_iv=null;}
+    },450);
+  }
+  ['wheel','touchmove','keydown'].forEach(function(ev){
+    window.addEventListener(ev,function(){ if(_iv){clearInterval(_iv);_iv=null;} if(_ro){_ro.disconnect();_ro=null;} },{passive:true});
+  });
+  /* 直因修正：版面尺寸每次变化（MathJax 占位文本→SVG 的巨幅涨缩）后立即按当前 hash 重校，
+     30 秒后自动断开；与上面的定时值守互为冗余。 */
+  var _ro=null;
+  if('ResizeObserver' in window){
+    _ro=new ResizeObserver(function(){
+      if(!location.hash) return;
+      var el=document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      if(!el) return;
+      var goal=parseFloat(getComputedStyle(el).scrollMarginTop)||76;
+      var top=el.getBoundingClientRect().top;
+      if(Math.abs(top-goal)>150) el.scrollIntoView({behavior:'instant',block:'start'});
+    });
+    _ro.observe(document.body);
+    setTimeout(function(){ if(_ro){_ro.disconnect();_ro=null;} },30000);
+  }
+  if(window.MathJax && MathJax.startup && MathJax.startup.promise){
+    MathJax.startup.promise.then(function(){ setTimeout(jump,30); setTimeout(stabilize,80); });
+  }else{
+    window.addEventListener('load',function(){ setTimeout(jump,300); setTimeout(stabilize,380); });
+  }
+  window.addEventListener('hashchange',function(){ setTimeout(jump,0); });
+  /* 超长页面（数百万像素）下，CSS 平滑滚动在超长距离上耗时数秒甚至无法正常启动。
+     监听站内锚点点击：不 preventDefault（hash 照原生更新），同时用 instant 即时定位，
+     浏览器的默认平滑滚动因目标已就位而成为空操作。 */
+  document.addEventListener('click', function(e){
+    var a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null;
+    if(!a) return;
+    var href = a.getAttribute('href');
+    if(!href || href.length < 2) return;
+    var el = document.getElementById(decodeURIComponent(href.slice(1)));
+    if(el) el.scrollIntoView({behavior:'instant', block:'start'});
+  });
+})();
+</script>
 <script>
 (function(){
   var links=Array.prototype.slice.call(document.querySelectorAll('.sidenav a[href^="#"]'));

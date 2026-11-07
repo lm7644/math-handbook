@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-# 生成极简工具书数据：从复核过的公式里精选，注入 cheatsheet.html 的 __DATA__
+# 速查表数据（E 列表，62 条）的维护入口：现由 build_textbook.py 经 ast 解析读取，
+# 静态渲染为 textbook.html 末尾的 #cheatsheet 附录；cheatsheet.html 已改为重定向页。
+# 以下注入逻辑仅作历史保留，对本版产物不再必需。
 import json, pathlib, re
 
 ROOT = pathlib.Path(__file__).parent

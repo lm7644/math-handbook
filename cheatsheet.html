@@ -1,147 +1,17 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="minimal">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>大模型数学 · 极简工具书（速查手册）</title>
-<style>
-:root{
-  --paper:#FFFFFF; --paper-2:#F7F7F7; --ink:#111111; --ink-2:#3C3C3C;
-  --muted:#6E6E6E; --line:#E9E9E9; --line-strong:#CFCFCF; --accent:#0A0A0A;
-  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-  --sans:-apple-system,BlinkMacSystemFont,"Helvetica Neue","PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif;
-}
-*{margin:0;padding:0;box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
-a{color:inherit;text-decoration:none}
-section,[id^="g"]{scroll-margin-top:96px}
-/* 顶栏：标题 + 检索 */
-.topbar{position:sticky;top:0;z-index:50;background:var(--paper);border-bottom:1.5px solid var(--ink)}
-.topbar-in{max-width:980px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:16px}
-.topbar h1{font-size:15px;font-weight:800;letter-spacing:.02em;white-space:nowrap}
-.topbar .badge{font-family:var(--mono);font-size:9.5px;color:var(--muted);letter-spacing:.08em;white-space:nowrap}
-.searchbox{flex:1;display:flex;align-items:center;gap:8px;border:1px solid var(--line-strong);padding:6px 12px;background:var(--paper-2)}
-.searchbox svg{width:14px;height:14px;color:var(--muted);flex:none}
-.searchbox input{border:none;outline:none;background:transparent;font:inherit;font-size:13px;width:100%;color:var(--ink)}
-.count{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap}
-/* 字母/组导航 */
-.groupnav{max-width:980px;margin:0 auto;padding:8px 20px;display:flex;flex-wrap:wrap;gap:2px 4px;border-bottom:1px solid var(--line)}
-.groupnav a{font-family:var(--mono);font-size:10.5px;color:var(--ink-2);padding:3px 8px;border:1px solid transparent;white-space:nowrap}
-.groupnav a:hover{border-color:var(--ink)}
-.groupnav a.cur{background:var(--ink);color:var(--paper)}
-/* 条目 */
-.wrap{max-width:980px;margin:0 auto;padding:0 20px 80px}
-.ghead{margin:36px 0 4px;padding-bottom:6px;border-bottom:1.5px solid var(--ink);display:flex;align-items:baseline;gap:12px;position:relative}
-.ghead .gn{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.1em}
-.ghead h2{font-size:17px;font-weight:800}
-.ghead .gsub{font-size:11px;color:var(--muted);margin-left:auto}
-/* 竖排抽屉标签：左缘档案索引 */
-.gtab{display:none}
-@media(min-width:1120px){
-  .wrap{position:relative}
-  .gtab{display:block;position:absolute;left:-40px;top:4px;writing-mode:vertical-rl;
-    font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.3em;
-    background:var(--ink);color:var(--paper);padding:14px 4px;border-radius:0 2px 2px 0;
-    print-color-adjust:exact;-webkit-print-color-adjust:exact}
-}
-.entry{display:grid;grid-template-columns:200px minmax(0,1fr) 40px;gap:6px 20px;padding:11px 8px 11px 12px;border-bottom:1px solid var(--line);border-left:2px solid transparent;transition:background .15s,border-color .15s}
-.entry:hover{background:var(--paper-2);border-left-color:var(--ink)}
-.entry.hide{display:none}
-.e-name{font-weight:700;font-size:14px;line-height:1.4}
-.e-name .en{display:block;font-weight:400;font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.02em;margin-top:2px}
-.e-body{min-width:0}
-.e-formula{overflow-x:auto;padding:2px 0}
-.e-note{font-size:12px;color:var(--ink-2);margin-top:4px;line-height:1.6}
-.e-note b{color:var(--ink)}
-.e-tag{display:inline-block;font-family:var(--mono);font-size:9px;color:var(--ink-2);border:1px dashed var(--line-strong);padding:1px 5px;margin-top:3px;letter-spacing:.08em;justify-self:end;text-align:center;min-width:30px;height:fit-content;background:var(--paper-2)}
-/* 对照表区块 */
-.tbl-block{margin:10px 0 0}
-table.tbl{width:100%;border-collapse:collapse;font-size:12px}
-.tbl th{font-family:var(--mono);font-size:10px;color:var(--ink-2);text-align:left;padding:6px 10px;border-bottom:1.5px solid var(--ink);font-weight:600;letter-spacing:.04em}
-.tbl td{padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.5}
-/* MathJax */
-mjx-container[jax="SVG"]{font-size:103%}
-mjx-container[jax="SVG"][display="true"]{margin:8px 0 !important;text-align:left !important}
-.footer{max-width:980px;margin:0 auto;padding:20px;border-top:1.5px solid var(--ink);font-family:var(--mono);font-size:10px;color:var(--muted);line-height:2;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px 30px}
-@media(max-width:680px){
-  .entry{grid-template-columns:1fr 40px}
-  .entry .e-name{grid-column:1/-1}
-  .groupnav{flex-wrap:nowrap;overflow-x:auto;-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent 99%);mask-image:linear-gradient(90deg,#000 88%,transparent 99%)}
-  .topbar .badge{display:none}
-  .topbar-in{padding:8px 14px;gap:8px;flex-wrap:wrap}
-  .searchbox{flex-basis:100%;order:3}
-}
-@media print{
-  .topbar,.groupnav{display:none}
-  /* 打印件保留档案标签：竖排改横排小标签 */
-  .gtab{display:inline-block;position:static;writing-mode:horizontal-tb;
-    background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:8.5px;font-weight:700;
-    letter-spacing:.15em;padding:2px 8px;border-radius:2px;margin-right:8px;
-    print-color-adjust:exact;-webkit-print-color-adjust:exact}
-  .ghead .gn{display:none}
-  body{font-size:9pt}
-  .entry{break-inside:avoid}
-  .ghead{break-after:avoid;break-inside:avoid}
-  @page{size:A4;margin:1.5cm;@bottom-center{content:counter(page);font-family:Menlo,monospace;font-size:8pt;color:#666}@top-center{content:"大模型数学 · 极简工具书";font-family:Menlo,monospace;font-size:8pt;color:#999;letter-spacing:.1em}}
-}
-</style>
+<meta http-equiv="refresh" content="0; url=textbook.html#cheatsheet">
+<link rel="canonical" href="textbook.html#cheatsheet">
+<title>速查表已并入教科书版附录</title>
+<script>location.replace('textbook.html#cheatsheet');</script>
 </head>
 <body>
-<div class="topbar"><div class="topbar-in">
-  <h1>大模型数学 · 极简工具书</h1>
-  <span class="badge">速查 · 据 16 章重写手册提炼</span>
-  <span class="badge" style="border-left:1px solid var(--line-strong);padding-left:14px">其他版：<a href="index.html" style="border-bottom:1px solid var(--muted)">学术严谨</a> · <a href="textbook.html" style="border-bottom:1px solid var(--muted)">现代教科书</a></span>
-  <label class="searchbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg><input id="q" type="search" placeholder="检索公式 / 概念 …"></label>
-  <span class="count" id="cnt"></span>
-</div></div>
-<nav class="groupnav" id="groupnav"></nav>
-<div class="wrap" id="wrap"></div>
-
-<script>
-/* 条目数据：g=组 t=中文名 en=英文名 f=公式(LaTeX) n=备注(用在哪/怎么用) tag=出处章 */
-var DATA = [{"g": "符号", "t": "实数向量空间", "en": "vector space", "f": "\\mathbb{R}^{n}", "n": "向量 x 的活动范围；嵌入向量 x∈ℝ^d", "tag": "01"}, {"g": "符号", "t": "向量 / 矩阵", "en": "vector / matrix", "f": "\\mathbf{x}\\ (\\text{粗小写}),\\quad \\mathbf{W}\\ (\\text{粗大写})", "n": "向量粗小写、矩阵粗大写、标量斜体——全书约定", "tag": "01"}, {"g": "符号", "t": "转置 / 逆", "en": "transpose / inverse", "f": "\\mathbf{W}^{\\top},\\quad \\mathbf{W}^{-1}", "n": "转置 ᵀ、逆 ⁻¹；(AB)ᵀ=BᵀAᵀ", "tag": "01"}, {"g": "符号", "t": "期望 / 概率", "en": "expectation", "f": "\\mathbb{E}[\\cdot],\\quad p(\\cdot)", "n": "期望 E、概率密度 p", "tag": "03"}, {"g": "符号", "t": "损失 / 梯度", "en": "loss / gradient", "f": "\\mathcal{L},\\quad \\nabla_{\\boldsymbol{\\theta}}\\mathcal{L}", "n": "花体 L 表损失，∇ 表梯度", "tag": "02"}, {"g": "符号", "t": "逐元素乘", "en": "Hadamard", "f": "\\mathbf{a}\\odot\\mathbf{b}", "n": "对应位相乘，区别于矩阵乘；全书统一写 ⊙", "tag": "02"}, {"g": "符号", "t": "关键维度记号", "en": "dims", "f": "d_{\\text{model}},\\ d_k,\\ h,\\ V,\\ L,\\ s", "n": "d_model=隐维 d_k=头维 h=头数 V=词表 L=层数 s=序列长（s 见第九章）", "tag": "06"}, {"g": "线性代数", "t": "嵌入查表", "en": "embedding lookup", "f": "\\mathbf{e}_t=\\mathbf{o}_t^{\\top}\\mathbf{E}", "n": "one-hot 乘嵌入矩阵 = 取第 t 行；LLM 第一步", "tag": "01"}, {"g": "线性代数", "t": "点积与余弦", "en": "dot / cosine", "f": "\\operatorname{cos\\_sim}=\\dfrac{\\mathbf{x}\\cdot\\mathbf{y}}{\\|\\mathbf{x}\\|_2\\|\\mathbf{y}\\|_2}", "n": "余弦相似度，检索与注意力打分的底", "tag": "01"}, {"g": "线性代数", "t": "线性层", "en": "linear layer", "f": "\\mathbf{y}=\\mathbf{W}\\mathbf{x}+\\mathbf{b}", "n": "W 形状 d_out×d_in；FFN 与投影的基本件", "tag": "01"}, {"g": "线性代数", "t": "矩阵乘法维度", "en": "matmul dims", "f": "\\mathbb{R}^{n\\times d_k}\\times\\mathbb{R}^{d_k\\times m}\\to\\mathbb{R}^{n\\times m}", "n": "每次矩阵乘先对齐内维", "tag": "01"}, {"g": "线性代数", "t": "低秩分解", "en": "LoRA", "f": "\\Delta\\mathbf{W}=\\mathbf{B}\\mathbf{A},\\ \\mathbf{B}\\in\\mathbb{R}^{d\\times r},\\ \\mathbf{A}\\in\\mathbb{R}^{r\\times d}", "n": "r≪d，参数量 d²→2dr；微调省参数", "tag": "01"}, {"g": "线性代数", "t": "特征值", "en": "eigenvalue", "f": "\\mathbf{A}\\mathbf{v}=\\lambda\\mathbf{v}", "n": "对称矩阵可正交对角化；协方差主方向", "tag": "01"}, {"g": "微积分与求导", "t": "梯度", "en": "gradient", "f": "\\nabla f(\\mathbf{x})=\\left[\\tfrac{\\partial f}{\\partial x_1}\\ \\cdots\\ \\tfrac{\\partial f}{\\partial x_n}\\right]^{\\top}", "n": "偏导排成列向量；指向上升最快方向", "tag": "02"}, {"g": "微积分与求导", "t": "链式法则", "en": "chain rule", "f": "\\frac{\\partial\\mathcal{L}}{\\partial\\mathbf{x}}=\\left(\\frac{\\partial\\mathbf{y}}{\\partial\\mathbf{x}}\\right)^{\\top}\\nabla_{\\mathbf{y}}\\mathcal{L}", "n": "反向传播的数学本质；向量形式注意转置", "tag": "02"}, {"g": "微积分与求导", "t": "xᵀa 求导", "en": "identity", "f": "\\dfrac{\\partial(\\mathbf{x}^{\\top}\\mathbf{a})}{\\partial\\mathbf{x}}=\\mathbf{a}", "n": "分母布局；线性层 backward 基础", "tag": "10"}, {"g": "微积分与求导", "t": "xᵀAx 求导", "en": "quadratic", "f": "\\dfrac{\\partial(\\mathbf{x}^{\\top}\\mathbf{A}\\mathbf{x})}{\\partial\\mathbf{x}}=(\\mathbf{A}+\\mathbf{A}^{\\top})\\mathbf{x}", "n": "A 对称时=2Ax", "tag": "10"}, {"g": "微积分与求导", "t": "逆矩阵微分", "en": "inverse diff", "f": "d(\\mathbf{X}^{-1})=-\\mathbf{X}^{-1}(d\\mathbf{X})\\mathbf{X}^{-1}", "n": "注意逆在两边、负号在前", "tag": "10"}, {"g": "微积分与求导", "t": "tr 循环性", "en": "trace cyclic", "f": "\\operatorname{tr}(\\mathbf{A}\\mathbf{B}\\mathbf{C})=\\operatorname{tr}(\\mathbf{B}\\mathbf{C}\\mathbf{A})", "n": "矩阵微积分调换顺序的关键", "tag": "10"}, {"g": "微积分与求导", "t": "CE 对 logits 梯度", "en": "softmax-CE grad", "f": "\\frac{\\partial\\mathcal{L}}{\\partial\\mathbf{z}}=\\mathbf{p}-\\mathbf{y}", "n": "softmax+交叉熵的合成梯度=预测减真值", "tag": "15"}, {"g": "概率与采样", "t": "自回归分解", "en": "autoregressive", "f": "P(x_1,\\dots,x_T)=\\prod_{t=1}^{T}P(x_t\\mid x_1,\\dots,x_{t-1})", "n": "LLM 的定义式：逐 token 条件概率", "tag": "03"}, {"g": "概率与采样", "t": "类别分布", "en": "categorical", "f": "P(X=k)=p_k,\\ \\sum_k p_k=1", "n": "词表上的 next-token 分布", "tag": "03"}, {"g": "概率与采样", "t": "高斯密度", "en": "Gaussian", "f": "f(x)=\\dfrac{1}{\\sqrt{2\\pi}\\sigma}\\exp\\!\\left(-\\tfrac{(x-\\mu)^2}{2\\sigma^2}\\right)", "n": "初始化与噪声；Z=(X−μ)/σ 标准化", "tag": "03"}, {"g": "概率与采样", "t": "贝叶斯", "en": "Bayes", "f": "P(A\\mid B)=\\dfrac{P(B\\mid A)P(A)}{P(B)}", "n": "注意基础率；别把 P(A|B) 当 P(B|A)", "tag": "03"}, {"g": "概率与采样", "t": "极大似然", "en": "MLE", "f": "\\hat{\\theta}=\\arg\\max_\\theta\\sum_i\\ln q_\\theta(y_i)", "n": "训练=MLE；与最小交叉熵等价", "tag": "04"}, {"g": "概率与采样", "t": "温度采样", "en": "temperature", "f": "p_i\\propto p_i^{1/T}\\ \\Leftrightarrow\\ \\operatorname{softmax}(z_i/T)", "n": "T<1 更尖锐（更确定），T>1 更平（更随机）", "tag": "03"}, {"g": "信息论与损失", "t": "熵", "en": "entropy", "f": "H(p)=-\\sum_x p(x)\\log p(x)", "n": "不确定性的度量；bit 用 log2、nat 用 ln", "tag": "04"}, {"g": "信息论与损失", "t": "交叉熵", "en": "cross-entropy", "f": "H(p,q)=-\\sum_x p(x)\\log q(x)", "n": "LLM 训练损失；=H(p)+KL(p‖q)", "tag": "04"}, {"g": "信息论与损失", "t": "KL 散度", "en": "KL divergence", "f": "\\operatorname{KL}(p\\|q)=\\sum_x p(x)\\log\\dfrac{p(x)}{q(x)}", "n": "≥0，不对称，不是距离；RLHF 用 KL(π_θ‖π_ref)", "tag": "04"}, {"g": "信息论与损失", "t": "困惑度", "en": "perplexity", "f": "\\mathrm{PPL}=\\exp\\!\\left(-\\tfrac{1}{N}\\textstyle\\sum_i\\ln q(y_i)\\right)", "n": "LM 评估标准；与平均损失单调对应", "tag": "04"}, {"g": "优化器与调度", "t": "梯度下降", "en": "gradient descent", "f": "\\boldsymbol{\\theta}_{t+1}=\\boldsymbol{\\theta}_t-\\eta\\,\\nabla_{\\boldsymbol{\\theta}}\\mathcal{L}", "n": "η=学习率；η>2/λmax 发散（=临界等幅震荡）", "tag": "05"}, {"g": "优化器与调度", "t": "动量", "en": "momentum", "f": "\\mathbf{v}\\leftarrow\\beta\\mathbf{v}+\\nabla\\mathcal{L},\\quad \\boldsymbol{\\theta}\\leftarrow\\boldsymbol{\\theta}-\\eta\\mathbf{v}", "n": "β≈0.9；抑制峡谷震荡", "tag": "05"}, {"g": "优化器与调度", "t": "Adam", "en": "Adam", "f": "\\hat m_t=\\tfrac{m_t}{1-\\beta_1^t},\\ \\hat v_t=\\tfrac{v_t}{1-\\beta_2^t},\\ \\theta\\leftarrow\\theta-\\eta\\tfrac{\\hat m_t}{\\sqrt{\\hat v_t}+\\epsilon}", "n": "偏差修正不可省；LLM 训练常取 β2=0.95", "tag": "05"}, {"g": "优化器与调度", "t": "解耦权重衰减", "en": "AdamW", "f": "\\theta\\leftarrow\\theta-\\eta\\,\\lambda\\,\\theta", "n": "与 L2 不等价（Adam 下）；LLM 训练标配", "tag": "05"}, {"g": "优化器与调度", "t": "warmup", "en": "lr warmup", "f": "\\eta_t=\\eta_{\\max}\\cdot t/T_w\\ (t\\le T_w)", "n": "线性升温；Adam 二阶矩未稳时防炸", "tag": "05"}, {"g": "Transformer 组件", "t": "缩放点积注意力", "en": "attention", "f": "\\operatorname{softmax}\\!\\left(\\dfrac{\\mathbf{Q}\\mathbf{K}^{\\top}}{\\sqrt{d_k}}\\right)\\mathbf{V}", "n": "全书统一写法；除以 √d_k 防 softmax 饱和", "tag": "06"}, {"g": "Transformer 组件", "t": "为什么除 √d_k", "en": "scaling", "f": "\\operatorname{Var}(\\mathbf{q}\\cdot\\mathbf{k})=d_k\\ (\\text{分量独立、零均值、单位方差})", "n": "d 大时分数尺度~√d_k，不除则饱和、梯度消失", "tag": "06"}, {"g": "Transformer 组件", "t": "正弦位置编码", "en": "sinusoidal PE", "f": "PE_{(pos,2i)}=\\sin\\!\\tfrac{pos}{10000^{2i/d}},\\ PE_{(pos,2i+1)}=\\cos\\!\\tfrac{pos}{10000^{2i/d}}", "n": "相对位置可线性表示；RoPE 的思想源头", "tag": "06"}, {"g": "Transformer 组件", "t": "LayerNorm", "en": "LayerNorm", "f": "\\hat x_i=\\dfrac{x_i-\\mu}{\\sqrt{\\sigma^2+\\epsilon}},\\ \\ y_i=\\gamma_i\\hat x_i+\\beta_i", "n": "按 token 内特征维归一；pre-norm 更稳", "tag": "06"}, {"g": "Transformer 组件", "t": "残差连接", "en": "residual", "f": "\\mathbf{y}=\\mathbf{x}+F(\\mathbf{x})\\ \\Rightarrow\\ \\tfrac{\\partial\\mathbf{y}}{\\partial\\mathbf{x}}=\\mathbf{I}+\\tfrac{\\partial F}{\\partial\\mathbf{x}}", "n": "梯度高速路：+I 保证深层可训", "tag": "06"}, {"g": "Transformer 组件", "t": "FFN", "en": "feed-forward", "f": "\\operatorname{FFN}(\\mathbf{x})=\\varphi(\\mathbf{x}\\mathbf{W}_1+\\mathbf{b}_1)\\mathbf{W}_2+\\mathbf{b}_2", "n": "d_model→4d_model→d_model；约占 2/3 参数", "tag": "06"}, {"g": "数值稳定", "t": "浮点格式", "en": "float formats", "f": "\\text{FP32/TF32/FP16/BF16}", "n": "BF16 指数位同 FP32（范围大）、尾数 7 位（精度低）——深度学习够用", "tag": "07"}, {"g": "数值稳定", "t": "log-sum-exp", "en": "log-sum-exp", "f": "\\operatorname{softmax}(z_i)=\\dfrac{e^{z_i-m}}{\\sum_j e^{z_j-m}},\\ m=\\max_j z_j", "n": "减最大值防 exp 溢出；softmax/CE 必用", "tag": "07"}, {"g": "数值稳定", "t": "稳定交叉熵", "en": "stable CE", "f": "\\log p(y)=z_y-m-\\log\\Bigl(\\textstyle\\sum_j e^{z_j-m}\\Bigr)", "n": "log_softmax 合并算，不先 exp 再取 log", "tag": "07"}, {"g": "数值稳定", "t": "损失缩放", "en": "loss scaling", "f": "\\mathcal{L}_{\\text{scaled}}=S\\cdot\\mathcal{L},\\ \\ \\nabla\\leftarrow\\nabla/S", "n": "混合精度下防梯度下溢成 0", "tag": "07"}, {"g": "数值稳定", "t": "梯度裁剪", "en": "grad clip", "f": "\\mathbf{g}\\leftarrow\\mathbf{g}\\cdot\\min\\!\\bigl(1,\\ c/\\lVert\\mathbf{g}\\rVert_2\\bigr)", "n": "按全局范数裁剪；LLM 常用 c=1.0", "tag": "07"}, {"g": "训练估算", "t": "训练 FLOPs", "en": "C≈6ND", "f": "C\\approx 6ND", "n": "N=参数量 D=token 数；前向 2N 反向 4N（每 token）", "tag": "09"}, {"g": "训练估算", "t": "显存四本账", "en": "memory", "f": "\\text{参数}+\\text{梯度}+\\text{Adam}(m,v)+\\text{激活}", "n": "混合精度+AdamW 静态显存≈16N 字节", "tag": "09"}, {"g": "训练估算", "t": "Chinchilla 最优", "en": "compute-optimal", "f": "D^{*}\\approx 20N", "n": "每个参数配约 20 token；小模型喂更多数据更划算", "tag": "09"}, {"g": "训练估算", "t": "流水线气泡", "en": "pipeline bubble", "f": "\\text{气泡比}=\\dfrac{p-1}{m+p-1}", "n": "p=流水线级数 m=micro-batch 数；m 越大气泡越小", "tag": "09"}, {"g": "部署推理", "t": "KV cache 显存", "en": "KV cache", "f": "M_{\\text{KV}}=2\\cdot L\\cdot d_{\\text{model}}\\cdot n_{\\text{ctx}}\\cdot B\\cdot b", "n": "2=K和V；b=字节数(BF16=2)；7B×2048×bs1≈1 GiB", "tag": "13"}, {"g": "部署推理", "t": "GQA/MQA 省显存", "en": "GQA", "f": "M_{\\text{KV}}\\propto n_{\\text{kv\\_heads}}", "n": "分组查询注意力砍 KV 头数；GQA-8 省 4 倍", "tag": "13"}, {"g": "部署推理", "t": "对称量化", "en": "quantization", "f": "q=\\operatorname{round}(x/s),\\ \\ \\tilde x=s\\,q,\\ \\ |\\tilde x-x|\\le s/2", "n": "INT8/INT4 显存与精度取舍；s=量化步长", "tag": "13"}, {"g": "部署推理", "t": "All-Reduce 通信", "en": "all-reduce", "f": "\\text{通信量}=\\dfrac{2(N-1)}{N}\\,K", "n": "N 卡 K 元素；TP 要放单机 NVLink 内", "tag": "13"}, {"g": "RL 与对齐", "t": "策略梯度", "en": "policy gradient", "f": "\\nabla_\\theta J=\\mathbb{E}\\bigl[\\textstyle\\sum_t\\nabla_\\theta\\log\\pi_\\theta(a_t|s_t)\\,\\hat A_t\\bigr]", "n": "对数导数技巧；采样即可估梯度", "tag": "11"}, {"g": "RL 与对齐", "t": "PPO 裁剪", "en": "PPO clip", "f": "\\mathcal{L}^{\\text{CLIP}}=\\mathbb{E}_t\\bigl[\\min(r_t\\hat A_t,\\ \\operatorname{clip}(r_t,1-\\epsilon,1+\\epsilon)\\hat A_t)\\bigr]", "n": "r_t=π_θ/π_old；信任区防大步跑偏", "tag": "11"}, {"g": "RL 与对齐", "t": "KL 惩罚", "en": "KL penalty", "f": "\\mathcal{L}=\\mathbb{E}[r]-\\beta\\,\\operatorname{KL}(\\pi_\\theta\\|\\pi_{\\text{ref}})", "n": "防 reward hacking、保语言能力", "tag": "11"}, {"g": "RL 与对齐", "t": "DPO 损失", "en": "DPO", "f": "\\mathcal{L}_{\\text{DPO}}=-\\log\\sigma\\!\\bigl(\\beta\\log\\tfrac{\\pi_\\theta(y_w)}{\\pi_{\\text{ref}}(y_w)}-\\beta\\log\\tfrac{\\pi_\\theta(y_l)}{\\pi_{\\text{ref}}(y_l)}\\bigr)", "n": "无需奖励模型、离线；直接拉偏好对", "tag": "11"}, {"g": "RL 与对齐", "t": "GRPO 优势", "en": "GRPO", "f": "\\hat A_i=\\dfrac{r_i-\\operatorname{mean}(\\{r\\}_G)}{\\operatorname{std}(\\{r\\}_G)}", "n": "同 prompt 采 G 条组内标准化；无价值网络", "tag": "11"}, {"g": "检索 RAG", "t": "三种度量", "en": "metrics", "f": "\\cos=\\tfrac{q\\cdot d}{\\|q\\|\\|d\\|},\\ \\ \\text{dot}=q^{\\top}d,\\ \\ d_2=\\|q-d\\|_2", "n": "归一化后 dot=cos、d₂²=2−2cos；别用未归一点积", "tag": "12"}, {"g": "检索 RAG", "t": "RAG 后验", "en": "RAG posterior", "f": "p(\\text{doc}|\\text{query})\\approx\\operatorname{softmax}(\\text{score})", "n": "检索分数当近似后验；top-k 截断后重归一化", "tag": "12"}, {"g": "检索 RAG", "t": "暴力 vs ANN", "en": "ANN", "f": "\\text{暴力 }O(Nd)\\ \\to\\ \\text{IVF/HNSW 亚线性}", "n": "召回率↔延迟取舍；nprobe/ef 调参", "tag": "12"}];
-/* 组导航与渲染 */
-var wrap=document.getElementById('wrap'), gnav=document.getElementById('groupnav');
-var groups={};
-DATA.forEach(function(e){ (groups[e.g]=groups[e.g]||[]).push(e); });
-var order=["符号","线性代数","微积分与求导","概率与采样","信息论与损失","优化器与调度","Transformer 组件","数值稳定","训练估算","部署推理","RL 与对齐","检索 RAG","对照表"];
-var html='', nav='';
-order.forEach(function(g){
-  if(!groups[g])return;
-  var gid='g-'+g.replace(/[^A-Za-z0-9一-龥]/g,'');
-  nav+='<a href="#'+gid+'">'+g+'</a>';
-  html+='<div class="ghead" id="'+gid+'"><span class="gtab">'+g+'</span><span class="gn">'+g+'</span><h2></h2><span class="gsub">'+groups[g].length+' 条</span></div>';
-  groups[g].forEach(function(e){
-    html+='<div class="entry" data-k="'+ (e.t+' '+(e.en||'')+' '+e.n).toLowerCase().replace(/"/g,'') +'">'
-      +'<div class="e-name">'+e.t+(e.en?'<span class="en">'+e.en+'</span>':'')+'</div>'
-      +'<div class="e-body">'
-      +(e.f?'<div class="e-formula">\\['+e.f+'\\]</div>':'')
-      +(e.n?'<div class="e-note">'+e.n+'</div>':'')
-      +'</div>'
-      +(e.tag?'<span class="e-tag">§'+e.tag+'</span>':'<span></span>')
-      +'</div>';
-  });
-});
-wrap.innerHTML=html; gnav.innerHTML=nav;
-var cnt=document.getElementById('cnt');
-function refresh(){var es=document.querySelectorAll('.entry');var v=0;es.forEach(function(e){if(!e.classList.contains('hide'))v++});cnt.textContent=v+' / '+es.length+' 条';}
-document.getElementById('q').addEventListener('input',function(){
-  var q=this.value.trim().toLowerCase();
-  document.querySelectorAll('.entry').forEach(function(e){
-    e.classList.toggle('hide', q && e.getAttribute('data-k').indexOf(q)===-1);
-  }); refresh();
-});
-/* 分组导航联动高亮 */
-var navLinks=gnav.querySelectorAll('a'), gheads=document.querySelectorAll('.ghead');
-var spy=function(){var y=window.scrollY+120,cur=gheads.length?gheads[0].id:null;gheads.forEach(function(h){if(h.offsetTop<=y)cur=h.id;});navLinks.forEach(function(a){a.classList.toggle('cur',a.getAttribute('href')==='#'+cur);});};
-document.addEventListener('scroll',spy,{passive:true});spy();
-refresh();
-</script>
-<script>
-window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],tags:'none'},svg:{fontCache:'global'},options:{enableMenu:false}};
-</script>
-<script src="vendor/tex-svg-full.js" id="MathJax-script"></script>
-<div class="footer"><span>极简工具书 · 速查定位<br>条目化 · 可检索 · 不铺推导</span><span>据《学大模型需要的数学背景知识手册》(16章重写版) 提炼<br>每条公式均经独立复核</span><span>离线单文件 · MathJax 本地<br>2026.11.06</span></div>
+<p style="max-width:38em;margin:18vh auto 0;padding:0 24px;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC",sans-serif;font-size:15px;line-height:2;color:#333">
+速查表已并入《教科书版》末尾附录，正在跳转…<br>
+<a href="textbook.html#cheatsheet" style="border-bottom:1px solid #999">若未自动跳转，点击此处 &rarr;</a>
+</p>
 </body>
 </html>

@@ -19,6 +19,9 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
+/* 关闭滚动锚定：MathJax 排版期版面振荡时，浏览器 scroll anchoring 会自动补偿 scrollY，
+   把锚点定位反复顶偏（与定点脚本打架）。关闭后滚动位置只由用户与显式脚本决定。 */
+html,body{overflow-anchor:none}
 body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16.5px;line-height:1.85;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 ::selection{background:var(--accent);color:#fff}
 a{color:inherit;text-decoration:none}
@@ -154,6 +157,21 @@ mjx-assistive-mml{max-width:1px !important;max-height:1px !important;width:1px !
 a.xref{color:inherit;text-decoration:none;border-bottom:1px dotted #B9AC96}
 a.xref:hover{color:var(--accent);border-bottom-color:var(--accent)}
 .ti-sec{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:2px}
+/* ---------- 速查表附录 ---------- */
+.cs-ghead{margin:30px 0 4px;padding-bottom:6px;border-bottom:1.5px solid var(--ink);display:flex;align-items:baseline;gap:12px}
+.cs-ghead .gn{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--accent)}
+.cs-ghead h3{font-size:17px;font-weight:800;margin:0}
+.cs-ghead .gsub{font-size:11px;color:var(--muted);margin-left:auto}
+.cs-entry{display:grid;grid-template-columns:180px minmax(0,1fr) 46px;gap:6px 16px;padding:10px 8px;border-bottom:1px solid var(--line)}
+.cs-entry:hover{background:var(--paper-2)}
+.cs-name{font-weight:700;font-size:14px;line-height:1.4}
+.cs-name .en{display:block;font-weight:400;font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:2px}
+.cs-formula{overflow-x:auto;padding:2px 0}
+.cs-note{font-size:12.5px;color:var(--ink-2);margin-top:3px;line-height:1.65}
+a.cs-tag{display:inline-block;font-family:var(--mono);font-size:9.5px;border:1px dashed var(--line-strong);padding:1px 6px;letter-spacing:.06em;height:fit-content;justify-self:end;color:var(--ink-2)}
+a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
+@media(max-width:680px){.cs-entry{grid-template-columns:1fr 46px}.cs-name{grid-column:1/-1}}
+@media print{.cs-entry{break-inside:avoid}.cs-ghead{break-after:avoid}}
 .anchor{display:inline-block;width:0;height:0;overflow:hidden;scroll-margin-top:100px}
 
 .footer{border-top:2px solid var(--ink)}
@@ -233,8 +251,8 @@ __PRINT_PAGES__
       <button onclick="window.print()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v7H6z"/></svg>打印成书</button>
     </div>
     <div class="ver-links">
-      <a href="index.html">→ 学术严谨版</a>
-      <a href="cheatsheet.html">→ 极简工具书版</a>
+      <a href="index.html">→ 学术严谨版（底版）</a>
+      <a href="#cheatsheet">→ 速查表（本页附录）</a>
     </div>
   </nav>
 
@@ -252,13 +270,85 @@ __BODY__
 <footer class="footer"><div class="footer-inner">
   <span>《大模型数学·现代教科书版》<br>零基础自学 · 直觉先行 · 不跳步</span>
   <span>目录来源：公众号「AI智能研究站」2026.10.30 文章目录图<br>重写版，非原作者 PDF</span>
-  <span>三版并行：学术严谨 / 现代教科书 / 极简工具书<br>MathJax 本地 · 离线 · 2026.11.06</span>
+  <span>学术严谨版（底版）/ 教科书版（主入口，含速查表附录）<br>MathJax 本地 · 离线 · 2026.11.08</span>
 </div></footer>
 
 <script>
 window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],tags:'none',packages:{'[+]':['ams','boldsymbol','mathtools']}},svg:{fontCache:'global'},options:{enableMenu:false}};
 </script>
 <script src="vendor/tex-svg-full.js" id="MathJax-script"></script>
+<script>
+/* 锚点修正：MathJax 异步排版会改变页面高度，使浏览器在排版前执行的 hash 定位落空。
+   渲染完成后按当前 hash 重新定位一次；不拦截任何点击，原生锚点行为保持不变。 */
+(function(){
+  function jump(){
+    if(!location.hash) return;
+    var el=document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    /* 必须用 instant：全局 CSS 是 scroll-behavior:smooth，默认平滑滚动在超长页面（数百万像素）
+       上耗时数秒且会被渲染抖动/其他滚动请求中断，导致落点漂移或看似未跳。 */
+    if(el) el.scrollIntoView({behavior:'instant',block:'start'});
+  }
+  /* 三段定位：解析完先跳（近似落点），MathJax 渲染完再校正（精确落点），
+     前进后退/改 hash 时也跳。 */
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',function(){ setTimeout(jump,0); setTimeout(stabilize,120); });
+  }else{ setTimeout(jump,0); setTimeout(stabilize,120); }
+  /* 稳定器：版面在 MathJax 收尾期会涨缩振荡，定点跳一次会被之后的收缩甩掉。
+     每 450ms 检查一次落点，偏离就重跳，连续 2 次稳定或 14 次后停止；用户一滚动立即让位。 */
+  var _iv=null;
+  function stabilize(){
+    if(!location.hash) return;
+    var el=document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if(!el) return;
+    if(_iv) clearInterval(_iv);
+    var goal=parseFloat(getComputedStyle(el).scrollMarginTop)||76;
+    var tries=0;
+    /* 加载后约 18 秒内持续值守：版面在 MathJax 收尾期涨缩振荡，浏览器还可能在
+       load 完成时自行重放一次 fragment 滚动（落到漂移位置）。不设提前退出——
+       稳定期零操作（仅检测），任何 >150px 偏离立即重跳。用户滚动即让位。 */
+    _iv=setInterval(function(){
+      var top=el.getBoundingClientRect().top;
+      if(Math.abs(top-goal)>150){ el.scrollIntoView({behavior:'instant',block:'start'}); }
+      if(++tries>=80){clearInterval(_iv);_iv=null;}
+    },450);
+  }
+  ['wheel','touchmove','keydown'].forEach(function(ev){
+    window.addEventListener(ev,function(){ if(_iv){clearInterval(_iv);_iv=null;} if(_ro){_ro.disconnect();_ro=null;} },{passive:true});
+  });
+  /* 直因修正：版面尺寸每次变化（MathJax 占位文本→SVG 的巨幅涨缩）后立即按当前 hash 重校，
+     30 秒后自动断开；与上面的定时值守互为冗余。 */
+  var _ro=null;
+  if('ResizeObserver' in window){
+    _ro=new ResizeObserver(function(){
+      if(!location.hash) return;
+      var el=document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      if(!el) return;
+      var goal=parseFloat(getComputedStyle(el).scrollMarginTop)||76;
+      var top=el.getBoundingClientRect().top;
+      if(Math.abs(top-goal)>150) el.scrollIntoView({behavior:'instant',block:'start'});
+    });
+    _ro.observe(document.body);
+    setTimeout(function(){ if(_ro){_ro.disconnect();_ro=null;} },30000);
+  }
+  if(window.MathJax && MathJax.startup && MathJax.startup.promise){
+    MathJax.startup.promise.then(function(){ setTimeout(jump,30); setTimeout(stabilize,80); });
+  }else{
+    window.addEventListener('load',function(){ setTimeout(jump,300); setTimeout(stabilize,380); });
+  }
+  window.addEventListener('hashchange',function(){ setTimeout(jump,0); });
+  /* 超长页面（数百万像素）下，CSS 平滑滚动在超长距离上耗时数秒甚至无法正常启动。
+     监听站内锚点点击：不 preventDefault（hash 照原生更新），同时用 instant 即时定位，
+     浏览器的默认平滑滚动因目标已就位而成为空操作。 */
+  document.addEventListener('click', function(e){
+    var a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null;
+    if(!a) return;
+    var href = a.getAttribute('href');
+    if(!href || href.length < 2) return;
+    var el = document.getElementById(decodeURIComponent(href.slice(1)));
+    if(el) el.scrollIntoView({behavior:'instant', block:'start'});
+  });
+})();
+</script>
 <script>
 (function(){
   var links=Array.prototype.slice.call(document.querySelectorAll('.sidenav a[href^="#"]'));

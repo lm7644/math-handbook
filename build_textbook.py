@@ -159,13 +159,66 @@ def _card_tabs(h):
 for c in chapters:
     c["html"] = _card_tabs(c["html"])
 
+# ---------- 速查表附录：读取 build_cheatsheet.py 的 E 数据，静态渲染为末尾附录 ----------
+import ast as _ast
+_cs_tree = _ast.parse(read(ROOT/"build_cheatsheet.py"))
+_cs_E = None
+for _node in _cs_tree.body:
+    if isinstance(_node, _ast.Assign) and getattr(_node.targets[0], "id", "") == "E":
+        _cs_E = _ast.literal_eval(_node.value); break
+if not _cs_E:
+    print("构建失败：未能从 build_cheatsheet.py 解析 E 数据"); sys.exit(1)
+
+_CS_ORDER = ["符号","线性代数","微积分与求导","概率与采样","信息论与损失","优化器与调度",
+             "Transformer 组件","数值稳定","训练估算","部署推理","RL 与对齐","检索 RAG"]
+_cs_groups = {}
+for _g,_t,_en,_f,_n,_tag in _cs_E:
+    _cs_groups.setdefault(_g, []).append((_t,_en,_f,_n,_tag))
+
+_cs_parts = []
+_cs_count = 0
+for _gi, _g in enumerate([g for g in _CS_ORDER if g in _cs_groups]):
+    _items = _cs_groups[_g]
+    _cs_parts.append(f'<div class="cs-ghead" id="tbcs-g{_gi}"><span class="gn">{_g}</span><h3>{_g}</h3><span class="gsub">{len(_items)} 条</span></div>')
+    for _t,_en,_f,_n,_tag in _items:
+        _cs_count += 1
+        _en_html = f'<span class="en">{_en}</span>' if _en else ''
+        _f_html = f'<div class="cs-formula">\\[{_f}\\]</div>' if _f else ''
+        _n_html = f'<div class="cs-note">{_n}</div>' if _n else ''
+        _tag_html = (f'<a class="cs-tag xref" href="#tb{_tag}" title="回第{_tag}章">§{_tag}</a>'
+                     if _tag and _tag.isdigit() and int(_tag) < 16 else f'<span class="cs-tag">§{_tag}</span>')
+        _cs_parts.append(f'<div class="cs-entry"><div class="cs-name">{_t}{_en_html}</div><div>{_f_html}{_n_html}</div>{_tag_html}</div>')
+
+_appendix = (
+ '<div class="chapter-wrap" id="wrap-tbcs" data-running="附录　速查表（教科书版）">\n'
+ '<section class="chapter" id="cheatsheet">\n'
+ '  <header class="ch-open">\n'
+ '    <p class="ch-kicker">附录 · 据全书 16 章提炼</p>\n'
+ '    <h2 class="ch-title">速查表：公式与判据</h2>\n'
+ '    <p class="ch-sub">62 条高频公式按 12 组归类；每条标注出处章，点 § 号跳回对应章节</p>\n'
+ '    <p class="ch-lede">临阵查证用：先看「用在哪」备注，再回正文复核推导。符号约定在第 01 组。</p>\n'
+ '  </header>\n'
+ + "\n".join(_cs_parts) +
+ '\n</section>\n</div>'
+)
+print(f"附录速查表: {_cs_count} 条, 组数={len([g for g in _CS_ORDER if g in _cs_groups])}")
+
 body="\n\n".join(f'<div class="chapter-wrap" id="wrap-tb{c["num"]}" data-running="{c["label"]}　{c["title"]}（教科书版）">\n{c["html"]}\n</div>' for c in chapters)
+body += "\n\n" + _appendix
+
+# 附录入导航与总目录
+nav += '\n<li><a href="#cheatsheet" data-nav="cheatsheet"><span class="n">附</span><span class="nt">速查表：公式与判据</span><span class="ns">速查表</span></a></li>'
+toc_rows += ('\n<a class="toc-row" href="#cheatsheet"><span class="toc-num">附</span>'
+             '<span class="toc-body"><span class="toc-title">速查表：公式与判据</span>'
+             '<span class="toc-sub">附录 · 62 条公式按 12 组归类，带出处章回指</span></span></a>')
 
 # 每章命名页：打印页眉随章变化
 print_pages_css = "\n  ".join(
     f'@page pgt{c["num"]}{{@top-center{{content:"{c["label"]} · {short_name(c["title"])}";font-family:Menlo,monospace;font-size:8.5pt;color:#666;letter-spacing:.05em}}}}\n'
     f'  #wrap-tb{c["num"]}{{page:pgt{c["num"]}}}'
     for c in chapters)
+print_pages_css += ('\n  @page pgtcs{@top-center{content:"附录 · 速查表";font-family:Menlo,monospace;font-size:8.5pt;color:#666;letter-spacing:.05em}}\n'
+                    '  #wrap-tbcs{page:pgtcs}')
 
 tpl=read(ROOT/"_template_textbook.html")
 tpl=tpl.replace("__PRINT_PAGES__",print_pages_css).replace("__NAV__",nav).replace("__TOC_ROWS__",toc_rows).replace("__BODY__",body)
