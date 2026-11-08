@@ -18,8 +18,8 @@
 
 | 版本 | 文件 | 适合谁 | 篇幅 |
 |---|---|---|---|
-| 学术版（底版） | `index.html` | 有工程背景、想严谨速通的读者：定义→推导→例子，紧凑密度高；作参照与来源 | 16 章 · 约 100 打印页（510 条公式、112 个例题） |
-| 教科书版（主入口） | `textbook.html` | 零基础自学者：更厚、更慢、更细，带术语索引与章内导引 | 16 章 · 约 200 打印页 |
+| 学术版（底版） | `index.html` | 有工程背景、想严谨速通的读者：定义→推导→例子，紧凑密度高；作参照与来源 | 16 章 · 约 100 打印页（284 条展示公式，其中 170 条编号式；51 个例题） |
+| 教科书版（主入口） | `textbook.html` | 零基础自学者：更厚、更慢、更细，带术语索引与章内导引 | 16 章 · 约 200 打印页（421 条展示公式，其中 175 条编号式；122 个例题） |
 | 速查表（附录） | `textbook.html#cheatsheet` | 临时查证：62 条高频公式按 12 组归类，带出处章回指 | 教科书版末尾附录 |
 
 > 独立的 `cheatsheet.html` 已改为重定向页，访问它会自动跳到教科书版末尾的速查表附录。
@@ -87,8 +87,8 @@ A math reference handbook for readers who build large language models and want t
 
 | Edition | File | For whom | Size |
 |---|---|---|---|
-| Academic (base) | `index.html` | Engineers who want a rigorous fast track: definitions → derivations → worked examples; the reference edition | 16 chapters · ~100 printed pages (510 formulas, 112 examples) |
-| Textbook (main entry) | `textbook.html` | Self-learners starting from zero: slower, thicker, with a term index and guided reading | 16 chapters · ~200 printed pages |
+| Academic (base) | `index.html` | Engineers who want a rigorous fast track: definitions → derivations → worked examples; the reference edition | 16 chapters · ~100 printed pages (284 display formulas, 170 of them numbered; 51 worked examples) |
+| Textbook (main entry) | `textbook.html` | Self-learners starting from zero: slower, thicker, with a term index and guided reading | 16 chapters · ~200 printed pages (421 display formulas, 175 of them numbered; 122 worked examples) |
 | Cheatsheet (appendix) | `textbook.html#cheatsheet` | Quick lookup: 62 high-frequency formulas in 12 groups with chapter back-references | Appendix at the end of the textbook edition |
 
 > The standalone `cheatsheet.html` is now a redirect page that jumps to the cheatsheet appendix at the end of the textbook edition.
