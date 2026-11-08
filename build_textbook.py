@@ -201,7 +201,7 @@ _cs_parts = []
 _cs_count = 0
 for _gi, _g in enumerate([g for g in _CS_ORDER if g in _cs_groups]):
     _items = _cs_groups[_g]
-    _cs_parts.append(f'<div class="cs-ghead" id="tbcs-g{_gi}"><span class="gn">{_g}</span><h3>{_g}</h3><span class="gsub">{len(_items)} 条</span></div>')
+    _cs_parts.append(f'<div class="cs-ghead" id="tbcs-g{_gi}"><span class="gn">G{_gi:02d}</span><h3>{_g}</h3><span class="gsub">{len(_items)} 条</span></div>')
     for _t,_en,_f,_n,_tag in _items:
         _cs_count += 1
         _en_html = f'<span class="en">{_en}</span>' if _en else ''
