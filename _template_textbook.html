@@ -318,7 +318,7 @@ window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],tags
     _iv=setInterval(function(){
       var top=el.getBoundingClientRect().top;
       if(Math.abs(top-goal)>150){ el.scrollIntoView({behavior:'instant',block:'start'}); }
-      if(++tries>=120){clearInterval(_iv);_iv=null;}
+      if(++tries>=400){clearInterval(_iv);_iv=null;}
     },450);
   }
   ['wheel','touchmove','keydown'].forEach(function(ev){
@@ -344,7 +344,8 @@ window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],tags
   }else{
     window.addEventListener('load',function(){ setTimeout(jump,300); setTimeout(stabilize,380); });
   }
-  window.addEventListener('hashchange',function(){ setTimeout(jump,0); });
+  if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){setTimeout(jump,60);setTimeout(stabilize,120);});}
+  window.addEventListener('hashchange',function(){ setTimeout(jump,0); setTimeout(stabilize,50); });
   /* 超长页面（数百万像素）下，CSS 平滑滚动在超长距离上耗时数秒甚至无法正常启动。
      监听站内锚点点击：不 preventDefault（hash 照原生更新），同时用 instant 即时定位，
      浏览器的默认平滑滚动因目标已就位而成为空操作。 */

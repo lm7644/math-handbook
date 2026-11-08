@@ -418,6 +418,7 @@ function setTheme(t){
   if(window.MathJax&&MathJax.startup&&MathJax.startup.promise){
     MathJax.startup.promise.then(function(){ setTimeout(jump,50); setTimeout(jump,800); });
   }
+  if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){setTimeout(jump,60);});}
   window.addEventListener('hashchange',function(){ jump(); setTimeout(jump,300); });
 
   var _userScrolled=false;
@@ -442,7 +443,7 @@ function setTheme(t){
     var goal=parseFloat(getComputedStyle(el).scrollMarginTop)||76;
     var top=el.getBoundingClientRect().top;
     if(Math.abs(top-goal)>150){ el.scrollIntoView({behavior:'instant',block:'start'}); }
-    if(++tries>=120){clearInterval(_iv);_iv=null;}
+    if(++tries>=400){clearInterval(_iv);_iv=null;}
   },450);
 })();
 </script>
