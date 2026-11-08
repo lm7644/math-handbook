@@ -238,14 +238,19 @@ mjx-assistive-mml{max-width:1px !important;max-height:1px !important;width:1px !
   .chapter h3{font-size:19px}
 }
 
-/* 屏幕端（非打印）：允许 display 公式容器收缩到父宽并内部横滚 */
+/* 屏幕端（非打印）：display 公式容器收缩到父宽并内部横滚（超宽公式不再撑破版面） */
 @media screen{
-  .chapter mjx-container[jax="SVG"][display="true"]{min-width:0 !important}
+  .chapter mjx-container[jax="SVG"][display="true"]{min-width:0 !important;max-width:100%;overflow-x:auto;overflow-y:hidden}
 }
 /* 窄屏：超长行内公式变为可横滚的行内块，避免整页横向溢出 */
 @media screen and (max-width:760px){
   .chapter mjx-container[jax="SVG"]:not([display="true"]){display:inline-block;max-width:100%;overflow-x:auto;overflow-y:hidden}
   .chapter .tbl{display:block;overflow-x:auto}
+}
+/* 走查修复：窄屏触控目标 ≥44px */
+@media screen and (max-width:1080px){
+  .sidenav ol a{min-height:44px}
+  .ch-toc a{display:inline-flex;align-items:center;min-height:44px}
 }
 .sidenav a .ns{display:none}
 
@@ -386,6 +391,59 @@ function setTheme(t){
     });
   }, { rootMargin: '-15% 0px -75% 0px' });
   targets.forEach(function(t){ obs.observe(t); });
+})();
+
+/* ===== 锚点定位加固（与教科书版同款） =====
+   问题：MathJax 异步排版使页面高度剧烈变化，原生 fragment 跳转落空；
+   全局 scroll-behavior:smooth 让超长平滑滚动永不到达；Chrome scroll anchoring 自动补偿 scrollY。
+   策略：即时跳转（instant 覆盖 smooth）→ MathJax 完成后校正 → hashchange 同款；
+   ResizeObserver 直因修正（不设时限，用户滚动即让位）→ 定时值守兜底 → 关闭 scroll anchoring。 */
+(function(){
+  var st=document.createElement('style');
+  st.textContent='html,body{overflow-anchor:none}';
+  document.head.appendChild(st);
+
+  function targetEl(){
+    if(!location.hash) return null;
+    var id=decodeURIComponent(location.hash.slice(1));
+    return document.getElementById(id);
+  }
+  function jump(){
+    var el=targetEl(); if(!el) return;
+    el.scrollIntoView({behavior:'instant',block:'start'});
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',jump);
+  }else{ jump(); }
+  if(window.MathJax&&MathJax.startup&&MathJax.startup.promise){
+    MathJax.startup.promise.then(function(){ setTimeout(jump,50); setTimeout(jump,800); });
+  }
+  window.addEventListener('hashchange',function(){ jump(); setTimeout(jump,300); });
+
+  var _userScrolled=false;
+  ['wheel','touchmove','keydown'].forEach(function(ev){
+    window.addEventListener(ev,function(){ _userScrolled=true; if(_ro){_ro.disconnect();_ro=null;} },{passive:true});
+  });
+  var _ro=null;
+  if('ResizeObserver' in window){
+    _ro=new ResizeObserver(function(){
+      if(_userScrolled||!location.hash) return;
+      var el=targetEl(); if(!el) return;
+      var goal=parseFloat(getComputedStyle(el).scrollMarginTop)||76;
+      var top=el.getBoundingClientRect().top;
+      if(Math.abs(top-goal)>150) el.scrollIntoView({behavior:'instant',block:'start'});
+    });
+    _ro.observe(document.body);
+  }
+  var tries=0;
+  var _iv=setInterval(function(){
+    if(_userScrolled||!location.hash){clearInterval(_iv);_iv=null;return;}
+    var el=targetEl(); if(!el) return;
+    var goal=parseFloat(getComputedStyle(el).scrollMarginTop)||76;
+    var top=el.getBoundingClientRect().top;
+    if(Math.abs(top-goal)>150){ el.scrollIntoView({behavior:'instant',block:'start'}); }
+    if(++tries>=120){clearInterval(_iv);_iv=null;}
+  },450);
 })();
 </script>
 </body>
