@@ -248,12 +248,14 @@ mjx-assistive-mml{max-width:1px !important;max-height:1px !important;width:1px !
   .chapter mjx-container[jax="SVG"]:not([display="true"]){display:inline-block;max-width:100%;overflow-x:auto;overflow-y:hidden}
   .chapter .tbl{display:block;overflow-x:auto}
 }
-/* 走查修复：窄屏触控目标 ≥44px */
+/* 走查修复：窄屏触控目标 ≥44px（横滑导航每项至少 44×44） */
 @media screen and (max-width:1080px){
-  .sidenav ol a{min-height:44px}
+  .sidenav ol>*{flex:none}
+  .sidenav ol a{min-height:44px;min-width:44px;text-align:center}
   .ch-toc a{display:inline-flex;align-items:center;min-height:44px}
 }
-.sidenav a .ns{display:none}
+/* 短名只在桌面侧栏隐藏；窄屏必须显示，否则横滑导航是空条 */
+@media (min-width:1081px){ .sidenav a .ns{display:none} }
 
 /* ================= 打印：书页化 ================= */
 @media print{
@@ -292,6 +294,11 @@ __PRINT_PAGES__
 </head>
 <body>
 <div class="topbar"></div>
+<noscript>
+  <div style="max-width:1184px;margin:0 auto;padding:12px 32px;background:#FBF4E4;border-bottom:1px solid #E7DFD0;color:#7A5200;font-size:13px;line-height:1.7">
+    <strong>未启用 JavaScript</strong>：本页公式由 MathJax 在浏览器端渲染，脚本关闭时不会排版。正文与公式的 TeX 原文仍然完整可读（形如 \(…\)、\[…\] 的源码即公式本身），阅读不受影响，只是观感略糙。
+  </div>
+</noscript>
 
 <!-- ================= 封面 ================= -->
 <header class="cover" id="top">
@@ -361,10 +368,12 @@ window.MathJax = {
     packages: {'[+]': ['ams','boldsymbol','mathtools']}
   },
   svg: { fontCache: 'global', scale: 1.0 },
-  options: { enableMenu: false }
+  options: { enableMenu: false },
+  startup: { typeset: false }   /* 关闭整页一次性排版，交给 lazy-typeset.js 按需排 */
 };
 </script>
-<script src="vendor/tex-svg-full.js" id="MathJax-script"></script>
+<script src="vendor/tex-svg-full.js" id="MathJax-script" async></script>
+<script src="lazy-typeset.js"></script>
 
 <script>
 /* 主题切换 */

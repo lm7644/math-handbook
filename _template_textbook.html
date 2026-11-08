@@ -194,8 +194,8 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
   .sidenav a.active{border-bottom-color:var(--accent)}
   section,[id^="tb"]{scroll-margin-top:104px}
 }
-.sidenav a .ns{display:none}
-/* 屏幕端（非打印）：display 公式容器收缩到父宽并内部横滚（超宽公式不再撑破版面） */
+/* 短名只在桌面侧栏隐藏；窄屏必须显示，否则横滑导航是空条 */
+@media (min-width:1081px){ .sidenav a .ns{display:none} }
 @media screen{
   mjx-container[jax="SVG"][display="true"]{min-width:0 !important;max-width:100%;overflow-x:auto;overflow-y:hidden}
 }
@@ -206,7 +206,9 @@ a.cs-tag:hover{border-color:var(--accent);color:var(--accent)}
 }
 /* 走查修复：窄屏触控目标 ≥44px */
 @media screen and (max-width:1080px){
-  .sidenav ol a{min-height:44px}
+  .sidenav ol>*{flex:none}
+  .sidenav .nav-band{white-space:nowrap;display:flex;align-items:center;padding:0 10px;min-height:44px;margin:0}
+  .sidenav ol a{min-height:44px;min-width:44px;text-align:center}
   .ch-toc a{display:inline-flex;align-items:center;min-height:44px}
   .quiz summary{min-height:44px}
 }
@@ -234,6 +236,11 @@ __PRINT_PAGES__
 </head>
 <body>
 <div class="topbar"></div>
+<noscript>
+  <div style="max-width:1184px;margin:0 auto;padding:12px 32px;background:#FBF4E4;border-bottom:1px solid #E7DFD0;color:#7A5200;font-size:13px;line-height:1.7">
+    <strong>未启用 JavaScript</strong>：本页公式由 MathJax 在浏览器端渲染，脚本关闭时不会排版。正文与公式的 TeX 原文仍然完整可读（形如 \(…\)、\[…\] 的源码即公式本身），阅读不受影响，只是观感略糙。
+  </div>
+</noscript>
 <header class="cover" id="top">
   <div class="kicker">零基础自学 · 由浅入深 · 16 章</div>
   <h1>大模型数学<br>现代教科书</h1>
@@ -284,9 +291,10 @@ __BODY__
 </div></footer>
 
 <script>
-window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],tags:'none',packages:{'[+]':['ams','boldsymbol','mathtools']}},svg:{fontCache:'global'},options:{enableMenu:false}};
+window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],tags:'none',packages:{'[+]':['ams','boldsymbol','mathtools']}},svg:{fontCache:'global'},options:{enableMenu:false},startup:{typeset:false}};
 </script>
-<script src="vendor/tex-svg-full.js" id="MathJax-script"></script>
+<script src="vendor/tex-svg-full.js" id="MathJax-script" async></script>
+<script src="lazy-typeset.js"></script>
 <script>
 /* 锚点修正：MathJax 异步排版会改变页面高度，使浏览器在排版前执行的 hash 定位落空。
    渲染完成后按当前 hash 重新定位一次；不拦截任何点击，原生锚点行为保持不变。 */
